@@ -73,8 +73,13 @@ export function createFalling(game) {
         forward: normalize(lerp(startPose.forward, endPose.forward, e)),
         up: normalize(lerp(startPose.up, endPose.up, e)),
       };
+      // Occlusion einblenden, sobald die Kamera quer zur Wandrichtung blickt:
+      // |forward . normal| = 1 (schaut auf die Flaeche) -> 0, = 0 (Ego) -> 1.
+      const fn = pose.forward[0] * face.normal[0] + pose.forward[1] * face.normal[1] + pose.forward[2] * face.normal[2];
+      const occWeight = 1 - Math.abs(fn);
+
       const walls = faceWalls(maze, face, WALL_RATIO * cell * e); // Waende wachsen auf
-      renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell });
+      renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, occWeight });
 
       // Naht zur Kartensicht: Grid-Rahmen + S/G blenden waehrend des Schwenks aus.
       const fade = 1 - e;
