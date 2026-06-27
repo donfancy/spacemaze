@@ -15,6 +15,7 @@ export class Game {
   constructor(options = {}) {
     this.debug = options.debug ?? null;
     this.time = 0;
+    this.dockFace = null; // vom Startscreen gewaehlte Andock-Flaeche (fuer MazeGen)
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.
     this.scenes = {
