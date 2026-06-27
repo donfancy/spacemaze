@@ -1,0 +1,12 @@
+{
+  "name": "spacemaze",
+  "version": "0.1.0",
+  "description": "3D vector maze in the style of early-80s Atari arcade games (Battlezone / Tempest / Star Wars). Plain vanilla JS, 2D canvas, hand-rolled 3D.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "author": "Boris Baginski",
+  "license": "MIT"
+}
