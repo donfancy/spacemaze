@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createCamera, worldToView, forward, lookAt } from '../src/math/camera.js';
+import { createCamera, worldToView, forward, lookAt, basisFromForwardUp } from '../src/math/camera.js';
 import { normalize, sub } from '../src/math/vec3.js';
 
 const close = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
@@ -54,4 +54,29 @@ test('lookAt richtet die Kamera exakt auf das Ziel (diverse Lagen)', () => {
   assertLooksAt([0, -5, 0], [0, 0, 0]);   // nach oben
   assertLooksAt([3, 4, 5], [-1, 2, 1]);   // schraeg
   assertLooksAt([-2, -3, 4], [5, 1, -2]); // schraeg
+});
+
+test('basisFromForwardUp: Standardblick -z, up +y ergibt right +x', () => {
+  const b = basisFromForwardUp([0, 0, -1], [0, 1, 0]);
+  assertVecClose(b.right, [1, 0, 0]);
+  assertVecClose(b.up, [0, 1, 0]);
+  assertVecClose(b.forward, [0, 0, -1]);
+});
+
+test('worldToView mit basis stimmt mit yaw/pitch ueberein (Standardlage)', () => {
+  const pos = [1, 2, 3];
+  const camYP = createCamera({ position: pos, yaw: 0, pitch: 0 });
+  const camB = createCamera({ position: pos });
+  camB.basis = basisFromForwardUp([0, 0, -1], [0, 1, 0]);
+  for (const p of [[4, 5, -2], [0, 0, 0], [-3, 7, 1]]) {
+    assertVecClose(worldToView(camB, p), worldToView(camYP, p));
+  }
+});
+
+test('basis erlaubt freie Oben-Richtung (up = +z, Blick -x)', () => {
+  const cam = createCamera({ position: [0, 0, 0] });
+  cam.basis = basisFromForwardUp([-1, 0, 0], [0, 0, 1]);
+  assertVecClose(forward(cam), [-1, 0, 0]);
+  assert.ok(worldToView(cam, [0, 0, 1])[1] > 0, 'oben (+z) -> positives view-y');
+  assert.ok(worldToView(cam, [-1, 0, 0])[2] < 0, 'voraus (-x) -> vor der Kamera (z<0)');
 });

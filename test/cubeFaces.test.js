@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SIDE_FACES, pickDockFace, faceDockPose, mapGridToFace, mapSegmentsToFace, gridBorderOnFace,
+  faceLocalToWorld, faceDir,
 } from '../src/world/cubeFaces.js';
 import { createCamera, forward } from '../src/math/camera.js';
 
@@ -67,4 +68,27 @@ test('mapSegmentsToFace mappt 2D-Segmente auf die Flaeche', () => {
   const world = mapSegmentsToFace([[[0, 0], [11, 0]]], 11, 2.4, SIDE_FACES[0]);
   assert.equal(world.length, 1);
   assertVecClose(world[0][0], [-1.2, 1.2, 1.2]); // grid(0,0) auf front
+});
+
+test('faceLocalToWorld(Hoehe 0) ist deckungsgleich mit mapGridToFace', () => {
+  const n = 11, s = 2.4, cell = s / n;
+  for (const face of SIDE_FACES) {
+    for (const [gx, gy] of [[0, 0], [5, 5], [11, 11], [3, 7]]) {
+      assertVecClose(faceLocalToWorld(gx * cell, 0, gy * cell, face, s), mapGridToFace(gx, gy, n, s, face));
+    }
+  }
+});
+
+test('faceLocalToWorld: Hoehe verschiebt entlang der Flaechennormalen', () => {
+  const face = SIDE_FACES[0]; // normal +z
+  const a = faceLocalToWorld(1, 0, 1, face, 2.4);
+  const b = faceLocalToWorld(1, 0.5, 1, face, 2.4);
+  assertVecClose([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [0, 0, 0.5]);
+});
+
+test('faceDir mappt lokale Richtungen ohne Verschiebung', () => {
+  const face = SIDE_FACES[2]; // right (+x): uAxis [0,0,-1], vAxis [0,-1,0], normal [1,0,0]
+  assertVecClose(faceDir(1, 0, 0, face), face.uAxis); // lokales +x -> uAxis
+  assertVecClose(faceDir(0, 0, 1, face), face.vAxis); // lokales +z -> vAxis
+  assertVecClose(faceDir(0, 1, 0, face), face.normal); // lokale Hoehe -> normal
 });

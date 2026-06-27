@@ -9,7 +9,7 @@
 // pitch = Drehung um die x-Achse (hoch/runter schauen)
 // roll  = Drehung um die z-Achse (Kippen des Horizonts)
 
-import { sub, normalize, rotateX, rotateY, rotateZ } from './vec3.js';
+import { sub, normalize, cross, dot, rotateX, rotateY, rotateZ } from './vec3.js';
 
 export function createCamera(opts = {}) {
   return {
@@ -21,20 +21,38 @@ export function createCamera(opts = {}) {
   };
 }
 
+// Orthonormale Kamera-Basis aus Blickrichtung + grober Oben-Richtung.
+// { right, up, forward } -- erlaubt eine FREIE Oben-Richtung (anders als yaw/pitch,
+// die implizit Welt-oben = +y annehmen). Noetig fuer den Schwenk aus der flachen
+// Kartensicht in die Ego-Begehung auf einer (vertikalen) Wuerfelflaeche.
+export function basisFromForwardUp(forwardDir, upHint) {
+  const f = normalize(forwardDir);
+  const r = normalize(cross(f, upHint));
+  const u = cross(r, f);
+  return { right: r, up: u, forward: f };
+}
+
 // Transformiert einen Weltpunkt in den View-Space (Kamerakoordinaten).
-// Schritte: 1) relativ zur Kameraposition verschieben,
-//           2) mit der inversen Kamerarotation zurueckdrehen.
-// Inverse von (yaw dann pitch dann roll) ist (-roll dann -pitch dann -yaw).
+// Mit camera.basis: Projektion auf die Basisachsen (Kamera blickt entlang -z_view,
+// daher z = -(p . forward)). Sonst klassisch ueber yaw/pitch/roll:
+//   1) relativ zur Kameraposition verschieben,
+//   2) mit der inversen Kamerarotation zurueckdrehen
+//      (Inverse von yaw->pitch->roll ist -roll->-pitch->-yaw).
 export function worldToView(camera, worldPoint) {
-  let p = sub(worldPoint, camera.position);
-  p = rotateY(p, -camera.yaw);
-  p = rotateX(p, -camera.pitch);
-  p = rotateZ(p, -camera.roll);
-  return p;
+  const p = sub(worldPoint, camera.position);
+  if (camera.basis) {
+    const { right, up, forward } = camera.basis;
+    return [dot(p, right), dot(p, up), -dot(p, forward)];
+  }
+  let q = rotateY(p, -camera.yaw);
+  q = rotateX(q, -camera.pitch);
+  q = rotateZ(q, -camera.roll);
+  return q;
 }
 
 // Vorwaertsrichtung der Kamera in Weltkoordinaten (wohin sie schaut).
 export function forward(camera) {
+  if (camera.basis) return camera.basis.forward;
   // Startet als -z und wird mit der Kamerarotation in die Welt gedreht.
   let f = [0, 0, -1];
   f = rotateZ(f, camera.roll);

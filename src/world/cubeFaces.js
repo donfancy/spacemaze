@@ -56,6 +56,31 @@ export function mapGridToFace(gx, gy, n, squareSize, face) {
   ];
 }
 
+// Bildet einen Punkt der lokalen "horizontalen" Spielwelt auf die Flaeche ab:
+//   lx entlang uAxis, lz entlang vAxis (beide in Welt-Einheiten 0..squareSize),
+//   ly als Hoehe entlang der Flaechennormalen (0 = auf der Flaeche).
+// Mit ly=0 deckungsgleich mit mapGridToFace (gx*cell, gy*cell).
+export function faceLocalToWorld(lx, ly, lz, face, squareSize) {
+  const half = squareSize / 2;
+  const u = lx - half;
+  const v = lz - half;
+  const h = half + ly;
+  return [
+    face.uAxis[0] * u + face.vAxis[0] * v + face.normal[0] * h,
+    face.uAxis[1] * u + face.vAxis[1] * v + face.normal[1] * h,
+    face.uAxis[2] * u + face.vAxis[2] * v + face.normal[2] * h,
+  ];
+}
+
+// Wie faceLocalToWorld, aber fuer RICHTUNGEN (ohne Verschiebung) -- z.B. Blickrichtung.
+export function faceDir(lx, ly, lz, face) {
+  return [
+    face.uAxis[0] * lx + face.vAxis[0] * lz + face.normal[0] * ly,
+    face.uAxis[1] * lx + face.vAxis[1] * lz + face.normal[1] * ly,
+    face.uAxis[2] * lx + face.vAxis[2] * lz + face.normal[2] * ly,
+  ];
+}
+
 // Mappt eine Liste von 2D-Grid-Segmenten auf die Flaeche.
 export function mapSegmentsToFace(segments, n, squareSize, face) {
   return segments.map(([a, b]) => [
