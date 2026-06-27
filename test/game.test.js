@@ -41,31 +41,32 @@ test('Spiel startet im Startscreen und rendert', () => {
   assert.ok(r.calls > 0, 'Startscreen sollte zeichnen');
 });
 
-test('S loest animierten Uebergang zur Labyrinth-Erzeugung aus', () => {
+test('S leitet die Andock-Sequenz ein; erst danach Uebergang zur Labyrinth-Erzeugung', () => {
   const g = new Game();
   const r = fakeRenderer();
 
   g.handleKey('X'); // irrelevante Taste -> nichts passiert
+  advance(g, r, 0.1);
+  assert.equal(g.stateKey, State.STARTSCREEN);
   assert.ok(!g.transition.active);
 
   g.handleKey('S');
-  assert.ok(g.transition.active, 'Uebergang sollte starten');
-  assert.equal(g.transition.toState, State.MAZE_GEN);
+  // Waehrend des Andockens (~1,6s) bleibt der Zustand Startscreen, kein Uebergang.
+  advance(g, r, 0.3);
+  assert.equal(g.stateKey, State.STARTSCREEN);
+  assert.ok(!g.transition.active);
 
-  // Waehrend des Uebergangs werden weitere Tasten ignoriert.
-  g.handleKey('S');
-
-  advance(g, r, 0.8); // Uebergang (0,7s) abschliessen
+  // Nach dem Andocken folgt der Uebergang zur Labyrinth-Erzeugung.
+  advance(g, r, 2.6);
   assert.equal(g.stateKey, State.MAZE_GEN);
-  assert.ok(!g.transition.active);
 });
 
-test('voller Zyklus Start -> MazeGen -> Playing -> Start', () => {
+test('voller Zyklus Start -> (Andocken) -> MazeGen -> Playing -> Start', () => {
   const g = new Game();
   const r = fakeRenderer();
 
   g.handleKey('S');
-  advance(g, r, 0.8);
+  advance(g, r, 2.6); // Andocken (~1,6s) + Uebergang
   assert.equal(g.stateKey, State.MAZE_GEN);
 
   // MazeGen schaltet nach ~2s automatisch weiter.
@@ -80,6 +81,24 @@ test('voller Zyklus Start -> MazeGen -> Playing -> Start', () => {
 
   // Q verlaesst das Spiel zurueck zum Startscreen.
   g.handleKey('Q');
+  advance(g, r, 0.8);
+  assert.equal(g.stateKey, State.STARTSCREEN);
+});
+
+test('Zustands-Zyklus direkt via dispatch (ohne Andocken)', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+  assert.equal(g.stateKey, State.STARTSCREEN);
+
+  g.dispatch(GameEvent.START);
+  advance(g, r, 0.8);
+  assert.equal(g.stateKey, State.MAZE_GEN);
+
+  advance(g, r, 2.2);
+  advance(g, r, 0.8);
+  assert.equal(g.stateKey, State.PLAYING);
+
+  g.dispatch(GameEvent.EXIT);
   advance(g, r, 0.8);
   assert.equal(g.stateKey, State.STARTSCREEN);
 });

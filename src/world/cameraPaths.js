@@ -1,6 +1,7 @@
 // Reine Kamera-Bahnen (Choreografie). Kein Canvas -> headless testbar.
 
 import { lookAt } from '../math/camera.js';
+import { lerp } from '../math/vec3.js';
 
 // Punkt auf einer Kugel um `center`:
 //   azimuth   dreht um die y-Achse (in der xz-Ebene)
@@ -33,4 +34,46 @@ export function orbitCamera(t, opts = {}) {
   const position = sphericalToCartesian(center, radius, azimuth, elevation);
   const { yaw, pitch } = lookAt(position, center);
   return { position, yaw, pitch, radius, azimuth, elevation };
+}
+
+// --- Andocken: vom Umtanzen zur Draufsicht -------------------------------------
+
+function clamp01(x) {
+  return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
+// Sanfte, harmonische Ein-/Ausblendkurve (Cosinus): 0 -> 0, 1 -> 1, flach an den Enden.
+function easeInOut(t) {
+  return 0.5 - 0.5 * Math.cos(Math.PI * t);
+}
+
+// Kuerzester Winkelweg from->to, normalisiert auf (-pi, pi].
+function shortestAngle(from, to) {
+  let d = (to - from) % (2 * Math.PI);
+  if (d > Math.PI) d -= 2 * Math.PI;
+  if (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+
+// Draufsicht-Pose: Kamera senkrecht ueber `center`, blickt gerade nach unten,
+// sodass ein Quadrat der Kantenlaenge `squareSize` (die Oberseite) den Screen
+// vertikal zu `fill` ausfuellt.
+export function topDownDock(center, squareSize, fov, fill = 0.85) {
+  const dist = squareSize / (2 * Math.tan(fov / 2) * fill);
+  return {
+    position: [center[0], center[1] + squareSize / 2 + dist, center[2]],
+    yaw: 0,
+    pitch: -Math.PI / 2,
+  };
+}
+
+// Interpoliert harmonisch von der Start-Pose zur Dock-Pose (progress in [0,1]):
+// Position linear, yaw ueber den kuerzeren Winkelweg, pitch direkt.
+export function dockPose(progress, start, dock) {
+  const e = easeInOut(clamp01(progress));
+  return {
+    position: lerp(start.position, dock.position, e),
+    yaw: start.yaw + shortestAngle(start.yaw, dock.yaw) * e,
+    pitch: start.pitch + (dock.pitch - start.pitch) * e,
+  };
 }

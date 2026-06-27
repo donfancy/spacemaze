@@ -1,65 +1,96 @@
-// Startbildschirm: die Kamera umtanzt einen Drahtwuerfel, darueber blinkt fix
-// "PRESS S TO START". Der Wuerfel steht im Ursprung; spaeter dockt die Kamera bei
-// S an eine seiner Seiten an und blendet auf die Labyrinth-Draufsicht ueber.
+// Startbildschirm in zwei Phasen:
+//   'orbiting' - die Kamera umtanzt einen Drahtwuerfel, "PRESS S TO START" blinkt.
+//   'docking'  - nach S faehrt die Kamera harmonisch in die Draufsicht senkrecht
+//                ueber den Wuerfel; verdeckte Kanten faden von 30% auf 0%, sodass
+//                am Ende nur das Quadrat (die Oberseite = das Grid) uebrig bleibt.
+// Nach Abschluss des Andockens wird der Uebergang zur Labyrinth-Erzeugung ausgeloest.
 
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
 import { cubeMesh } from '../world/shapes.js';
-import { orbitCamera } from '../world/cameraPaths.js';
+import { orbitCamera, dockPose, topDownDock } from '../world/cameraPaths.js';
 import { classifyEdges } from '../world/visibility.js';
 
+const CUBE_SIZE = 2.4;
+const HIDDEN_DIM = 0.3;     // Grunddimmung verdeckter Kanten
+const DOCK_DURATION = 1.6;  // Sekunden fuer das Andocken
+const ORBIT_OPTS = { center: [0, 0, 0], radius: 5.85, radiusVar: 1.6, azimuthSpeed: 0.36 };
+
 export function createStartscreen(game) {
-  let t = 0;
   const camera = createCamera({ fov: Math.PI / 2.4 });
-  const cube = cubeMesh([0, 0, 0], 2.4); // Wuerfel im Ursprung
+  const cube = cubeMesh([0, 0, 0], CUBE_SIZE);
+  const dockTarget = topDownDock([0, 0, 0], CUBE_SIZE, camera.fov, 0.85);
+
+  let t = 0;
+  let phase = 'orbiting';
+  let dockT = 0;
+  let dockStart = null;
+
+  function applyPose(pose) {
+    camera.position = pose.position;
+    camera.yaw = pose.yaw;
+    camera.pitch = pose.pitch;
+  }
+
+  // Wuerfel mit Hidden-Line-Dimmung zeichnen (verdeckte Kanten mit `hiddenDim`).
+  function drawCube(renderer, hiddenDim) {
+    const { visible, hidden } = classifyEdges(cube, camera.position);
+    renderer.renderScene({ segments: hidden, intensity: hiddenDim }, camera);
+    renderer.renderScene({ segments: visible, intensity: 1.0 }, camera);
+  }
 
   return {
     enter() {
       t = 0;
+      phase = 'orbiting';
+      dockT = 0;
+      dockStart = null;
     },
 
     update(dt) {
       t += dt;
+      if (phase === 'docking') {
+        dockT += dt;
+        if (dockT >= DOCK_DURATION) {
+          dockT = DOCK_DURATION;
+          phase = 'docked';
+          game.dispatch(GameEvent.START); // erst nach dem Andocken weiter
+        }
+      }
     },
 
     render(renderer) {
-      // Kamera umtanzt den Wuerfel: Blick stets auf den Mittelpunkt, kreisend,
-      // Abstand und Hoehe pulsieren sanft.
-      const orbit = orbitCamera(t, {
-        center: [0, 0, 0],
-        radius: 5.85,        // 10% naeher dran
-        radiusVar: 1.6,
-        azimuthSpeed: 0.36,  // 20% schneller
-      });
-      camera.position = orbit.position;
-      camera.yaw = orbit.yaw;
-      camera.pitch = orbit.pitch;
+      if (phase === 'orbiting') {
+        applyPose(orbitCamera(t, ORBIT_OPTS));
+        drawCube(renderer, HIDDEN_DIM);
 
-      // Hidden Lines: verdeckte Kanten bleiben sichtbar, aber gedimmt (50%).
-      // Erst die gedimmten zeichnen, dann die vollen hell darueber.
-      const { visible, hidden } = classifyEdges(cube, camera.position);
-      renderer.renderScene({ segments: hidden, intensity: 0.5 }, camera);
-      renderer.renderScene({ segments: visible, intensity: 1.0 }, camera);
-
-      // Arcade-typisches Blinken: ~1,1s Periode, etwa zwei Drittel der Zeit sichtbar.
-      const w = renderer.width;
-      const h = renderer.height;
-      const promptVisible = (t % 1.1) < 0.72;
-      if (promptVisible) {
-        const size = Math.max(18, Math.min(42, h * 0.05));
-        renderer.drawText('PRESS S TO START', {
-          x: w / 2,
-          y: h - Math.max(48, h * 0.14),
-          size,
-          align: 'center',
-          baseline: 'middle',
-        });
+        // Arcade-Blinken: ~1,1s Periode, etwa zwei Drittel sichtbar.
+        const w = renderer.width;
+        const h = renderer.height;
+        if ((t % 1.1) < 0.72) {
+          renderer.drawText('PRESS S TO START', {
+            x: w / 2,
+            y: h - Math.max(48, h * 0.14),
+            size: Math.max(18, Math.min(42, h * 0.05)),
+            align: 'center',
+            baseline: 'middle',
+          });
+        }
+      } else {
+        // 'docking' / 'docked': in die Draufsicht interpolieren, verdeckte Kanten ausblenden.
+        const p = Math.min(dockT / DOCK_DURATION, 1);
+        applyPose(dockPose(p, dockStart, dockTarget));
+        drawCube(renderer, HIDDEN_DIM * (1 - p));
       }
     },
 
     onKey(key) {
-      if (key === 'S') {
-        game.dispatch(GameEvent.START);
+      if (key === 'S' && phase === 'orbiting') {
+        // Aktuelle Orbit-Pose als Startpunkt des Andockens festhalten.
+        const o = orbitCamera(t, ORBIT_OPTS);
+        dockStart = { position: o.position, yaw: o.yaw, pitch: o.pitch };
+        phase = 'docking';
+        dockT = 0;
       }
     },
   };
