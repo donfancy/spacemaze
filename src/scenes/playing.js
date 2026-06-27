@@ -42,8 +42,8 @@ export function createPlaying(game) {
       const left = keys.has('ArrowLeft') || keys.has('A');
       const right = keys.has('ArrowRight') || keys.has('D');
 
-      if (left) yaw -= TURN_SPEED * dt;
-      if (right) yaw += TURN_SPEED * dt;
+      if (left) yaw += TURN_SPEED * dt;  // nach links drehen
+      if (right) yaw -= TURN_SPEED * dt; // nach rechts drehen
 
       const move = (fwd ? 1 : 0) - (back ? 1 : 0);
       if (move !== 0 && !reached) {
