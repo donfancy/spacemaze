@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateMaze, OPEN, WALL } from '../src/world/maze.js';
 import { corridorOutline } from '../src/world/mazeGeometry.js';
-import { mazeWalls, cellAt, cellCenter, isWalkable, tryMove, startFacingYaw } from '../src/world/mazeWorld.js';
+import { mazeWalls, wallFootprints, cellAt, cellCenter, isWalkable, tryMove, startFacingYaw } from '../src/world/mazeWorld.js';
 
 // Mini-Labyrinth fuer praezise Kollisionstests: nur Mitte (1,1) offen.
 function tiny() {
@@ -15,6 +15,16 @@ test('mazeWalls: 4 Kanten je Konturensegment, alle zwischen y=0 und y=height', (
   assert.equal(walls.length, corridorOutline(m).length * 4);
   for (const [a, b] of walls) {
     assert.ok((a[1] === 0 || a[1] === 1.2) && (b[1] === 0 || b[1] === 1.2));
+  }
+});
+
+test('wallFootprints: ein xz-Segment je Korridor-Kontur, alle bei y=0', () => {
+  const m = generateMaze(11, { seed: 5 });
+  const fp = wallFootprints(m, { cell: 1 });
+  assert.equal(fp.length, corridorOutline(m).length);
+  for (const [a, b] of fp) {
+    assert.equal(a[1], 0);
+    assert.equal(b[1], 0);
   }
 });
 

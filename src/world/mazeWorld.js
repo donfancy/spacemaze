@@ -24,6 +24,16 @@ export function mazeWalls(maze, opts = {}) {
   return walls;
 }
 
+// Die Wand-Grundrisse (xz-Liniensegmente bei y=0) -- die Verdecker fuer die
+// Hidden-Line-Bestimmung (siehe render/occlusion.js).
+export function wallFootprints(maze, opts = {}) {
+  const cell = opts.cell ?? 1;
+  return corridorOutline(maze).map(([[x1, y1], [x2, y2]]) => [
+    [x1 * cell, 0, y1 * cell],
+    [x2 * cell, 0, y2 * cell],
+  ]);
+}
+
 // Weltkoordinaten -> Grid-Zelle.
 export function cellAt(worldX, worldZ, cell = 1) {
   return [Math.floor(worldX / cell), Math.floor(worldZ / cell)];
