@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cubeEdges, floorGrid, rotateSegmentsY } from '../src/world/shapes.js';
+import { cubeEdges, cubeMesh, floorGrid, rotateSegmentsY } from '../src/world/shapes.js';
 
 test('Wuerfel hat 12 Kanten', () => {
   const edges = cubeEdges([0, 0, 0], 2);
@@ -9,6 +9,15 @@ test('Wuerfel hat 12 Kanten', () => {
     assert.equal(a.length, 3);
     assert.equal(b.length, 3);
   }
+});
+
+test('cubeMesh hat 8 Ecken, 6 Flaechen, 12 Kanten', () => {
+  const m = cubeMesh([0, 0, 0], 2);
+  assert.equal(m.vertices.length, 8);
+  assert.equal(m.faces.length, 6);
+  assert.equal(m.edges.length, 12);
+  for (const f of m.faces) assert.equal(f.length, 4);
+  for (const e of m.edges) assert.equal(e[2].length, 2); // 2 angrenzende Flaechen
 });
 
 test('Wuerfel-Ecken liegen bei +/- halbe Kantenlaenge', () => {
