@@ -7,6 +7,7 @@
 import { State, GameEvent, nextState } from './states.js';
 import { createStartscreen } from '../scenes/startscreen.js';
 import { createMazeGen } from '../scenes/mazegen.js';
+import { createFalling } from '../scenes/falling.js';
 import { createPlaying } from '../scenes/playing.js';
 
 const TRANSITION_DURATION = 0.7; // Sekunden fuer den gesamten Fade out+in
@@ -23,6 +24,7 @@ export class Game {
     this.scenes = {
       [State.STARTSCREEN]: createStartscreen(this),
       [State.MAZE_GEN]: createMazeGen(this),
+      [State.FALLING]: createFalling(this),
       [State.PLAYING]: createPlaying(this),
     };
 

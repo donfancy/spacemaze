@@ -5,19 +5,22 @@
 export const State = {
   STARTSCREEN: 'STARTSCREEN',   // schwarzer Bildschirm, "PRESS S TO START"
   MAZE_GEN: 'MAZE_GEN',         // Labyrinth wird erzeugt (Animation)
+  FALLING: 'FALLING',           // Schwenk aus der Kartensicht in die Ego-Begehung
   PLAYING: 'PLAYING',           // Spielablauf
 };
 
 export const GameEvent = {
   START: 'START',           // Spieler drueckt S im Startscreen
-  MAZE_READY: 'MAZE_READY', // Labyrinth-Erzeugung fertig
+  MAZE_READY: 'MAZE_READY', // Labyrinth-Erzeugung fertig -> Reinfallen
+  FALL_DONE: 'FALL_DONE',   // Reinfall-Schwenk abgeschlossen -> Spielablauf
   EXIT: 'EXIT',             // Spiel verlassen -> zurueck zum Startscreen
 };
 
 // Erlaubte Uebergaenge: State -> Event -> Folgestate.
 const TRANSITIONS = {
   [State.STARTSCREEN]: { [GameEvent.START]: State.MAZE_GEN },
-  [State.MAZE_GEN]: { [GameEvent.MAZE_READY]: State.PLAYING },
+  [State.MAZE_GEN]: { [GameEvent.MAZE_READY]: State.FALLING },
+  [State.FALLING]: { [GameEvent.FALL_DONE]: State.PLAYING },
   [State.PLAYING]: { [GameEvent.EXIT]: State.STARTSCREEN },
 };
 

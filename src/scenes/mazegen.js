@@ -69,7 +69,7 @@ export function createMazeGen(game) {
     update(dt) {
       t += dt;
       if (t >= MARKER_TIME + GROW_TIME + HOLD_TIME) {
-        game.dispatch(GameEvent.MAZE_READY);
+        game.dispatch(GameEvent.MAZE_READY, { fade: false }); // nahtlos ins Reinfallen
       }
     },
 

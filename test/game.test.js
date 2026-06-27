@@ -70,9 +70,12 @@ test('voller Zyklus Start -> (Andocken) -> MazeGen -> Playing -> Start', () => {
   advance(g, r, 1.8); // Andocken (~1,6s) -> nahtlos (ohne Fade) MazeGen
   assert.equal(g.stateKey, State.MAZE_GEN);
 
-  // MazeGen inszeniert Marker + Wachstum (~4,3s), dann weiter.
+  // MazeGen inszeniert Marker + Wachstum (~4,3s) -> Reinfallen.
   advance(g, r, 4.5);
-  advance(g, r, 0.8); // Uebergang nach Playing
+  assert.equal(g.stateKey, State.FALLING);
+
+  // Reinfall-Schwenk (~1,7s) -> Spielablauf.
+  advance(g, r, 2.0);
   assert.equal(g.stateKey, State.PLAYING);
 
   // Playing rendert die 3D-Szene.
@@ -95,8 +98,9 @@ test('Zustands-Zyklus direkt via dispatch (ohne Andocken)', () => {
   advance(g, r, 0.8);
   assert.equal(g.stateKey, State.MAZE_GEN);
 
-  advance(g, r, 4.5); // MazeGen-Inszenierung
-  advance(g, r, 0.8);
+  advance(g, r, 4.5); // MazeGen -> Falling
+  assert.equal(g.stateKey, State.FALLING);
+  advance(g, r, 2.0); // Falling -> Playing
   assert.equal(g.stateKey, State.PLAYING);
 
   g.dispatch(GameEvent.EXIT);

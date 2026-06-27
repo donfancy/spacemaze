@@ -1,43 +1,42 @@
 // Zustand "Spielablauf": Ego-Perspektive im Labyrinth, Tank-Steuerung.
-// Die Korridore sind begehbarer Boden, die Waende ragen als Wireframe auf.
-// Hidden Lines: verdeckte Kantenstuecke werden gedimmt (nah) bzw. weggelassen (fern).
-// Ziel: von S nach G.
+// Das Labyrinth liegt auf der Andock-Wuerfelflaeche (nahtlos vom Reinfallen).
+// Die Spiellogik (Bewegung, Kollision) rechnet in der lokalen Welt; gerendert
+// wird ueber die Flaeche mit freier Kamera-Orientierung (up = Flaechennormale).
 
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
+import { cellCenter, cellAt, tryMove, startFacingYaw } from '../world/mazeWorld.js';
+import { faceLocalToWorld, faceDir, SIDE_FACES } from '../world/cubeFaces.js';
 import {
-  mazeWalls, wallFootprints, cellCenter, cellAt, tryMove, startFacingYaw,
-} from '../world/mazeWorld.js';
-import { projectOccluders, occludeEdge } from '../render/occlusion.js';
+  CUBE_SIZE, WALL_RATIO, EYE_RATIO, FAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
+} from './mazeView.js';
 
-const CELL = 1;
-const WALL_HEIGHT = 1.2;
-const EYE = 0.5;          // Augenhoehe ueber dem Boden
-const MOVE_SPEED = 2.2;   // Zellen pro Sekunde
+const MOVE_RATIO = 2.2;   // Zellen pro Sekunde
 const TURN_SPEED = 2.2;   // Radiant pro Sekunde
-const RADIUS = 0.25;      // Kollisionsabstand zur Wand
-const NEAR = 0.1;
-const FAR_OCCLUDED = 6;   // verdeckte Kanten weiter weg als das werden weggelassen
-const DIM = 0.1;          // Helligkeit verdeckter (naher) Kanten
+const RADIUS_RATIO = 0.25;
 
 export function createPlaying(game) {
   const camera = createCamera({ fov: Math.PI / 2.4 });
 
   let maze = null;
+  let face = null;
   let walls = null;
   let footprints = null;
-  let px = 0;
+  let cell = 1;
+  let px = 0; // lokale Position (Flaecheneinheiten)
   let pz = 0;
-  let yaw = 0;
+  let yaw = 0; // lokaler Blickwinkel
   let reached = false;
 
   return {
     enter() {
       maze = game.maze ?? generateMaze(11, {});
-      walls = mazeWalls(maze, { cell: CELL, height: WALL_HEIGHT });
-      footprints = wallFootprints(maze, { cell: CELL });
-      const [cx, cz] = cellCenter(maze.start[0], maze.start[1], CELL);
+      face = game.dockFace ?? SIDE_FACES[0];
+      cell = cellSize(maze);
+      walls = faceWalls(maze, face, WALL_RATIO * cell);
+      footprints = faceFootprints(maze, face);
+      const [cx, cz] = cellCenter(maze.start[0], maze.start[1], cell);
       px = cx;
       pz = cz;
       yaw = startFacingYaw(maze);
@@ -51,42 +50,29 @@ export function createPlaying(game) {
       const left = keys.has('ArrowLeft') || keys.has('A');
       const right = keys.has('ArrowRight') || keys.has('D');
 
-      if (left) yaw += TURN_SPEED * dt;  // nach links drehen
-      if (right) yaw -= TURN_SPEED * dt; // nach rechts drehen
+      if (left) yaw += TURN_SPEED * dt;
+      if (right) yaw -= TURN_SPEED * dt;
 
       const move = (fwd ? 1 : 0) - (back ? 1 : 0);
       if (move !== 0 && !reached) {
-        // forward(yaw, pitch=0) = (-sin yaw, 0, -cos yaw)
-        const step = MOVE_SPEED * dt * move;
+        const step = MOVE_RATIO * cell * dt * move;
         const dx = -Math.sin(yaw) * step;
         const dz = -Math.cos(yaw) * step;
-        [px, pz] = tryMove(maze, px, pz, dx, dz, { cell: CELL, radius: RADIUS });
+        [px, pz] = tryMove(maze, px, pz, dx, dz, { cell, radius: RADIUS_RATIO * cell });
       }
 
-      const [gx, gy] = cellAt(px, pz, CELL);
+      const [gx, gy] = cellAt(px, pz, cell);
       if (gx === maze.goal[0] && gy === maze.goal[1]) reached = true;
     },
 
     render(renderer) {
-      camera.position = [px, EYE, pz];
-      camera.yaw = yaw;
-      camera.pitch = 0;
-
-      const vp = { width: renderer.width, height: renderer.height, fov: camera.fov, near: NEAR };
-      const occluders = projectOccluders(footprints, camera, vp);
-
-      // Jede Wandkante exakt an den Verdeckungsgrenzen aufteilen und einsortieren.
-      const visible = [];
-      const dimmed = [];
-      for (const edge of walls) {
-        for (const s of occludeEdge(edge, camera, vp, occluders)) {
-          if (!s.occluded) visible.push([s.a, s.b]);
-          else if (s.depth < FAR_OCCLUDED) dimmed.push([s.a, s.b]);
-          // sonst: weit verdeckt -> gar nicht zeichnen
-        }
-      }
-      renderer.drawPolylines(dimmed, { intensity: DIM });
-      renderer.drawPolylines(visible, { intensity: 1.0 });
+      const eye = EYE_RATIO * cell;
+      const pose = {
+        position: faceLocalToWorld(px, eye, pz, face, CUBE_SIZE),
+        forward: faceDir(-Math.sin(yaw), 0, -Math.cos(yaw), face),
+        up: face.normal,
+      };
+      renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell });
 
       const w = renderer.width;
       const h = renderer.height;
