@@ -70,6 +70,22 @@ test('Kante komplett hinter der Kamera ergibt nichts', () => {
   assert.deepEqual(occludeEdge([[-1, 0, 5], [1, 0, 5]], cam, VP, occ), []);
 });
 
+test('zu grosse Near-Plane schneidet nahe Verdecker ab (Near muss klein genug sein)', () => {
+  // Verdecker sehr nah (Tiefe 0.05), Testkante dahinter (Tiefe 1).
+  const fp = [[[-1, 0, -0.05], [1, 0, -0.05]]];
+  const edge = [[-0.3, 0, -1], [0.3, 0, -1]];
+
+  // Grosse Near-Plane (0.1 > 0.05): Verdecker wird weggeclippt -> verdeckt NICHT (Bug-Szenario).
+  const bigVP = { ...VP, near: 0.1 };
+  const occBig = projectOccluders(fp, cam, bigVP);
+  assert.ok(occludeEdge(edge, cam, bigVP, occBig).every((s) => !s.occluded));
+
+  // Kleine Near-Plane (0.01 < 0.05): Verdecker zaehlt -> Kante korrekt verdeckt.
+  const smallVP = { ...VP, near: 0.01 };
+  const occSmall = projectOccluders(fp, cam, smallVP);
+  assert.ok(occludeEdge(edge, cam, smallVP, occSmall).some((s) => s.occluded));
+});
+
 test('eigene Wand verdeckt sich nicht selbst (gleiche Tiefe)', () => {
   // Eine Kante, die exakt auf einem Verdecker-Grundriss liegt (y angehoben).
   const o = projectOccluders([[[-1, 0, -3], [1, 0, -3]]], cam, VP);

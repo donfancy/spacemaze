@@ -15,7 +15,8 @@ export const CUBE_SIZE = 2.4;   // Kantenlaenge des Wuerfels (= Bildflaeche)
 export const WALL_RATIO = 1.2;  // Wandhoehe in Zellen
 export const EYE_RATIO = 0.5;   // Augenhoehe in Zellen
 export const FAR_RATIO = 6;     // ab dieser Tiefe (in Zellen) werden verdeckte Kanten weggelassen
-const NEAR = 0.1;
+export const NEAR_RATIO = 0.1;  // Near-Plane in Zellen -- MUSS mit der kleinen Flaechen-Zellgroesse mitskalieren,
+                                // sonst werden nahe (verdeckende) Waende abgeschnitten
 const DIM = 0.1;
 
 export function cellSize(maze) {
@@ -45,7 +46,7 @@ export function renderFaceWalls(renderer, walls, footprints, camera, pose, opts 
   camera.position = pose.position;
   camera.basis = basisFromForwardUp(pose.forward, pose.up);
 
-  const vp = { width: renderer.width, height: renderer.height, fov: camera.fov, near: NEAR };
+  const vp = { width: renderer.width, height: renderer.height, fov: camera.fov, near: opts.near ?? 0.1 };
   const occ = projectOccluders(footprints, camera, vp);
   const far = opts.far ?? Infinity;
   // Wirkungsstaerke der Hidden-Line-Verdeckung (0..1). Die azimutale Annahme gilt

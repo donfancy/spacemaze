@@ -9,7 +9,7 @@ import { generateMaze } from '../world/maze.js';
 import { cellCenter, cellAt, tryMove, startFacingYaw } from '../world/mazeWorld.js';
 import { faceLocalToWorld, faceDir, SIDE_FACES } from '../world/cubeFaces.js';
 import {
-  CUBE_SIZE, WALL_RATIO, EYE_RATIO, FAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
+  CUBE_SIZE, WALL_RATIO, EYE_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
 } from './mazeView.js';
 
 const MOVE_RATIO = 2.2;   // Zellen pro Sekunde
@@ -72,7 +72,7 @@ export function createPlaying(game) {
         forward: faceDir(-Math.sin(yaw), 0, -Math.cos(yaw), face),
         up: face.normal,
       };
-      renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell });
+      renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell });
 
       const w = renderer.width;
       const h = renderer.height;

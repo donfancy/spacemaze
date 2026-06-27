@@ -12,7 +12,7 @@ import {
   faceDockPose, faceLocalToWorld, faceDir, mapGridToFace, gridBorderOnFace, SIDE_FACES,
 } from '../world/cubeFaces.js';
 import {
-  CUBE_SIZE, WALL_RATIO, EYE_RATIO, FAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
+  CUBE_SIZE, WALL_RATIO, EYE_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
 } from './mazeView.js';
 
 const DURATION = 1.7; // Sekunden
@@ -79,7 +79,7 @@ export function createFalling(game) {
       const occWeight = 1 - Math.abs(fn);
 
       const walls = faceWalls(maze, face, WALL_RATIO * cell * e); // Waende wachsen auf
-      renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, occWeight });
+      renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight });
 
       // Naht zur Kartensicht: Grid-Rahmen + S/G blenden waehrend des Schwenks aus.
       const fade = 1 - e;
