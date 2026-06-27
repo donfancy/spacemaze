@@ -19,6 +19,7 @@ function fakeRenderer() {
     drawText() { this.calls++; },
     drawPolylines() { this.calls++; },
     renderScene() { this.calls++; },
+    worldToScreen() { return { x: 400, y: 300 }; },
   };
 }
 
@@ -66,11 +67,11 @@ test('voller Zyklus Start -> (Andocken) -> MazeGen -> Playing -> Start', () => {
   const r = fakeRenderer();
 
   g.handleKey('S');
-  advance(g, r, 2.6); // Andocken (~1,6s) + Uebergang
+  advance(g, r, 1.8); // Andocken (~1,6s) -> nahtlos (ohne Fade) MazeGen
   assert.equal(g.stateKey, State.MAZE_GEN);
 
-  // MazeGen schaltet nach ~2s automatisch weiter.
-  advance(g, r, 2.2);
+  // MazeGen inszeniert Marker + Wachstum (~4,3s), dann weiter.
+  advance(g, r, 4.5);
   advance(g, r, 0.8); // Uebergang nach Playing
   assert.equal(g.stateKey, State.PLAYING);
 
@@ -94,7 +95,7 @@ test('Zustands-Zyklus direkt via dispatch (ohne Andocken)', () => {
   advance(g, r, 0.8);
   assert.equal(g.stateKey, State.MAZE_GEN);
 
-  advance(g, r, 2.2);
+  advance(g, r, 4.5); // MazeGen-Inszenierung
   advance(g, r, 0.8);
   assert.equal(g.stateKey, State.PLAYING);
 

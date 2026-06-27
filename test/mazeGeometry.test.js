@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateMaze, OPEN } from '../src/world/maze.js';
-import { corridorOutline } from '../src/world/mazeGeometry.js';
+import {
+  corridorOutline, growthOutline, mapGridToWorld, mapSegmentsToWorld, gridBorderWorld,
+} from '../src/world/mazeGeometry.js';
 import { createRng } from '../src/util/rng.js';
 
 function maze(n = 11, seed = 20260627) {
@@ -71,4 +73,41 @@ test('robust ueber mehrere n und Seeds (immer geschlossene Konturen)', () => {
       }
     }
   }
+});
+
+test('growthOutline: k=0 ist leer, voll deckt die inneren Konturen ab', () => {
+  const m = maze(11);
+  assert.equal(growthOutline(m, 0).length, 0);
+  assert.ok(growthOutline(m, m.order.length).length > 0);
+});
+
+test('growthOutline liefert NIE Aussenrand-Segmente, fuer jedes k', () => {
+  const m = maze(11);
+  for (let k = 0; k <= m.order.length; k++) {
+    for (const [[x1, y1], [x2, y2]] of growthOutline(m, k)) {
+      const onBorder = (y1 === y2 && (y1 === 0 || y1 === 11)) || (x1 === x2 && (x1 === 0 || x1 === 11));
+      assert.ok(!onBorder, `k=${k}: Aussenrand-Segment durchgerutscht`);
+    }
+  }
+});
+
+test('mapGridToWorld bildet das Grid-Quadrat auf die Ebene ab', () => {
+  assert.deepEqual(mapGridToWorld(0, 0, 11, 2.4, 1.2), [-1.2, 1.2, -1.2]);
+  assert.deepEqual(mapGridToWorld(11, 11, 11, 2.4, 1.2), [1.2, 1.2, 1.2]);
+  assert.deepEqual(mapGridToWorld(5.5, 5.5, 11, 2.4, 1.2), [0, 1.2, 0]);
+});
+
+test('gridBorderWorld: 4 Segmente, alle in der Ebene y=planeY', () => {
+  const segs = gridBorderWorld(11, 2.4, 1.2);
+  assert.equal(segs.length, 4);
+  for (const [a, b] of segs) {
+    assert.equal(a[1], 1.2);
+    assert.equal(b[1], 1.2);
+  }
+});
+
+test('mapSegmentsToWorld mappt 2D-Segmente in die Ebene', () => {
+  const world = mapSegmentsToWorld([[[0, 0], [1, 0]]], 11, 2.4, 1.2);
+  assert.equal(world.length, 1);
+  assert.deepEqual(world[0][0], [-1.2, 1.2, -1.2]);
 });

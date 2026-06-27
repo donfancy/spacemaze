@@ -54,7 +54,8 @@ export function createStartscreen(game) {
         if (dockT >= DOCK_DURATION) {
           dockT = DOCK_DURATION;
           phase = 'docked';
-          game.dispatch(GameEvent.START); // erst nach dem Andocken weiter
+          // Nahtlos (ohne Fade) ins Labyrinth: MazeGen uebernimmt dieselbe Draufsicht.
+          game.dispatch(GameEvent.START, { fade: false });
         }
       }
     },

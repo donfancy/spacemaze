@@ -88,24 +88,31 @@ export function generateMaze(n = 11, options = {}) {
   const start = [...startList[randInt(rng, startList.length)]];
   const goal = [...goalList[randInt(rng, goalList.length)]];
 
-  // Recursive Backtracker (iterativ mit Stack) ueber die Kammern.
-  carve(grid, n, start, goal, rng);
+  // Recursive Backtracker (iterativ mit Stack) ueber die Kammern. Liefert die
+  // Reihenfolge, in der Zellen begehbar werden (fuer die Wachstums-Animation).
+  const order = carve(grid, n, start, goal, rng);
 
-  return { n, grid, start, goal, seed };
+  return { n, grid, start, goal, seed, order };
 }
 
 // Hoehlt die Zwischenwaende aus, bis ein Spannbaum ueber alle Kammern entsteht.
+// Liefert `order`: alle offen werdenden Zellen in der Reihenfolge ihrer Oeffnung
+// (Start zuerst, dann je Schritt Zwischenwand und neue Kammer). Grundlage der
+// "Reinfress"-Animation.
 function carve(grid, n, start, goal, rng) {
   const key = (x, y) => x + ',' + y;
   const goalKey = key(goal[0], goal[1]);
   const visited = new Set([key(start[0], start[1])]);
+  const order = [[start[0], start[1]]]; // S wird zuerst begehbar
 
   // Start-Terminierung: genau EINE Wand von S zu einem zufaelligen Nachbarn
   // (niemals direkt G) oeffnen und das eigentliche Graben bei diesem Nachbarn
   // beginnen. So behaelt S nur diese eine Verbindung.
   const startOptions = neighborsOf(start, n).filter(([nx, ny]) => key(nx, ny) !== goalKey);
   const [fx, fy, fdx, fdy] = startOptions[randInt(rng, startOptions.length)];
-  grid[start[1] + fdy / 2][start[0] + fdx / 2] = OPEN;
+  const swx = start[0] + fdx / 2, swy = start[1] + fdy / 2;
+  grid[swy][swx] = OPEN;
+  order.push([swx, swy], [fx, fy]); // Zwischenwand, dann erste Nachbarkammer
   visited.add(key(fx, fy));
   const stack = [[fx, fy]];
 
@@ -120,7 +127,9 @@ function carve(grid, n, start, goal, rng) {
 
     const [nx, ny, dx, dy] = candidates[randInt(rng, candidates.length)];
     // Zwischenwand zwischen aktueller und Nachbarkammer oeffnen.
-    grid[cy + dy / 2][cx + dx / 2] = OPEN;
+    const wx = cx + dx / 2, wy = cy + dy / 2;
+    grid[wy][wx] = OPEN;
+    order.push([wx, wy], [nx, ny]); // Zwischenwand, dann neue Kammer
     visited.add(key(nx, ny));
 
     // Ziel-Terminierung: G wird besucht (und damit nie erneut geoeffnet), aber
@@ -130,6 +139,7 @@ function carve(grid, n, start, goal, rng) {
       stack.push([nx, ny]);
     }
   }
+  return order;
 }
 
 // Nachbarkammern (2 Felder entfernt) innerhalb der Aussenwaende, je mit Richtung [dx,dy].

@@ -111,4 +111,11 @@ export class Renderer {
       glow: opts.glow ?? this.glow,
     });
   }
+
+  // Projiziert einen Weltpunkt auf Bildschirm-Pixel ({x,y}) oder null, wenn er
+  // hinter der Near-Plane liegt. Nuetzlich, um 2D-Marker an 3D-Positionen zu setzen.
+  worldToScreen(worldPoint, camera) {
+    const v = worldToView(camera, worldPoint);
+    return project(v, { width: this.width, height: this.height, fov: camera.fov, near: this.near });
+  }
 }

@@ -192,3 +192,28 @@ test('funktioniert auch fuer kleinstes n=7', () => {
   }
   assert.equal(chambersSeen, chamberCount(n)); // 9 Kammern, alle verbunden
 });
+
+test('order enthaelt jede offene Zelle genau einmal, Start zuerst, Ziel enthalten', () => {
+  const m = maze(11);
+  let openCount = 0;
+  for (let y = 0; y < 11; y++) {
+    for (let x = 0; x < 11; x++) {
+      if (m.grid[y][x] === OPEN) openCount++;
+    }
+  }
+  assert.equal(m.order.length, openCount);
+  assert.deepEqual(m.order[0], m.start);
+
+  const seen = new Set();
+  for (const [x, y] of m.order) {
+    const k = `${x},${y}`;
+    assert.ok(!seen.has(k), `Duplikat in order: ${k}`);
+    seen.add(k);
+    assert.equal(m.grid[y][x], OPEN, `order-Zelle ${k} ist nicht offen`);
+  }
+  assert.ok(seen.has(m.goal.join(',')), 'Ziel fehlt in order');
+});
+
+test('order ist deterministisch fuer gleichen Seed', () => {
+  assert.deepEqual(generateMaze(11, { seed: 123 }).order, generateMaze(11, { seed: 123 }).order);
+});

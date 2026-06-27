@@ -36,10 +36,18 @@ export class Game {
 
   // Ereignis ausloesen: startet einen animierten Uebergang, falls in diesem
   // Zustand definiert. Waehrend eines laufenden Uebergangs werden Ereignisse ignoriert.
-  dispatch(event) {
+  dispatch(event, opts = {}) {
     if (this.transition.active) return false;
     const target = nextState(this.stateKey, event);
     if (!target) return false;
+    if (opts.fade === false) {
+      // Nahtloser, sofortiger Wechsel (z.B. Andocken -> Labyrinth: gleiche Kamera).
+      this.current.exit?.();
+      this.stateKey = target;
+      this.current.enter?.();
+      this.debug?.log(`${event} -> ${target} (instant)`);
+      return true;
+    }
     this.transition = { active: true, t: 0, toState: target, switched: false };
     this.debug?.log(`${event} -> ${target}`);
     return true;
