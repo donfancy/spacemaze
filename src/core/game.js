@@ -16,6 +16,8 @@ export class Game {
     this.debug = options.debug ?? null;
     this.time = 0;
     this.dockFace = null; // vom Startscreen gewaehlte Andock-Flaeche (fuer MazeGen)
+    this.maze = null;     // von MazeGen erzeugt, von Playing weiterverwendet
+    this.keys = new Set(); // aktuell gedrueckte Tasten (fuer kontinuierliche Steuerung)
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.
     this.scenes = {

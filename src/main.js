@@ -22,10 +22,18 @@ resize();
 // --- Spiel + Eingabe ------------------------------------------------------------
 const game = new Game({ debug: debugEnabled ? debug : null });
 
+// Einzelzeichen (Buchstaben) normalisieren wir auf Grossbuchstaben.
+const normKey = (e) => (e.key.length === 1 ? e.key.toUpperCase() : e.key);
+
 window.addEventListener('keydown', (e) => {
-  // Einzelzeichen (Buchstaben) normalisieren wir auf Grossbuchstaben.
-  const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-  game.handleKey(key);
+  const key = normKey(e);
+  game.keys.add(key);          // gehaltene Taste (kontinuierliche Steuerung)
+  game.handleKey(key);         // diskrete Aktion (S, Q, ...)
+  if (key.startsWith('Arrow')) e.preventDefault(); // kein Seiten-Scrollen
+});
+
+window.addEventListener('keyup', (e) => {
+  game.keys.delete(normKey(e));
 });
 
 // --- Debug-Overlay unten rechts -------------------------------------------------

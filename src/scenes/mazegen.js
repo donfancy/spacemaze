@@ -60,6 +60,7 @@ export function createMazeGen(game) {
     enter() {
       t = 0;
       maze = generateMaze(LEVEL1_N, { seed: randomSeed() });
+      game.maze = maze; // an Playing weiterreichen
       face = game.dockFace ?? SIDE_FACES[0]; // Fallback, falls ohne Andocken erreicht
       border = gridBorderOnFace(maze.n, CUBE_SIZE, face);
       applyDock();
