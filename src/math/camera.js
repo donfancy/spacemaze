@@ -9,7 +9,7 @@
 // pitch = Drehung um die x-Achse (hoch/runter schauen)
 // roll  = Drehung um die z-Achse (Kippen des Horizonts)
 
-import { sub, rotateX, rotateY, rotateZ } from './vec3.js';
+import { sub, normalize, rotateX, rotateY, rotateZ } from './vec3.js';
 
 export function createCamera(opts = {}) {
   return {
@@ -41,4 +41,14 @@ export function forward(camera) {
   f = rotateX(f, camera.pitch);
   f = rotateY(f, camera.yaw);
   return f;
+}
+
+// Berechnet yaw/pitch (roll bleibt 0), damit eine Kamera an `position` genau auf
+// `target` blickt -- die Umkehrung von forward(). Liefert {yaw, pitch}.
+export function lookAt(position, target) {
+  const d = normalize(sub(target, position));
+  // forward = [-cos(pitch)*sin(yaw), sin(pitch), -cos(pitch)*cos(yaw)]
+  const pitch = Math.asin(Math.max(-1, Math.min(1, d[1])));
+  const yaw = Math.atan2(-d[0], -d[2]);
+  return { yaw, pitch };
 }
