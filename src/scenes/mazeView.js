@@ -8,7 +8,7 @@
 
 import { basisFromForwardUp } from '../math/camera.js';
 import { mazeWalls, wallFootprints } from '../world/mazeWorld.js';
-import { faceLocalToWorld } from '../world/cubeFaces.js';
+import { faceLocalToWorld, faceDir, faceDockPose, mapGridToFace, gridBorderOnFace } from '../world/cubeFaces.js';
 import { projectOccluders, occludeEdge } from '../render/occlusion.js';
 
 export const CUBE_SIZE = 2.4;   // Kantenlaenge des Wuerfels (= Bildflaeche)
@@ -21,6 +21,25 @@ const DIM = 0.1;
 
 export function cellSize(maze) {
   return CUBE_SIZE / maze.n;
+}
+
+// Ego-Pose auf der Flaeche: Position (lokale Flaecheneinheiten) + Blickwinkel yaw.
+export function egoPose(face, px, pz, yaw, cell) {
+  return {
+    position: faceLocalToWorld(px, EYE_RATIO * cell, pz, face, CUBE_SIZE),
+    forward: faceDir(-Math.sin(yaw), 0, -Math.cos(yaw), face),
+    up: face.normal,
+  };
+}
+
+// Kartensicht-Pose (= Andock-Pose): frontal auf die Flaeche, Welt-oben.
+export function mapPose(face, fov) {
+  const dock = faceDockPose(face, CUBE_SIZE, fov, 0.85);
+  return {
+    position: dock.position,
+    forward: [-face.normal[0], -face.normal[1], -face.normal[2]],
+    up: [0, 1, 0],
+  };
 }
 
 function toFace(segments, face) {
@@ -38,6 +57,38 @@ export function faceWalls(maze, face, height) {
 // Verdecker-Grundrisse auf der Flaeche.
 export function faceFootprints(maze, face) {
   return toFace(wallFootprints(maze, { cell: cellSize(maze) }), face);
+}
+
+function drawFaceMarker(renderer, gridCell, label, face, n, camera, intensity) {
+  const world = mapGridToFace(gridCell[0] + 0.5, gridCell[1] + 0.5, n, CUBE_SIZE, face);
+  const screen = renderer.worldToScreen(world, camera);
+  if (!screen) return;
+  renderer.drawText(label, {
+    x: screen.x, y: screen.y, size: Math.max(12, renderer.height * 0.04),
+    align: 'center', baseline: 'middle', intensity,
+  });
+}
+
+// Karten-Overlay: Grid-Rahmen, S/G-Marker und (optional) der abgelaufene Weg.
+// Erwartet eine bereits gesetzte camera.basis (nach renderFaceWalls). `trail` ist
+// eine Liste von Grid-Zellen [gx,gy] oder null.
+export function drawMapOverlay(renderer, maze, face, camera, trail, intensity) {
+  if (intensity <= 0.01) return;
+  renderer.renderScene({ segments: gridBorderOnFace(maze.n, CUBE_SIZE, face), intensity }, camera);
+
+  if (trail && trail.length > 1) {
+    const segs = [];
+    for (let i = 1; i < trail.length; i++) {
+      segs.push([
+        mapGridToFace(trail[i - 1][0] + 0.5, trail[i - 1][1] + 0.5, maze.n, CUBE_SIZE, face),
+        mapGridToFace(trail[i][0] + 0.5, trail[i][1] + 0.5, maze.n, CUBE_SIZE, face),
+      ]);
+    }
+    renderer.renderScene({ segments: segs, intensity }, camera);
+  }
+
+  drawFaceMarker(renderer, maze.start, 'S', face, maze.n, camera, intensity);
+  drawFaceMarker(renderer, maze.goal, 'G', face, maze.n, camera, intensity);
 }
 
 // Rendert weltweite Wand-Segmente aus einer Pose {position, forward, up} mit

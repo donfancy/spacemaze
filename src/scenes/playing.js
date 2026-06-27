@@ -1,20 +1,21 @@
 // Zustand "Spielablauf": Ego-Perspektive im Labyrinth, Tank-Steuerung.
-// Das Labyrinth liegt auf der Andock-Wuerfelflaeche (nahtlos vom Reinfallen).
-// Die Spiellogik (Bewegung, Kollision) rechnet in der lokalen Welt; gerendert
-// wird ueber die Flaeche mit freier Kamera-Orientierung (up = Flaechennormale).
+// Zeichnet den abgelaufenen Weg auf (game.trail) und merkt die Spielerlage
+// (game.playerState) fuer den Rueckschwenk. Q -> zurueck zur Karte; am Ziel
+// loest der Rueckschwenk nach 20 s automatisch aus.
 
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
 import { cellCenter, cellAt, tryMove, startFacingYaw } from '../world/mazeWorld.js';
-import { faceLocalToWorld, faceDir, SIDE_FACES } from '../world/cubeFaces.js';
+import { SIDE_FACES } from '../world/cubeFaces.js';
 import {
-  CUBE_SIZE, WALL_RATIO, EYE_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
+  WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls, egoPose,
 } from './mazeView.js';
 
-const MOVE_RATIO = 2.2;   // Zellen pro Sekunde
-const TURN_SPEED = 2.2;   // Radiant pro Sekunde
+const MOVE_RATIO = 2.2;     // Zellen pro Sekunde
+const TURN_SPEED = 2.2;     // Radiant pro Sekunde
 const RADIUS_RATIO = 0.25;
+const GOAL_AUTO_EXIT = 20;  // Sekunden am Ziel bis automatischer Rueckschwenk
 
 export function createPlaying(game) {
   const camera = createCamera({ fov: Math.PI / 2.4 });
@@ -24,10 +25,15 @@ export function createPlaying(game) {
   let walls = null;
   let footprints = null;
   let cell = 1;
-  let px = 0; // lokale Position (Flaecheneinheiten)
+  let px = 0;
   let pz = 0;
-  let yaw = 0; // lokaler Blickwinkel
+  let yaw = 0;
   let reached = false;
+  let reachedTime = 0;
+
+  function recordState() {
+    game.playerState = { px, pz, yaw };
+  }
 
   return {
     enter() {
@@ -41,6 +47,9 @@ export function createPlaying(game) {
       pz = cz;
       yaw = startFacingYaw(maze);
       reached = false;
+      reachedTime = 0;
+      game.trail = [[maze.start[0], maze.start[1]]]; // abgelaufener Weg
+      recordState();
     },
 
     update(dt) {
@@ -62,16 +71,22 @@ export function createPlaying(game) {
       }
 
       const [gx, gy] = cellAt(px, pz, cell);
+      // Weg aufzeichnen, sobald eine neue Zelle betreten wird.
+      const last = game.trail[game.trail.length - 1];
+      if ((last[0] !== gx || last[1] !== gy) && gx >= 0 && gx < maze.n && gy >= 0 && gy < maze.n) {
+        game.trail.push([gx, gy]);
+      }
+      recordState();
+
       if (gx === maze.goal[0] && gy === maze.goal[1]) reached = true;
+      if (reached) {
+        reachedTime += dt;
+        if (reachedTime >= GOAL_AUTO_EXIT) game.dispatch(GameEvent.EXIT, { fade: false });
+      }
     },
 
     render(renderer) {
-      const eye = EYE_RATIO * cell;
-      const pose = {
-        position: faceLocalToWorld(px, eye, pz, face, CUBE_SIZE),
-        forward: faceDir(-Math.sin(yaw), 0, -Math.cos(yaw), face),
-        up: face.normal,
-      };
+      const pose = egoPose(face, px, pz, yaw, cell);
       renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell });
 
       const w = renderer.width;
@@ -80,7 +95,7 @@ export function createPlaying(game) {
         x: 24, y: 24, size: Math.min(20, h * 0.03),
         align: 'left', baseline: 'top', intensity: 0.7,
       });
-      renderer.drawText('ARROWS MOVE - Q QUIT', {
+      renderer.drawText('ARROWS MOVE - Q MAP', {
         x: w - 24, y: h - 20, size: 13,
         align: 'right', baseline: 'bottom', intensity: 0.5,
       });
@@ -93,7 +108,7 @@ export function createPlaying(game) {
     },
 
     onKey(key) {
-      if (key === 'Q') game.dispatch(GameEvent.EXIT);
+      if (key === 'Q') game.dispatch(GameEvent.EXIT, { fade: false }); // nahtlos in den Rueckschwenk
     },
   };
 }

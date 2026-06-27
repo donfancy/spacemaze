@@ -83,7 +83,14 @@ test('voller Zyklus Start -> (Andocken) -> MazeGen -> Playing -> Start', () => {
   advance(g, r, 0.1);
   assert.ok(r.calls > 0);
 
-  // Q verlaesst das Spiel zurueck zum Startscreen.
+  // Q -> Rueckschwenk (nahtlos) -> Karte.
+  g.handleKey('Q');
+  advance(g, r, 0.1);
+  assert.equal(g.stateKey, State.RISING);
+  advance(g, r, 2.0);
+  assert.equal(g.stateKey, State.MAP);
+
+  // Q auf der Karte -> zurueck zum Startscreen.
   g.handleKey('Q');
   advance(g, r, 0.8);
   assert.equal(g.stateKey, State.STARTSCREEN);
@@ -102,6 +109,12 @@ test('Zustands-Zyklus direkt via dispatch (ohne Andocken)', () => {
   assert.equal(g.stateKey, State.FALLING);
   advance(g, r, 2.0); // Falling -> Playing
   assert.equal(g.stateKey, State.PLAYING);
+
+  g.dispatch(GameEvent.EXIT);
+  advance(g, r, 0.8);
+  assert.equal(g.stateKey, State.RISING);
+  advance(g, r, 2.0); // Rising -> Map
+  assert.equal(g.stateKey, State.MAP);
 
   g.dispatch(GameEvent.EXIT);
   advance(g, r, 0.8);

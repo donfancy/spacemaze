@@ -9,6 +9,8 @@ import { createStartscreen } from '../scenes/startscreen.js';
 import { createMazeGen } from '../scenes/mazegen.js';
 import { createFalling } from '../scenes/falling.js';
 import { createPlaying } from '../scenes/playing.js';
+import { createRising } from '../scenes/rising.js';
+import { createMap } from '../scenes/map.js';
 
 const TRANSITION_DURATION = 0.7; // Sekunden fuer den gesamten Fade out+in
 
@@ -19,6 +21,8 @@ export class Game {
     this.dockFace = null; // vom Startscreen gewaehlte Andock-Flaeche (fuer MazeGen)
     this.maze = null;     // von MazeGen erzeugt, von Playing weiterverwendet
     this.keys = new Set(); // aktuell gedrueckte Tasten (fuer kontinuierliche Steuerung)
+    this.trail = [];      // abgelaufener Weg (Grid-Zellen), von Playing aufgezeichnet
+    this.playerState = null; // letzte Spielerlage {px,pz,yaw} fuer den Rueckschwenk
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.
     this.scenes = {
@@ -26,6 +30,8 @@ export class Game {
       [State.MAZE_GEN]: createMazeGen(this),
       [State.FALLING]: createFalling(this),
       [State.PLAYING]: createPlaying(this),
+      [State.RISING]: createRising(this),
+      [State.MAP]: createMap(this),
     };
 
     this.stateKey = State.STARTSCREEN;
