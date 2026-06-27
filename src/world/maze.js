@@ -12,6 +12,13 @@
 //     Ergebnis: "perfektes" Labyrinth -> genau EIN Weg zwischen je zwei Kammern.
 //   - Start: zufaellige Kammer in Quadrant 1 (grosses x & y).
 //     Ziel:  zufaellige Kammer in Quadrant 3 (kleines x & y), diagonal gegenueber.
+//   - Terminierung von S UND G: von beiden wird nie weitergegraben, daher haben
+//     beide am Ende genau EINE Verbindung und liegen -- wie ein Korridor-Ende --
+//     am Ende eines Weges (Sackgasse). G passiv (wird nur einmal erreicht), S aktiv
+//     (oeffnet genau eine Wand, dann graebt der Algorithmus vom Nachbarn weiter).
+//     Das verlangt n >= 7: bei n = 5 (2x2 Kammern) liegen S und G diagonal im
+//     4er-Ring, und ein Ring-Spannbaum kann nie zwei DIAGONALE Ecken zugleich zu
+//     Blaettern machen -- beide gleichzeitig als Sackgasse waere unmoeglich.
 
 import { createRng, randomSeed, randInt } from '../util/rng.js';
 
@@ -58,8 +65,8 @@ export function generateMaze(n = 11, options = {}) {
   if (!Number.isInteger(n) || n % 2 === 0) {
     throw new Error('n muss eine ungerade Ganzzahl sein, war ' + n);
   }
-  if (n < 5) {
-    throw new Error('n muss >= 5 sein, war ' + n);
+  if (n < 7) {
+    throw new Error('n muss >= 7 sein (S und G sollen beide Sackgassen sein), war ' + n);
   }
 
   const seed = options.seed ?? randomSeed();
@@ -82,29 +89,29 @@ export function generateMaze(n = 11, options = {}) {
   const goal = [...goalList[randInt(rng, goalList.length)]];
 
   // Recursive Backtracker (iterativ mit Stack) ueber die Kammern.
-  carve(grid, n, start, rng);
+  carve(grid, n, start, goal, rng);
 
   return { n, grid, start, goal, seed };
 }
 
 // Hoehlt die Zwischenwaende aus, bis ein Spannbaum ueber alle Kammern entsteht.
-function carve(grid, n, start, rng) {
+function carve(grid, n, start, goal, rng) {
   const key = (x, y) => x + ',' + y;
+  const goalKey = key(goal[0], goal[1]);
   const visited = new Set([key(start[0], start[1])]);
-  const stack = [start];
+
+  // Start-Terminierung: genau EINE Wand von S zu einem zufaelligen Nachbarn
+  // (niemals direkt G) oeffnen und das eigentliche Graben bei diesem Nachbarn
+  // beginnen. So behaelt S nur diese eine Verbindung.
+  const startOptions = neighborsOf(start, n).filter(([nx, ny]) => key(nx, ny) !== goalKey);
+  const [fx, fy, fdx, fdy] = startOptions[randInt(rng, startOptions.length)];
+  grid[start[1] + fdy / 2][start[0] + fdx / 2] = OPEN;
+  visited.add(key(fx, fy));
+  const stack = [[fx, fy]];
 
   while (stack.length > 0) {
     const [cx, cy] = stack[stack.length - 1];
-
-    // Unbesuchte Nachbarkammern (2 Felder entfernt, innerhalb der Aussenwaende).
-    const candidates = [];
-    for (const [dx, dy] of STEP) {
-      const nx = cx + dx;
-      const ny = cy + dy;
-      if (nx < 1 || nx > n - 2 || ny < 1 || ny > n - 2) continue;
-      if (visited.has(key(nx, ny))) continue;
-      candidates.push([nx, ny, dx, dy]);
-    }
+    const candidates = neighborsOf([cx, cy], n).filter(([nx, ny]) => !visited.has(key(nx, ny)));
 
     if (candidates.length === 0) {
       stack.pop(); // Sackgasse -> zurueck
@@ -115,8 +122,26 @@ function carve(grid, n, start, rng) {
     // Zwischenwand zwischen aktueller und Nachbarkammer oeffnen.
     grid[cy + dy / 2][cx + dx / 2] = OPEN;
     visited.add(key(nx, ny));
-    stack.push([nx, ny]);
+
+    // Ziel-Terminierung: G wird besucht (und damit nie erneut geoeffnet), aber
+    // NICHT auf den Stack gelegt -> von G wird nie weitergegraben. So behaelt G
+    // genau eine Verbindung und bleibt eine Sackgasse.
+    if (key(nx, ny) !== goalKey) {
+      stack.push([nx, ny]);
+    }
   }
+}
+
+// Nachbarkammern (2 Felder entfernt) innerhalb der Aussenwaende, je mit Richtung [dx,dy].
+function neighborsOf([cx, cy], n) {
+  const result = [];
+  for (const [dx, dy] of STEP) {
+    const nx = cx + dx;
+    const ny = cy + dy;
+    if (nx < 1 || nx > n - 2 || ny < 1 || ny > n - 2) continue;
+    result.push([nx, ny, dx, dy]);
+  }
+  return result;
 }
 
 // Menge aller von `from` aus erreichbaren offenen Zellen (als "x,y"-Strings).

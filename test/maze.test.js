@@ -17,10 +17,20 @@ function chamberCount(n) {
   return c * c;
 }
 
-test('n muss eine ungerade Ganzzahl >= 5 sein', () => {
+// Anzahl offener Verbindungen einer Kammer (ueber die 4 angrenzenden Zwischenwaende).
+function openLinks(m, [cx, cy]) {
+  let count = 0;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const x = cx + dx, y = cy + dy;
+    if (x >= 0 && x < m.n && y >= 0 && y < m.n && m.grid[y][x] === OPEN) count++;
+  }
+  return count;
+}
+
+test('n muss eine ungerade Ganzzahl >= 7 sein', () => {
   assert.throws(() => generateMaze(10), /ungerade/);
-  assert.throws(() => generateMaze(3), />= 5/);
-  assert.doesNotThrow(() => maze(5));
+  assert.throws(() => generateMaze(5), />= 7/);
+  assert.doesNotThrow(() => maze(7));
   assert.doesNotThrow(() => maze(11));
 });
 
@@ -129,8 +139,49 @@ test('verschiedene Seeds erzeugen (in der Regel) verschiedene Labyrinthe', () =>
   assert.notDeepEqual(a.grid, b.grid);
 });
 
-test('funktioniert auch fuer kleines n=5', () => {
-  const n = 5;
+test('Start S und Ziel G sind beide Sackgassen: je genau eine Verbindung (viele Seeds)', () => {
+  for (let seed = 1; seed <= 80; seed++) {
+    const m = generateMaze(11, { seed });
+    assert.equal(openLinks(m, m.start), 1,
+      `seed ${seed}: S hat ${openLinks(m, m.start)} Verbindungen statt 1`);
+    assert.equal(openLinks(m, m.goal), 1,
+      `seed ${seed}: G hat ${openLinks(m, m.goal)} Verbindungen statt 1`);
+  }
+});
+
+test('Terminierung erhaelt perfektes Labyrinth fuer n in {7,9,11,13,15} (viele Seeds)', () => {
+  for (const n of [7, 9, 11, 13, 15]) {
+    for (let seed = 1; seed <= 40; seed++) {
+      const m = generateMaze(n, { seed });
+
+      // Alle Kammern vom Start aus erreichbar (verbunden)?
+      const seen = reachable(m, m.start);
+      let chambers = 0;
+      for (let y = 1; y <= n - 2; y += 2) {
+        for (let x = 1; x <= n - 2; x += 2) {
+          if (seen.has(`${x},${y}`)) chambers++;
+        }
+      }
+      assert.equal(chambers, chamberCount(n), `n=${n} seed=${seed}: nicht alle Kammern verbunden`);
+
+      // Spannbaum: offene Zwischenwaende = Kammern - 1 (genau ein Weg).
+      let openWalls = 0;
+      for (let y = 0; y < n; y++) {
+        for (let x = 0; x < n; x++) {
+          if (((x % 2) !== (y % 2)) && m.grid[y][x] === OPEN) openWalls++;
+        }
+      }
+      assert.equal(openWalls, chamberCount(n) - 1, `n=${n} seed=${seed}: kein Spannbaum`);
+
+      // S und G beide Sackgassen.
+      assert.equal(openLinks(m, m.start), 1, `n=${n} seed=${seed}: S keine Sackgasse`);
+      assert.equal(openLinks(m, m.goal), 1, `n=${n} seed=${seed}: G keine Sackgasse`);
+    }
+  }
+});
+
+test('funktioniert auch fuer kleinstes n=7', () => {
+  const n = 7;
   const m = maze(n);
   const seen = reachable(m, m.start);
   let chambersSeen = 0;
@@ -139,5 +190,5 @@ test('funktioniert auch fuer kleines n=5', () => {
       if (seen.has(`${x},${y}`)) chambersSeen++;
     }
   }
-  assert.equal(chambersSeen, chamberCount(n)); // 4 Kammern, alle verbunden
+  assert.equal(chambersSeen, chamberCount(n)); // 9 Kammern, alle verbunden
 });
