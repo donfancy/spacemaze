@@ -9,7 +9,7 @@ import { generateMaze } from '../world/maze.js';
 import {
   mazeWalls, wallFootprints, cellCenter, cellAt, tryMove, startFacingYaw,
 } from '../world/mazeWorld.js';
-import { buildDepthBuffer, splitEdgeByOcclusion } from '../render/occlusion.js';
+import { projectOccluders, occludeEdge } from '../render/occlusion.js';
 
 const CELL = 1;
 const WALL_HEIGHT = 1.2;
@@ -73,13 +73,13 @@ export function createPlaying(game) {
       camera.pitch = 0;
 
       const vp = { width: renderer.width, height: renderer.height, fov: camera.fov, near: NEAR };
-      const depthBuffer = buildDepthBuffer(footprints, camera, vp);
+      const occluders = projectOccluders(footprints, camera, vp);
 
-      // Jede Wandkante an den Verdeckungsgrenzen aufteilen und einsortieren.
+      // Jede Wandkante exakt an den Verdeckungsgrenzen aufteilen und einsortieren.
       const visible = [];
       const dimmed = [];
       for (const edge of walls) {
-        for (const s of splitEdgeByOcclusion(edge, camera, vp, depthBuffer)) {
+        for (const s of occludeEdge(edge, camera, vp, occluders)) {
           if (!s.occluded) visible.push([s.a, s.b]);
           else if (s.depth < FAR_OCCLUDED) dimmed.push([s.a, s.b]);
           // sonst: weit verdeckt -> gar nicht zeichnen
