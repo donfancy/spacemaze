@@ -45,13 +45,20 @@ export function createPlaying(game) {
       cell = cellSize(maze);
       walls = faceWalls(maze, face, WALL_RATIO * cell);
       footprints = faceFootprints(maze, face);
-      const [cx, cz] = cellCenter(maze.start[0], maze.start[1], cell);
-      px = cx;
-      pz = cz;
-      yaw = startFacingYaw(maze);
+      if (game.resume && game.playerState) {
+        // Fortsetzung von der Karte: Lage und abgelaufener Weg bleiben erhalten.
+        ({ px, pz, yaw } = game.playerState);
+      } else {
+        const [cx, cz] = cellCenter(maze.start[0], maze.start[1], cell);
+        px = cx;
+        pz = cz;
+        yaw = startFacingYaw(maze);
+        game.trail = [[px, pz]]; // abgelaufener Weg (praezise Flaechenpunkte)
+      }
+      game.resume = false;
       reached = false;
       reachedTime = 0;
-      game.trail = [[px, pz]]; // abgelaufener Weg (praezise Flaechenpunkte)
+      game.reachedGoal = false;
       recordState();
     },
 
@@ -85,7 +92,10 @@ export function createPlaying(game) {
 
       const [gx, gy] = cellAt(px, pz, cell);
 
-      if (gx === maze.goal[0] && gy === maze.goal[1]) reached = true;
+      if (gx === maze.goal[0] && gy === maze.goal[1]) {
+        reached = true;
+        game.reachedGoal = true; // die Karte bietet dann kein Weiterspielen mehr an
+      }
       if (reached) {
         reachedTime += dt;
         if (reachedTime >= GOAL_AUTO_EXIT) game.dispatch(GameEvent.EXIT, { fade: false });

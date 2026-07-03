@@ -1,6 +1,7 @@
 // Zustand "Karte": nach dem Rueckschwenk steht die Kartensicht still und zeigt das
-// flache Labyrinth mit S/G und dem abgelaufenen Weg. Q -> zurueck zum Startscreen
-// (der Wuerfel dreht wieder); nach 5 Minuten loest das automatisch aus.
+// flache Labyrinth mit S/G und dem abgelaufenen Weg. Solange das Ziel offen ist,
+// faellt man mit Q zurueck ins Labyrinth und spielt weiter; X beendet zum
+// Startscreen (nach 5 Minuten automatisch). Am Ziel gibt es nur noch X.
 
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
@@ -43,16 +44,21 @@ export function createMap(game) {
       renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight: 0 });
       drawMapOverlay(renderer, maze, face, camera, game.trail, 1);
 
-      renderer.drawText('YOUR PATH  -  Q TO RETURN', {
-        x: renderer.width / 2,
-        y: renderer.height - Math.max(40, renderer.height * 0.08),
-        size: Math.max(14, renderer.height * 0.025),
-        align: 'center', baseline: 'middle', intensity: 0.7,
+      // Klein unten rechts (wie die Steuerungszeile in der Ego-Ansicht).
+      renderer.drawText(game.reachedGoal ? 'X EXIT' : 'Q RETURN  X EXIT', {
+        x: renderer.width - 24, y: renderer.height - 20, size: 13,
+        align: 'right', baseline: 'bottom', intensity: 0.5,
       });
     },
 
     onKey(key) {
-      if (key === 'Q') game.dispatch(GameEvent.EXIT); // -> Startscreen
+      if (key === 'Q' && !game.reachedGoal) {
+        // Weiterspielen: nahtlos zurueck ins Labyrinth fallen (gleiche Kamera-Pose).
+        game.resume = true;
+        if (!game.dispatch(GameEvent.RESUME, { fade: false })) game.resume = false;
+      } else if (key === 'X') {
+        game.dispatch(GameEvent.EXIT); // -> Startscreen
+      }
     },
   };
 }

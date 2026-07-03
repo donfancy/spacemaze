@@ -90,8 +90,8 @@ test('voller Zyklus Start -> (Andocken) -> MazeGen -> Playing -> Start', () => {
   advance(g, r, 2.0);
   assert.equal(g.stateKey, State.MAP);
 
-  // Q auf der Karte -> zurueck zum Startscreen.
-  g.handleKey('Q');
+  // X auf der Karte -> zurueck zum Startscreen (Q wuerde weiterspielen).
+  g.handleKey('X');
   advance(g, r, 0.8);
   assert.equal(g.stateKey, State.STARTSCREEN);
 });
@@ -188,6 +188,57 @@ test('Playing zeichnet den Weg praezise auf (echte Positionen, Endpunkt beim Ver
   g.handleKey('Q');
   const last = g.trail[g.trail.length - 1];
   assert.ok(Math.hypot(last[0] - g.playerState.px, last[1] - g.playerState.pz) < 1e-9);
+});
+
+test('Q auf der Karte setzt das Spiel an der Spielerlage fort (Weg bleibt)', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+  g.dispatch(GameEvent.START);
+  advance(g, r, 0.8 + 4.5 + 2.0); // -> Playing
+  assert.equal(g.stateKey, State.PLAYING);
+  const mazeBefore = g.maze;
+
+  g.keys.add('W'); // ein Stueck laufen
+  advance(g, r, 0.4);
+  g.keys.delete('W');
+  const ps = { ...g.playerState };
+  const trailLen = g.trail.length;
+
+  g.handleKey('Q'); // -> Rueckschwenk -> Karte
+  advance(g, r, 2.0);
+  assert.equal(g.stateKey, State.MAP);
+
+  g.handleKey('Q'); // Ziel noch offen -> nahtlos zurueckfallen
+  advance(g, r, 0.05);
+  assert.equal(g.stateKey, State.FALLING);
+  advance(g, r, 2.0);
+  assert.equal(g.stateKey, State.PLAYING);
+
+  assert.equal(g.maze, mazeBefore, 'gleiches Labyrinth, kein neues');
+  assert.ok(Math.abs(g.playerState.px - ps.px) < 1e-9, 'gleiche Position (px)');
+  assert.ok(Math.abs(g.playerState.pz - ps.pz) < 1e-9, 'gleiche Position (pz)');
+  assert.ok(Math.abs(g.playerState.yaw - ps.yaw) < 1e-9, 'gleiche Blickrichtung');
+  assert.ok(g.trail.length >= trailLen, 'abgelaufener Weg bleibt erhalten');
+  assert.ok(!g.resume, 'resume-Flag wurde verbraucht');
+});
+
+test('am Ziel bietet die Karte kein Weiterspielen an: Q bleibt, X beendet', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+  g.dispatch(GameEvent.START);
+  advance(g, r, 0.8 + 4.5 + 2.0);
+  g.dispatch(GameEvent.EXIT);
+  advance(g, r, 2.8); // Fade + Rueckschwenk -> Karte
+  assert.equal(g.stateKey, State.MAP);
+
+  g.reachedGoal = true; // Ziel erreicht (Abkuerzung statt Labyrinth-Navigation)
+  g.handleKey('Q');
+  advance(g, r, 0.1);
+  assert.equal(g.stateKey, State.MAP, 'Q tut am Ziel nichts');
+
+  g.handleKey('X');
+  advance(g, r, 0.8);
+  assert.equal(g.stateKey, State.STARTSCREEN);
 });
 
 test('dispatch ignoriert undefinierte Uebergaenge', () => {

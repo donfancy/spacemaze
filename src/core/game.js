@@ -24,6 +24,8 @@ export class Game {
     this.keys = new Set(); // aktuell gedrueckte Tasten (fuer kontinuierliche Steuerung)
     this.trail = [];      // abgelaufener Weg (praezise Flaechenpunkte [x,z]), von Playing aufgezeichnet
     this.playerState = null; // letzte Spielerlage {px,pz,yaw} fuer den Rueckschwenk
+    this.resume = false;     // Q auf der Karte: naechstes Reinfallen kehrt zur Spielerlage zurueck
+    this.reachedGoal = false; // Ziel erreicht? (steuert Q/X-Angebot auf der Karte)
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.
     this.scenes = {

@@ -8,15 +8,16 @@ export const State = {
   FALLING: 'FALLING',           // Schwenk aus der Kartensicht in die Ego-Begehung
   PLAYING: 'PLAYING',           // Spielablauf
   RISING: 'RISING',             // Rueckschwenk aus der Begehung zur Kartensicht
-  MAP: 'MAP',                   // Kartensicht mit abgelaufenem Weg
+  MAP: 'MAP',                   // Kartensicht mit abgelaufenem Weg (Q: weiter, X: Ende)
 };
 
 export const GameEvent = {
   START: 'START',           // Spieler drueckt S im Startscreen
   MAZE_READY: 'MAZE_READY', // Labyrinth-Erzeugung fertig -> Reinfallen
   FALL_DONE: 'FALL_DONE',   // Reinfall-Schwenk abgeschlossen -> Spielablauf
-  EXIT: 'EXIT',             // Spiel verlassen (Q) -> Rueckschwenk bzw. Startscreen
+  EXIT: 'EXIT',             // Spiel verlassen (Q im Spiel, X auf der Karte)
   RISE_DONE: 'RISE_DONE',   // Rueckschwenk abgeschlossen -> Kartensicht
+  RESUME: 'RESUME',         // Q auf der Karte (Ziel noch offen) -> zurueck ins Labyrinth
 };
 
 // Erlaubte Uebergaenge: State -> Event -> Folgestate.
@@ -26,7 +27,7 @@ const TRANSITIONS = {
   [State.FALLING]: { [GameEvent.FALL_DONE]: State.PLAYING },
   [State.PLAYING]: { [GameEvent.EXIT]: State.RISING },
   [State.RISING]: { [GameEvent.RISE_DONE]: State.MAP },
-  [State.MAP]: { [GameEvent.EXIT]: State.STARTSCREEN },
+  [State.MAP]: { [GameEvent.EXIT]: State.STARTSCREEN, [GameEvent.RESUME]: State.FALLING },
 };
 
 // Liefert den Folgezustand fuer (state, event) oder null, wenn der Uebergang

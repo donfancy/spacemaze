@@ -1,7 +1,8 @@
 // Zustand "Reinfallen": sanfter Schwenk aus der Kartensicht (frontal aufs flache
 // Labyrinth) in die Ego-Begehung. Position, Blick und Oben-Richtung werden
 // harmonisch (Cosinus-Ease) interpoliert; die Waende wachsen dabei von flach auf
-// volle Hoehe. Endlage = Stillstand auf S mit Blick in den ersten Gang.
+// volle Hoehe. Endlage = Stillstand auf S mit Blick in den ersten Gang -- bzw.
+// bei Fortsetzung von der Karte (game.resume) die gemerkte Spielerlage.
 
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
@@ -39,8 +40,13 @@ export function createFalling(game) {
       cell = cellSize(maze);
       footprints = faceFootprints(maze, face);
       startPose = mapPose(face, camera.fov); // Kartensicht
-      const [cx, cz] = cellCenter(maze.start[0], maze.start[1], cell);
-      endPose = egoPose(face, cx, cz, startFacingYaw(maze), cell); // Ego auf S
+      if (game.resume && game.playerState) {
+        const ps = game.playerState; // Fortsetzung: zurueck zur Spielerlage
+        endPose = egoPose(face, ps.px, ps.pz, ps.yaw, cell);
+      } else {
+        const [cx, cz] = cellCenter(maze.start[0], maze.start[1], cell);
+        endPose = egoPose(face, cx, cz, startFacingYaw(maze), cell); // Ego auf S
+      }
     },
 
     update(dt) {
@@ -56,7 +62,8 @@ export function createFalling(game) {
 
       const walls = faceWalls(maze, face, WALL_RATIO * cell * e); // Waende wachsen auf
       renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight });
-      drawMapOverlay(renderer, maze, face, camera, null, 1 - e); // Rahmen + S/G verblassen
+      // Rahmen + S/G verblassen; bei Fortsetzung verblasst auch der Weg mit.
+      drawMapOverlay(renderer, maze, face, camera, game.resume ? game.trail : null, 1 - e);
     },
   };
 }

@@ -62,6 +62,8 @@ export function createMazeGen(game) {
       t = 0;
       maze = generateMaze(levelConfig(game.level).n, { seed: randomSeed() });
       game.maze = maze; // an Playing weiterreichen
+      game.resume = false; // frisches Labyrinth: keine Fortsetzung, Ziel offen
+      game.reachedGoal = false;
       face = game.dockFace ?? SIDE_FACES[0]; // Fallback, falls ohne Andocken erreicht
       border = gridBorderOnFace(maze.n, CUBE_SIZE, face);
       applyDock();
