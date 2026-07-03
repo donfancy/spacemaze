@@ -78,7 +78,7 @@ export class Renderer {
   }
 
   // Zeichnet Text als Vektorlinien (fixes 2D-Overlay, unabhaengig von der Kamera).
-  // opts: x, y, size, align, baseline, tracking, lineGap, intensity, color, glow, lineWidth
+  // opts: x, y, size, align, baseline, tracking, lineGap, angle, intensity, color, glow, lineWidth
   drawText(text, opts = {}) {
     const polylines = layoutText(text, opts);
     this.drawPolylines(polylines, opts);

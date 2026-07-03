@@ -35,6 +35,8 @@ export function measureText(text, opts = {}) {
 //   baseline  'top' | 'middle' | 'bottom'  (vertikale Ausrichtung um y)
 //   tracking  Zell-Zusatzabstand in Rastereinheiten (Default 0.4)
 //   lineGap   Zeilenabstand als Anteil von size (Default 0.6)
+//   angle     Rotation um den Anker (x,y) in Radiant; positiv = im Uhrzeigersinn
+//             (Bildschirm-y zeigt nach unten). Default 0.
 export function layoutText(text, opts = {}) {
   const size = opts.size ?? 24;
   const align = opts.align ?? 'left';
@@ -72,6 +74,17 @@ export function layoutText(text, opts = {}) {
       }
     }
   });
+
+  // Optionale Rotation der fertigen Polylinien um den Anker (z.B. Kompass-Scheibe).
+  const angle = opts.angle ?? 0;
+  if (angle !== 0) {
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    return polylines.map((poly) => poly.map(([px, py]) => [
+      x + (px - x) * c - (py - y) * s,
+      y + (px - x) * s + (py - y) * c,
+    ]));
+  }
 
   return polylines;
 }

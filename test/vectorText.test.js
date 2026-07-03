@@ -59,3 +59,22 @@ test('groessere size skaliert die Geometrie', () => {
   };
   assert.ok(span(big) > span(small) * 3);
 });
+
+test('angle rotiert die Polylinien um den Anker', () => {
+  const opts = { size: 24, x: 100, y: 200, align: 'center', baseline: 'middle' };
+  const plain = layoutText('N', opts);
+  const rotated = layoutText('N', { ...opts, angle: Math.PI / 2 });
+  assert.equal(rotated.length, plain.length);
+  // Jeder Punkt (px,py) muss auf (x - (py-y), y + (px-x)) landen (90 Grad im UZS).
+  for (let p = 0; p < plain.length; p++) {
+    for (let i = 0; i < plain[p].length; i++) {
+      const [px, py] = plain[p][i];
+      const [rx, ry] = rotated[p][i];
+      assert.ok(Math.abs(rx - (100 - (py - 200))) < 1e-9);
+      assert.ok(Math.abs(ry - (200 + (px - 100))) < 1e-9);
+    }
+  }
+  // Abstand zum Anker bleibt erhalten (starre Drehung).
+  const dist = ([a, b]) => Math.hypot(a - 100, b - 200);
+  assert.ok(Math.abs(dist(plain[0][0]) - dist(rotated[0][0])) < 1e-9);
+});

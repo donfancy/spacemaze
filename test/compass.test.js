@@ -49,6 +49,47 @@ test('Rose: Kreis geschlossen und auf Radius, Buchstaben innerhalb', () => {
   }
 });
 
+test('Scheibe rotiert als starre Einheit: Buchstaben radial nach aussen gerichtet', () => {
+  for (const yaw of [0, 0.7, Math.PI / 2, Math.PI, -2.1]) {
+    const rose = compassLayout(yaw, OPTS);
+    for (const l of rose.labels) {
+      // Oben-Richtung des Buchstabens (0,-1) um seinen Winkel gedreht ...
+      const upX = Math.sin(l.angle);
+      const upY = -Math.cos(l.angle);
+      // ... muss radial nach aussen zeigen (vom Zentrum zum Buchstaben).
+      const d = Math.hypot(l.x - OPTS.cx, l.y - OPTS.cy);
+      const outX = (l.x - OPTS.cx) / d;
+      const outY = (l.y - OPTS.cy) / d;
+      assert.ok(Math.abs(upX - outX) < 1e-9 && Math.abs(upY - outY) < 1e-9,
+        `${l.label} bei yaw=${yaw} radial ausgerichtet`);
+    }
+  }
+});
+
+test('der oben haengende Buchstabe steht aufrecht (Blick nach Westen -> W oben, Winkel 0)', () => {
+  const rose = compassLayout(Math.PI / 2, OPTS);
+  const w = labelByName(rose, 'W');
+  assert.ok(w.y < OPTS.cy, 'W oben');
+  assert.ok(Math.abs(w.angle) < 1e-9, 'W aufrecht');
+});
+
+test('vier Ticks haengen an der Kreis-Kante und rotieren mit', () => {
+  const rose = compassLayout(0.4, OPTS);
+  const ticks = rose.polylines.slice(2);
+  assert.equal(ticks.length, 4);
+  for (const [inner, outer] of ticks) {
+    assert.ok(Math.abs(Math.hypot(outer[0] - OPTS.cx, outer[1] - OPTS.cy) - OPTS.radius) < 1e-9, 'Tick endet auf der Kante');
+    assert.ok(Math.hypot(inner[0] - OPTS.cx, inner[1] - OPTS.cy) < OPTS.radius, 'Tick zeigt nach innen');
+  }
+  // Jeder Tick liegt auf der Linie Zentrum -> zugehoeriger Buchstabe.
+  for (let i = 0; i < 4; i++) {
+    const l = rose.labels[i];
+    const [, outer] = ticks[i];
+    const crossProd = (l.x - OPTS.cx) * (outer[1] - OPTS.cy) - (l.y - OPTS.cy) * (outer[0] - OPTS.cx);
+    assert.ok(Math.abs(crossProd) < 1e-9, `Tick ${l.label} radial zum Buchstaben`);
+  }
+});
+
 test('Kartenrand: N oben, S unten, W/E entlang der uAxis -- auf allen Flaechen', () => {
   const n = 11;
   const pts = compassGridPoints(n);

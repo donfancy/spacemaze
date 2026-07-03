@@ -113,7 +113,7 @@ export function createPlaying(game) {
       renderer.drawPolylines(rose.polylines, { intensity: 0.45, lineWidth: 1.5 });
       for (const l of rose.labels) {
         renderer.drawText(l.label, {
-          x: l.x, y: l.y, size: Math.max(10, cr * 0.5),
+          x: l.x, y: l.y, size: Math.max(10, cr * 0.5), angle: l.angle,
           align: 'center', baseline: 'middle', intensity: l.major ? 0.9 : 0.45,
         });
       }
