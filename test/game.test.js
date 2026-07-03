@@ -121,6 +121,51 @@ test('Zustands-Zyklus direkt via dispatch (ohne Andocken)', () => {
   assert.equal(g.stateKey, State.STARTSCREEN);
 });
 
+test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..5', () => {
+  const g = new Game();
+  assert.equal(g.level, 1);
+
+  g.handleKey('ArrowDown'); // unter Level 1 geht es nicht
+  assert.equal(g.level, 1);
+
+  g.handleKey('ArrowRight');
+  g.handleKey('ArrowUp');
+  assert.equal(g.level, 3);
+
+  for (let i = 0; i < 10; i++) g.handleKey('ArrowUp'); // oben begrenzt
+  assert.equal(g.level, 5);
+  g.handleKey('ArrowLeft');
+  assert.equal(g.level, 4);
+});
+
+test('gewaehltes Level bestimmt die Maze-Groesse (Level 3 -> n=13)', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+
+  g.handleKey('ArrowUp');
+  g.handleKey('ArrowUp'); // Level 3
+  g.handleKey('S');
+  advance(g, r, 1.8); // Andocken -> MazeGen erzeugt das Labyrinth
+  assert.equal(g.stateKey, State.MAZE_GEN);
+  assert.equal(g.maze.n, 13);
+});
+
+test('Pfeiltasten aendern das Level nur im Startscreen (nicht waehrend des Spiels)', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+
+  g.handleKey('S');
+  advance(g, r, 1.8);
+  assert.equal(g.stateKey, State.MAZE_GEN);
+  g.handleKey('ArrowUp');
+  assert.equal(g.level, 1);
+
+  advance(g, r, 4.5 + 2.0); // -> Falling -> Playing
+  assert.equal(g.stateKey, State.PLAYING);
+  g.handleKey('ArrowUp');
+  assert.equal(g.level, 1);
+});
+
 test('dispatch ignoriert undefinierte Uebergaenge', () => {
   const g = new Game();
   assert.equal(g.dispatch(GameEvent.EXIT), false); // im Startscreen nicht erlaubt

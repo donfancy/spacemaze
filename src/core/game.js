@@ -18,6 +18,7 @@ export class Game {
   constructor(options = {}) {
     this.debug = options.debug ?? null;
     this.time = 0;
+    this.level = 1;       // im Startscreen gewaehltes Level (bestimmt die Maze-Groesse)
     this.dockFace = null; // vom Startscreen gewaehlte Andock-Flaeche (fuer MazeGen)
     this.maze = null;     // von MazeGen erzeugt, von Playing weiterverwendet
     this.keys = new Set(); // aktuell gedrueckte Tasten (fuer kontinuierliche Steuerung)

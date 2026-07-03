@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 123 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 129 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -35,9 +35,11 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   (gemeinsamer Flächen-Renderer)
 
 ## Stand & wichtige technische Punkte
-- **Level 1 (n=11) ist KOMPLETT**: Startscreen → andocken → Labyrinth wächst →
-  Reinfallen → Ego-Begehung (Tank-Steuerung, Hidden Lines) → Q/20s → Rückschwenk →
-  Karte mit Weg → Q/5min → Startscreen.
+- **Der komplette Zyklus läuft**: Startscreen (Level-Auswahl per Pfeiltasten) →
+  andocken → Labyrinth wächst → Reinfallen → Ego-Begehung (Tank-Steuerung,
+  Hidden Lines) → Q/20s → Rückschwenk → Karte mit Weg → Q/5min → Startscreen.
+- Levels 1–5 in `src/core/levels.js` (reine Daten): Maze-Größe n = 9/11/13/15/17;
+  `game.level` hält die Auswahl, MazeGen liest daraus.
 - Die Begehung spielt AUF der Andock-Würfelseite (nicht horizontal). Schlüssel:
   freie Kamera-Oben-Richtung (`camera.basis`), `faceLocalToWorld`, `scenes/mazeView.js`.
 - Hidden Lines: `render/occlusion.js` (analytisch). Zwei Fallen beachten —

@@ -13,9 +13,9 @@ import {
   SIDE_FACES, faceDockPose, mapGridToFace, mapSegmentsToFace, gridBorderOnFace,
 } from '../world/cubeFaces.js';
 import { randomSeed } from '../util/rng.js';
+import { levelConfig } from '../core/levels.js';
 
 const CUBE_SIZE = 2.4;
-const LEVEL1_N = 11;
 
 const MARKER_TIME = 0.7;  // Sekunden: S/G blenden ein
 const GROW_TIME = 2.6;    // Sekunden: Labyrinth waechst
@@ -59,7 +59,7 @@ export function createMazeGen(game) {
   return {
     enter() {
       t = 0;
-      maze = generateMaze(LEVEL1_N, { seed: randomSeed() });
+      maze = generateMaze(levelConfig(game.level).n, { seed: randomSeed() });
       game.maze = maze; // an Playing weiterreichen
       face = game.dockFace ?? SIDE_FACES[0]; // Fallback, falls ohne Andocken erreicht
       border = gridBorderOnFace(maze.n, CUBE_SIZE, face);

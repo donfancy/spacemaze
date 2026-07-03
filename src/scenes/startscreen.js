@@ -1,5 +1,6 @@
 // Startbildschirm in zwei Phasen:
-//   'orbiting' - die Kamera umtanzt einen Drahtwuerfel, "PRESS S TO START" blinkt.
+//   'orbiting' - die Kamera umtanzt einen Drahtwuerfel, "PRESS S TO START" blinkt,
+//                oberhalb steht das per Pfeiltasten waehlbare Level.
 //   'docking'  - nach S faehrt die Kamera harmonisch frontal vor die Wuerfelseite,
 //                die ihr beim Druck am meisten zugewandt ist (min Blick . Normale).
 //                Verdeckte Kanten faden von 30% auf 0%, sodass am Ende nur das
@@ -7,6 +8,7 @@
 // Nach Abschluss des Andockens uebernimmt MazeGen nahtlos dieselbe Flaeche.
 
 import { GameEvent } from '../core/states.js';
+import { stepLevel } from '../core/levels.js';
 import { createCamera } from '../math/camera.js';
 import { normalize } from '../math/vec3.js';
 import { cubeMesh } from '../world/shapes.js';
@@ -75,6 +77,16 @@ export function createStartscreen(game) {
 
         const w = renderer.width;
         const h = renderer.height;
+
+        // Level-Auswahl oberhalb des Wuerfels (Pfeiltasten aendern sie).
+        renderer.drawText(`LEVEL ${game.level}`, {
+          x: w / 2,
+          y: Math.max(48, h * 0.14),
+          size: Math.max(18, Math.min(42, h * 0.05)),
+          align: 'center',
+          baseline: 'middle',
+        });
+
         if ((t % 1.1) < 0.72) {
           renderer.drawText('PRESS S TO START', {
             x: w / 2,
@@ -92,7 +104,12 @@ export function createStartscreen(game) {
     },
 
     onKey(key) {
-      if (key === 'S' && phase === 'orbiting') {
+      if (phase !== 'orbiting') return;
+      if (key === 'ArrowUp' || key === 'ArrowRight') {
+        game.level = stepLevel(game.level, +1);
+      } else if (key === 'ArrowDown' || key === 'ArrowLeft') {
+        game.level = stepLevel(game.level, -1);
+      } else if (key === 'S') {
         const o = orbitCamera(t, ORBIT_OPTS);
         // Blickrichtung zur Wuerfelmitte -> zugewandte Seitenflaeche waehlen.
         const viewDir = normalize([-o.position[0], -o.position[1], -o.position[2]]);
