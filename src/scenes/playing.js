@@ -8,6 +8,7 @@ import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
 import { cellCenter, cellAt, tryMove, startFacingYaw } from '../world/mazeWorld.js';
 import { recordTrailPoint } from '../world/trail.js';
+import { compassLayout } from '../render/compass.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls, egoPose,
@@ -105,6 +106,17 @@ export function createPlaying(game) {
         x: w - 24, y: h - 20, size: 13,
         align: 'right', baseline: 'bottom', intensity: 0.5,
       });
+
+      // Kompass-Rose rechts unten (oberhalb der Steuerungszeile schwebend).
+      const cr = Math.max(26, Math.min(w, h) * 0.05);
+      const rose = compassLayout(yaw, { cx: w - cr - 30, cy: h - cr - 52, radius: cr });
+      renderer.drawPolylines(rose.polylines, { intensity: 0.45, lineWidth: 1.5 });
+      for (const l of rose.labels) {
+        renderer.drawText(l.label, {
+          x: l.x, y: l.y, size: Math.max(10, cr * 0.5),
+          align: 'center', baseline: 'middle', intensity: l.major ? 0.9 : 0.45,
+        });
+      }
       if (reached) {
         renderer.drawText('YOU MADE IT', {
           x: w / 2, y: h / 2, size: Math.min(52, h * 0.08),

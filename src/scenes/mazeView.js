@@ -82,6 +82,36 @@ function drawFaceMarker(renderer, gridCell, label, face, n, camera, intensity) {
   });
 }
 
+// Himmelsrichtungen am Kartenrand: Grid-gy waechst nach unten -> Norden ist
+// oben (kleines gy), Osten rechts (grosses gx). Punkte in Grid-Koordinaten
+// knapp ausserhalb des Rahmens, mittig an jeder Seite.
+const COMPASS_MARGIN = 0.06; // Abstand vom Rahmen, Anteil der Flaechenkante
+
+export function compassGridPoints(n) {
+  const m = COMPASS_MARGIN * n;
+  return {
+    N: [n / 2, -m],
+    S: [n / 2, n + m],
+    W: [-m, n / 2],
+    E: [n + m, n / 2],
+  };
+}
+
+// Blendet N/W/E/S um den Kartenrand ein (Kartensicht bzw. Labyrinth-Aufbau).
+export function drawCompassLabels(renderer, maze, face, camera, intensity) {
+  if (intensity <= 0.01) return;
+  const points = compassGridPoints(maze.n);
+  for (const [label, [gx, gy]] of Object.entries(points)) {
+    const world = mapGridToFace(gx, gy, maze.n, CUBE_SIZE, face);
+    const screen = renderer.worldToScreen(world, camera);
+    if (!screen) continue;
+    renderer.drawText(label, {
+      x: screen.x, y: screen.y, size: Math.max(11, renderer.height * 0.028),
+      align: 'center', baseline: 'middle', intensity: 0.7 * intensity,
+    });
+  }
+}
+
 const TRAIL_DIM = 0.5; // Weglinie zu 50% gedimmt (gegen Rahmen/Waende absetzen)
 
 // Karten-Overlay: Grid-Rahmen, S/G-Marker und (optional) der abgelaufene Weg.
@@ -104,6 +134,7 @@ export function drawMapOverlay(renderer, maze, face, camera, trail, intensity) {
 
   drawFaceMarker(renderer, maze.start, 'S', face, maze.n, camera, intensity);
   drawFaceMarker(renderer, maze.goal, 'G', face, maze.n, camera, intensity);
+  drawCompassLabels(renderer, maze, face, camera, intensity);
 }
 
 // Rendert weltweite Wand-Segmente aus einer Pose {position, forward, up} mit

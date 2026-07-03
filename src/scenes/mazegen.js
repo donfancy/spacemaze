@@ -14,6 +14,7 @@ import {
 } from '../world/cubeFaces.js';
 import { randomSeed } from '../util/rng.js';
 import { levelConfig } from '../core/levels.js';
+import { drawCompassLabels } from './mazeView.js';
 
 const CUBE_SIZE = 2.4;
 
@@ -88,10 +89,11 @@ export function createMazeGen(game) {
         renderer.renderScene({ segments: world }, camera);
       }
 
-      // 3) S/G-Marker blenden zu Beginn ein.
+      // 3) S/G-Marker und Himmelsrichtungen blenden zu Beginn ein.
       const markerFade = clamp01(t / MARKER_TIME);
       drawMarker(renderer, maze.start, 'S', markerFade);
       drawMarker(renderer, maze.goal, 'G', markerFade);
+      drawCompassLabels(renderer, maze, face, camera, markerFade);
     },
   };
 }

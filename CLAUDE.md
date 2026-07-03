@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 142 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 146 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
