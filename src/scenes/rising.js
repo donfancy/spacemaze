@@ -6,11 +6,10 @@
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
-import { normalize, lerp } from '../math/vec3.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
-  egoPose, mapPose, drawMapOverlay,
+  egoPose, mapPose, blendPose, drawMapOverlay,
 } from './mazeView.js';
 
 const DURATION = 1.7;
@@ -50,11 +49,7 @@ export function createRising(game) {
 
     render(renderer) {
       const e = easeInOut(t / DURATION);
-      const pose = {
-        position: lerp(startPose.position, endPose.position, e),
-        forward: normalize(lerp(startPose.forward, endPose.forward, e)),
-        up: normalize(lerp(startPose.up, endPose.up, e)),
-      };
+      const pose = blendPose(startPose, endPose, e);
       const fn = pose.forward[0] * face.normal[0] + pose.forward[1] * face.normal[1] + pose.forward[2] * face.normal[2];
       const occWeight = 1 - Math.abs(fn);
 

@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 129 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 134 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -44,4 +44,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   freie Kamera-Oben-Richtung (`camera.basis`), `faceLocalToWorld`, `scenes/mazeView.js`.
 - Hidden Lines: `render/occlusion.js` (analytisch). Zwei Fallen beachten —
   Occlusion beim Schwenk per `occWeight` einblenden; Near-Plane mit `cell` skalieren.
+- Schwenks (Reinfallen/Rückschwenk) interpolieren die Orientierung per
+  Quaternion-Slerp (`math/quat.js`, `blendPose` in `mazeView.js`) — getrenntes
+  forward/up-Lerp kippt um, wenn beide antiparallel werden (Ego-Blick „Süd“).
 - Nächste mögliche Themen: höhere Levels, echter "Trench Run", Politur.

@@ -7,6 +7,8 @@
 // alle Laengen skalieren mit dieser Zellgroesse.
 
 import { basisFromForwardUp } from '../math/camera.js';
+import { quatFromBasis, basisFromQuat, slerpQuat } from '../math/quat.js';
+import { lerp } from '../math/vec3.js';
 import { mazeWalls, wallFootprints } from '../world/mazeWorld.js';
 import { faceLocalToWorld, faceDir, faceDockPose, mapGridToFace, gridBorderOnFace } from '../world/cubeFaces.js';
 import { projectOccluders, occludeEdge } from '../render/occlusion.js';
@@ -40,6 +42,17 @@ export function mapPose(face, fov) {
     forward: [-face.normal[0], -face.normal[1], -face.normal[2]],
     up: [0, 1, 0],
   };
+}
+
+// Pose-Ueberblendung fuer die Schwenks (Reinfallen/Rueckschwenk): Position
+// linear, Orientierung als EINE Rotation per Quaternion-Slerp. Getrenntes
+// Lerpen von forward/up wuerde umkippen, wenn beide in der Mitte antiparallel
+// werden (Ego-Blick "Sued": forward=-Welt-oben) -- der Kameraueberschlag.
+export function blendPose(a, b, e) {
+  const qa = quatFromBasis(basisFromForwardUp(a.forward, a.up));
+  const qb = quatFromBasis(basisFromForwardUp(b.forward, b.up));
+  const { forward, up } = basisFromQuat(slerpQuat(qa, qb, e));
+  return { position: lerp(a.position, b.position, e), forward, up };
 }
 
 function toFace(segments, face) {
