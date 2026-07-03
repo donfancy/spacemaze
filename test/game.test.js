@@ -166,6 +166,30 @@ test('Pfeiltasten aendern das Level nur im Startscreen (nicht waehrend des Spiel
   assert.equal(g.level, 1);
 });
 
+test('Playing zeichnet den Weg praezise auf (echte Positionen, Endpunkt beim Verlassen)', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+  g.dispatch(GameEvent.START);
+  advance(g, r, 0.8 + 4.5 + 2.0); // -> MazeGen -> Falling -> Playing
+  assert.equal(g.stateKey, State.PLAYING);
+
+  assert.equal(g.trail.length, 1); // exakt die Startposition
+  const [sx, sz] = g.trail[0];
+
+  g.keys.add('W'); // vorwaerts in den ersten Gang
+  advance(g, r, 0.5);
+  g.keys.delete('W');
+
+  assert.ok(g.trail.length >= 2, 'Bewegung erzeugt Wegpunkte');
+  const end = g.trail[g.trail.length - 1];
+  assert.ok(Math.hypot(end[0] - sx, end[1] - sz) > 0, 'Weg entfernt sich vom Start');
+
+  // Q -> exit() haelt die letzte Position exakt fest (= Spielerlage fuer den Rueckschwenk).
+  g.handleKey('Q');
+  const last = g.trail[g.trail.length - 1];
+  assert.ok(Math.hypot(last[0] - g.playerState.px, last[1] - g.playerState.pz) < 1e-9);
+});
+
 test('dispatch ignoriert undefinierte Uebergaenge', () => {
   const g = new Game();
   assert.equal(g.dispatch(GameEvent.EXIT), false); // im Startscreen nicht erlaubt

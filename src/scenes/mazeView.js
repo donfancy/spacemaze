@@ -82,9 +82,11 @@ function drawFaceMarker(renderer, gridCell, label, face, n, camera, intensity) {
   });
 }
 
+const TRAIL_DIM = 0.5; // Weglinie zu 50% gedimmt (gegen Rahmen/Waende absetzen)
+
 // Karten-Overlay: Grid-Rahmen, S/G-Marker und (optional) der abgelaufene Weg.
 // Erwartet eine bereits gesetzte camera.basis (nach renderFaceWalls). `trail` ist
-// eine Liste von Grid-Zellen [gx,gy] oder null.
+// eine Polyline praeziser lokaler Flaechenpunkte [x,z] (siehe world/trail.js) oder null.
 export function drawMapOverlay(renderer, maze, face, camera, trail, intensity) {
   if (intensity <= 0.01) return;
   renderer.renderScene({ segments: gridBorderOnFace(maze.n, CUBE_SIZE, face), intensity }, camera);
@@ -93,11 +95,11 @@ export function drawMapOverlay(renderer, maze, face, camera, trail, intensity) {
     const segs = [];
     for (let i = 1; i < trail.length; i++) {
       segs.push([
-        mapGridToFace(trail[i - 1][0] + 0.5, trail[i - 1][1] + 0.5, maze.n, CUBE_SIZE, face),
-        mapGridToFace(trail[i][0] + 0.5, trail[i][1] + 0.5, maze.n, CUBE_SIZE, face),
+        faceLocalToWorld(trail[i - 1][0], 0, trail[i - 1][1], face, CUBE_SIZE),
+        faceLocalToWorld(trail[i][0], 0, trail[i][1], face, CUBE_SIZE),
       ]);
     }
-    renderer.renderScene({ segments: segs, intensity }, camera);
+    renderer.renderScene({ segments: segs, intensity: TRAIL_DIM * intensity }, camera);
   }
 
   drawFaceMarker(renderer, maze.start, 'S', face, maze.n, camera, intensity);

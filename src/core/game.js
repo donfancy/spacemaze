@@ -22,7 +22,7 @@ export class Game {
     this.dockFace = null; // vom Startscreen gewaehlte Andock-Flaeche (fuer MazeGen)
     this.maze = null;     // von MazeGen erzeugt, von Playing weiterverwendet
     this.keys = new Set(); // aktuell gedrueckte Tasten (fuer kontinuierliche Steuerung)
-    this.trail = [];      // abgelaufener Weg (Grid-Zellen), von Playing aufgezeichnet
+    this.trail = [];      // abgelaufener Weg (praezise Flaechenpunkte [x,z]), von Playing aufgezeichnet
     this.playerState = null; // letzte Spielerlage {px,pz,yaw} fuer den Rueckschwenk
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.

@@ -7,6 +7,7 @@ import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
 import { cellCenter, cellAt, tryMove, startFacingYaw } from '../world/mazeWorld.js';
+import { recordTrailPoint } from '../world/trail.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls, egoPose,
@@ -16,6 +17,7 @@ const MOVE_RATIO = 2.2;     // Zellen pro Sekunde
 const TURN_SPEED = 2.2;     // Radiant pro Sekunde
 const RADIUS_RATIO = 0.25;
 const GOAL_AUTO_EXIT = 20;  // Sekunden am Ziel bis automatischer Rueckschwenk
+const TRAIL_DIST_RATIO = 0.2; // Weg-Aufzeichnung: Mindestdistanz in Zellen
 
 export function createPlaying(game) {
   const camera = createCamera({ fov: Math.PI / 2.4 });
@@ -48,8 +50,14 @@ export function createPlaying(game) {
       yaw = startFacingYaw(maze);
       reached = false;
       reachedTime = 0;
-      game.trail = [[maze.start[0], maze.start[1]]]; // abgelaufener Weg
+      game.trail = [[px, pz]]; // abgelaufener Weg (praezise Flaechenpunkte)
       recordState();
+    },
+
+    exit() {
+      // Letzte Position exakt festhalten (auch unterhalb der Mindestdistanz),
+      // damit die Weglinie genau dort endet, wo der Rueckschwenk beginnt.
+      recordTrailPoint(game.trail, px, pz, { force: true });
     },
 
     update(dt) {
@@ -70,13 +78,11 @@ export function createPlaying(game) {
         [px, pz] = tryMove(maze, px, pz, dx, dz, { cell, radius: RADIUS_RATIO * cell });
       }
 
-      const [gx, gy] = cellAt(px, pz, cell);
-      // Weg aufzeichnen, sobald eine neue Zelle betreten wird.
-      const last = game.trail[game.trail.length - 1];
-      if ((last[0] !== gx || last[1] !== gy) && gx >= 0 && gx < maze.n && gy >= 0 && gy < maze.n) {
-        game.trail.push([gx, gy]);
-      }
+      // Weg praezise aufzeichnen: echte Position, gerade Strecken zusammengefasst.
+      recordTrailPoint(game.trail, px, pz, { minDist: TRAIL_DIST_RATIO * cell });
       recordState();
+
+      const [gx, gy] = cellAt(px, pz, cell);
 
       if (gx === maze.goal[0] && gy === maze.goal[1]) reached = true;
       if (reached) {
