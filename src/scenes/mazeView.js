@@ -117,9 +117,14 @@ const TRAIL_DIM = 0.5; // Weglinie zu 50% gedimmt (gegen Rahmen/Waende absetzen)
 // Karten-Overlay: Grid-Rahmen, S/G-Marker und (optional) der abgelaufene Weg.
 // Erwartet eine bereits gesetzte camera.basis (nach renderFaceWalls). `trail` ist
 // eine Polyline praeziser lokaler Flaechenpunkte [x,z] (siehe world/trail.js) oder null.
-export function drawMapOverlay(renderer, maze, face, camera, trail, intensity) {
+// `borderIntensity` erlaubt, den Rahmen getrennt zu halten (Karten-Ausblenden:
+// der Rahmen bleibt stehen, weil er zur Wuerfelkante des Startscreens wird).
+export function drawMapOverlay(renderer, maze, face, camera, trail, intensity, borderIntensity = intensity) {
+  if (intensity <= 0.01 && borderIntensity <= 0.01) return;
+  if (borderIntensity > 0.01) {
+    renderer.renderScene({ segments: gridBorderOnFace(maze.n, CUBE_SIZE, face), intensity: borderIntensity }, camera);
+  }
   if (intensity <= 0.01) return;
-  renderer.renderScene({ segments: gridBorderOnFace(maze.n, CUBE_SIZE, face), intensity }, camera);
 
   if (trail && trail.length > 1) {
     const segs = [];
@@ -143,6 +148,11 @@ export function renderFaceWalls(renderer, walls, footprints, camera, pose, opts 
   camera.position = pose.position;
   camera.basis = basisFromForwardUp(pose.forward, pose.up);
 
+  // alpha skaliert alles gleichmaessig (Karten-Ausblenden beim Verlassen);
+  // die Kamera-Basis ist dann bereits gesetzt (das Overlay braucht sie).
+  const alpha = opts.alpha ?? 1;
+  if (alpha <= 0.01) return;
+
   const vp = { width: renderer.width, height: renderer.height, fov: camera.fov, near: opts.near ?? 0.1 };
   const occ = projectOccluders(footprints, camera, vp);
   const far = opts.far ?? Infinity;
@@ -165,7 +175,7 @@ export function renderFaceWalls(renderer, walls, footprints, camera, pose, opts 
   // occWeight 1 -> nahe verdeckte gedimmt, ferne weggelassen.
   const dimIntensity = 1 + ((opts.dim ?? DIM) - 1) * occWeight; // lerp(1 -> dim)
   const fadeIntensity = 1 - occWeight;                          // lerp(1 -> 0)
-  if (fadeIntensity > 0.01) renderer.drawPolylines(faded, { intensity: fadeIntensity });
-  renderer.drawPolylines(dimmed, { intensity: dimIntensity });
-  renderer.drawPolylines(visible, { intensity: 1.0 });
+  if (fadeIntensity > 0.01) renderer.drawPolylines(faded, { intensity: alpha * fadeIntensity });
+  renderer.drawPolylines(dimmed, { intensity: alpha * dimIntensity });
+  renderer.drawPolylines(visible, { intensity: alpha });
 }

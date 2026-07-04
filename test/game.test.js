@@ -90,9 +90,11 @@ test('voller Zyklus Start -> (Andocken) -> MazeGen -> Playing -> Start', () => {
   advance(g, r, 2.0);
   assert.equal(g.stateKey, State.MAP);
 
-  // X auf der Karte -> zurueck zum Startscreen (Q wuerde weiterspielen).
+  // X auf der Karte -> Karte blendet aus (~0,9s), dann nahtlos Startscreen.
   g.handleKey('X');
-  advance(g, r, 0.8);
+  advance(g, r, 0.5);
+  assert.equal(g.stateKey, State.MAP, 'waehrend des Ausblendens noch Karte');
+  advance(g, r, 0.7);
   assert.equal(g.stateKey, State.STARTSCREEN);
 });
 
@@ -237,8 +239,38 @@ test('am Ziel bietet die Karte kein Weiterspielen an: Q bleibt, X beendet', () =
   assert.equal(g.stateKey, State.MAP, 'Q tut am Ziel nichts');
 
   g.handleKey('X');
-  advance(g, r, 0.8);
+  advance(g, r, 1.2); // Ausblenden (~0,9s) + nahtloser Wechsel
   assert.equal(g.stateKey, State.STARTSCREEN);
+});
+
+test('X auf der Karte: Ausblenden, Abdock-Flug, dann reagiert der Startscreen wieder', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+  g.dispatch(GameEvent.START);
+  advance(g, r, 0.8 + 4.5 + 2.0); // -> MazeGen -> Falling -> Playing
+  g.dispatch(GameEvent.EXIT);
+  advance(g, r, 0.8 + 2.0); // Fade + Rueckschwenk -> Karte
+  assert.equal(g.stateKey, State.MAP);
+
+  g.handleKey('X'); // Karte blendet aus (~0,9s), Eingaben sind dabei gesperrt
+  advance(g, r, 0.5);
+  assert.equal(g.stateKey, State.MAP);
+  g.handleKey('Q'); // wird waehrend des Ausblendens ignoriert
+  advance(g, r, 0.05);
+  assert.equal(g.stateKey, State.MAP);
+
+  advance(g, r, 0.5); // Ausblenden fertig -> nahtlos (ohne Schwarzblende) Startscreen
+  assert.equal(g.stateKey, State.STARTSCREEN);
+  assert.ok(!g.undock, 'undock-Flag wurde verbraucht');
+
+  g.handleKey('S'); // waehrend des Abdock-Flugs (~1,6s) ignoriert
+  advance(g, r, 1.0);
+  assert.equal(g.stateKey, State.STARTSCREEN);
+
+  advance(g, r, 0.8); // Flug beendet -> Orbit laeuft, S startet wieder normal
+  g.handleKey('S');
+  advance(g, r, 1.8);
+  assert.equal(g.stateKey, State.MAZE_GEN);
 });
 
 test('dispatch ignoriert undefinierte Uebergaenge', () => {

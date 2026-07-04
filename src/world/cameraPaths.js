@@ -36,6 +36,17 @@ export function orbitCamera(t, opts = {}) {
   return { position, yaw, pitch, radius, azimuth, elevation };
 }
 
+// Zeitpunkt, zu dem die Orbit-Kamera einer Seitenflaeche (Normale in der
+// xz-Ebene) frontal zugewandt ist: Azimut so, dass die Position horizontal
+// entlang der Normalen liegt. Fuer das Abdocken -- der Rueckflug endet an
+// dieser Stelle der Bahn, damit der Orbit dort nahtlos weiterlaeuft.
+export function orbitTimeFacing(normal, opts = {}) {
+  const speed = opts.azimuthSpeed ?? 0.3;
+  let azimuth = Math.atan2(normal[0], normal[2]);
+  if (azimuth < 0) azimuth += 2 * Math.PI;
+  return azimuth / speed;
+}
+
 // --- Andocken: vom Umtanzen zur Draufsicht -------------------------------------
 
 function clamp01(x) {

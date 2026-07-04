@@ -1,7 +1,9 @@
 // Zustand "Karte": nach dem Rueckschwenk steht die Kartensicht still und zeigt das
 // flache Labyrinth mit S/G und dem abgelaufenen Weg. Solange das Ziel offen ist,
 // faellt man mit Q zurueck ins Labyrinth und spielt weiter; X beendet zum
-// Startscreen (nach 5 Minuten automatisch). Am Ziel gibt es nur noch X.
+// Startscreen (nach 5 Minuten automatisch): Karteninhalt blendet aus, nur der
+// Rahmen (= die Wuerfelflaeche) bleibt, dann uebernimmt der Startscreen nahtlos
+// mit dem rueckwaertigen Andock-Flug (game.undock).
 
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
@@ -12,6 +14,7 @@ import {
 } from './mazeView.js';
 
 const AUTO_EXIT = 300; // 5 Minuten
+const EXIT_FADE = 0.9; // Sekunden: Karteninhalt blendet aus, der Rahmen bleibt
 
 export function createMap(game) {
   const camera = createCamera({ fov: Math.PI / 2.4 });
@@ -23,10 +26,19 @@ export function createMap(game) {
   let cell = 1;
   let pose = null;
   let t = 0;
+  let exiting = false;
+  let exitT = 0;
+
+  function beginExit() {
+    exiting = true;
+    exitT = 0;
+  }
 
   return {
     enter() {
       t = 0;
+      exiting = false;
+      exitT = 0;
       maze = game.maze ?? generateMaze(11, {});
       face = game.dockFace ?? SIDE_FACES[0];
       cell = cellSize(maze);
@@ -37,27 +49,41 @@ export function createMap(game) {
 
     update(dt) {
       t += dt;
-      if (t >= AUTO_EXIT) game.dispatch(GameEvent.EXIT);
+      if (exiting) {
+        exitT += dt;
+        if (exitT >= EXIT_FADE) {
+          game.undock = true; // Startscreen: Andock-Flug rueckwaerts von dieser Flaeche
+          game.dispatch(GameEvent.EXIT, { fade: false });
+        }
+        return;
+      }
+      if (t >= AUTO_EXIT) beginExit();
     },
 
     render(renderer) {
-      renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight: 0 });
-      drawMapOverlay(renderer, maze, face, camera, game.trail, 1);
+      const fade = exiting ? Math.max(0, 1 - exitT / EXIT_FADE) : 1;
+      renderFaceWalls(renderer, walls, footprints, camera, pose, {
+        far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight: 0, alpha: fade,
+      });
+      drawMapOverlay(renderer, maze, face, camera, game.trail, fade, 1); // Rahmen bleibt
 
       // Klein unten rechts (wie die Steuerungszeile in der Ego-Ansicht).
-      renderer.drawText(game.reachedGoal ? 'X EXIT' : 'Q RETURN  X EXIT', {
-        x: renderer.width - 24, y: renderer.height - 20, size: 13,
-        align: 'right', baseline: 'bottom', intensity: 0.5,
-      });
+      if (fade > 0.01) {
+        renderer.drawText(game.reachedGoal ? 'X EXIT' : 'Q RETURN  X EXIT', {
+          x: renderer.width - 24, y: renderer.height - 20, size: 13,
+          align: 'right', baseline: 'bottom', intensity: 0.5 * fade,
+        });
+      }
     },
 
     onKey(key) {
+      if (exiting) return; // waehrend des Ausblendens keine Eingaben mehr
       if (key === 'Q' && !game.reachedGoal) {
         // Weiterspielen: nahtlos zurueck ins Labyrinth fallen (gleiche Kamera-Pose).
         game.resume = true;
         if (!game.dispatch(GameEvent.RESUME, { fade: false })) game.resume = false;
       } else if (key === 'X') {
-        game.dispatch(GameEvent.EXIT); // -> Startscreen
+        beginExit(); // Karte abblenden, dann -> Startscreen (Abdock-Flug)
       }
     },
   };

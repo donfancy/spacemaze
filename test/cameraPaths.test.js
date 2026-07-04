@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sphericalToCartesian, orbitCamera, dockPose, topDownDock } from '../src/world/cameraPaths.js';
+import { sphericalToCartesian, orbitCamera, dockPose, topDownDock, orbitTimeFacing } from '../src/world/cameraPaths.js';
 import { createCamera, forward } from '../src/math/camera.js';
 import { length, sub, normalize } from '../src/math/vec3.js';
+import { SIDE_FACES, pickDockFace } from '../src/world/cubeFaces.js';
 
 const close = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
 function assertVecClose(actual, expected, eps = 1e-9) {
@@ -75,6 +76,22 @@ test('dockPose: yaw nimmt den kuerzeren Winkelweg ueber die pi-Grenze', () => {
   // Kurzer Weg (Delta ~ +0.28) laeuft ueber +pi, nicht zurueck durch 0.
   const mid = dockPose(0.5, start, dock);
   assert.ok(Math.abs(mid.yaw) > 3.0, `yaw ${mid.yaw} nahm den langen Weg`);
+});
+
+test('orbitTimeFacing: Orbit-Pose ist der Flaeche zugewandt (alle 4 Seiten)', () => {
+  const opts = { azimuthSpeed: 0.36, elevation: 0.38, elevationVar: 0.17, radius: 5.85, radiusVar: 1.6 };
+  for (const face of SIDE_FACES) {
+    const t0 = orbitTimeFacing(face.normal, opts);
+    assert.ok(t0 >= 0, 'Zeit darf nicht negativ sein');
+
+    const o = orbitCamera(t0, opts);
+    // Horizontal liegt die Position entlang der Flaechennormalen ...
+    const horiz = normalize([o.position[0], 0, o.position[2]]);
+    assertVecClose(horiz, face.normal, 1e-9);
+    // ... also waehlt der Blick zum Zentrum genau diese Flaeche als Andock-Ziel.
+    const viewDir = normalize([-o.position[0], -o.position[1], -o.position[2]]);
+    assert.equal(pickDockFace(viewDir), face);
+  }
 });
 
 test('topDownDock: senkrecht ueber dem Zentrum, Blick nach unten', () => {
