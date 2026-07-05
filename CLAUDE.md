@@ -46,8 +46,10 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   `game.level` hält die Auswahl, MazeGen liest daraus.
 - Die Begehung spielt AUF der Andock-Würfelseite (nicht horizontal). Schlüssel:
   freie Kamera-Oben-Richtung (`camera.basis`), `faceLocalToWorld`, `scenes/mazeView.js`.
-- Hidden Lines: `render/occlusion.js` (analytisch). Zwei Fallen beachten —
-  Occlusion beim Schwenk per `occWeight` einblenden; Near-Plane mit `cell` skalieren.
+- Hidden Lines: `render/occlusion.js` (analytisch). Drei Fallen beachten —
+  Occlusion beim Schwenk per `occWeight` einblenden; Near-Plane mit `cell` skalieren;
+  Kollisionsradius (0.25 Zellen) muss über der Near-Plane (0.1) bleiben, sonst
+  verlieren nahe Wände ihre Verdeckung (`tryMove` prüft dafür das Spieler-Quadrat).
 - Schwenks (Reinfallen/Rückschwenk) interpolieren die Orientierung per
   Quaternion-Slerp (`math/quat.js`, `blendPose` in `mazeView.js`) — getrenntes
   forward/up-Lerp kippt um, wenn beide antiparallel werden (Ego-Blick „Süd“).

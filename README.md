@@ -28,8 +28,12 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
 
 ## Steuerung (aktueller Stand)
 
-- `S` — Spiel starten (im Startbildschirm)
-- `Q` — zurück zum Startbildschirm (im Spiel)
+- Startbildschirm: `↑/↓/←/→` Level wählen (1–5), `S` startet (Andock-Flug an den Würfel)
+- Im Labyrinth (Ego-Ansicht, Tank-Steuerung): `↑/W` vor, `↓/S` zurück,
+  `←/A`/`→/D` drehen, `Q` Rückschwenk zur Karte (am Ziel automatisch nach 20 s)
+- Auf der Karte: `Q` weiterspielen (fällt zurück an die Spielerlage, solange das
+  Ziel offen ist), `X` beenden (nach 5 min automatisch) — die Karte blendet aus
+  und die Kamera fliegt symmetrisch zum Start zurück in den Orbit
 
 ## Architektur
 
@@ -40,19 +44,38 @@ testbar ist und Refactoring sicher bleibt:
 src/
   math/
     vec3.js        Vektor-Mathematik (rein, getestet)
-    camera.js      6-DOF-Kamera, worldToView (rein, getestet)
+    camera.js      6-DOF-Kamera + optionale freie Basis, worldToView (rein, getestet)
+    quat.js        Quaternionen: Slerp fuer die Schwenks (rein, getestet)
   render/
     projection.js  3D→2D-Projektion + Near-Clipping (rein, getestet)
+    occlusion.js   analytische Hidden-Line-Bestimmung via Wand-Grundrisse (getestet)
     glyphs.js      eckiger Monospace-Vektorfont als Liniendaten (getestet)
     vectorText.js  Text-Layout → Polylinien in Pixeln (rein, getestet)
+    compass.js     Kompass-Rose als Liniendaten (rein, getestet)
     renderer.js    EINZIGER Canvas-berührender Teil (Phosphor-Glow)
   world/
+    maze.js        Labyrinth-Generator (DFS-Backtracker, seedbar, getestet)
+    mazeGeometry.js  Korridor-Konturen + Wachstums-Animation (getestet)
+    mazeWorld.js   begehbare Welt: Wände, Kollision (Spieler-Quadrat), getestet
+    cubeFaces.js   Würfel-Seitenflächen als Andock-Ziele + Grid-Mapping (getestet)
+    cameraPaths.js Kamera-Choreografie: Orbit, An-/Abdocken (getestet)
+    visibility.js  Kantenklassifikation für den Drahtwürfel (getestet)
     shapes.js      Welt-Geometrie-Erzeuger: Würfel, Gitter (rein, getestet)
+    trail.js       präzise Weg-Aufzeichnung (getestet)
   core/
     states.js      Zustands-Automat als reine Funktion (getestet)
+    levels.js      Level 1–5 als reine Daten: Maze-Größe n = 9/11/13/15/17
     game.js        Orchestrierung + animierte Übergänge
   scenes/
-    startscreen.js / mazegen.js / playing.js   die einzelnen Zustände
+    startscreen.js Orbit um den Drahtwürfel, Level-Wahl, An-/Abdock-Flug
+    mazegen.js     Labyrinth wächst auf der Andock-Fläche
+    falling.js     Schwenk aus der Kartensicht in die Ego-Begehung
+    playing.js     Ego-Begehung mit Hidden Lines und Kompass
+    rising.js      Rückschwenk zur Kartensicht (Wände schrumpfen)
+    map.js         Kartensicht mit abgelaufenem Weg; X blendet aus → Abdocken
+    mazeView.js    gemeinsamer Flächen-Renderer (Posen, Overlay, Hidden Lines)
+  util/
+    rng.js         seedbarer Zufall (getestet)
   debug/
     debugConsole.js  Live-Werte + Log (per ?debug eingeblendet)
   main.js          Browser-Entry: Canvas, Eingabe, requestAnimationFrame-Loop
@@ -68,7 +91,17 @@ Jeder Zustand hat (a) eine 3D-Szene, die durch die 6-DOF-Kamera projiziert wird,
 und (b) ein **fixes 2D-Text-Overlay** (kameraunabhängig). Gerendert wird immer
 voll: Canvas löschen, alles neu zeichnen, im `requestAnimationFrame`-Takt.
 
-Zustände: `STARTSCREEN → MAZE_GEN → PLAYING → STARTSCREEN`, Übergänge als Fade.
+Zustände (der komplette Zyklus läuft):
+
+```
+STARTSCREEN → MAZE_GEN → FALLING → PLAYING → RISING → MAP → STARTSCREEN
+                              ↑ (Q: RESUME, solange das Ziel offen ist) ↲
+```
+
+Die Übergänge sind nahtlos inszeniert (Andock-/Abdock-Flug, Rein-/Rausschwenk
+per Quaternion-Slerp); nur wo nötig wird über Schwarz geblendet. Die gesamte
+Begehung spielt AUF der gewählten Würfelseite — Schlüssel dafür sind die freie
+Kamera-Oben-Richtung (`camera.basis`), `faceLocalToWorld` und `scenes/mazeView.js`.
 
 ## Deployment (später)
 
