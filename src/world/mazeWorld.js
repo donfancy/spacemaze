@@ -65,6 +65,10 @@ export function startFacingYaw(maze) {
 
 // Versucht eine Bewegung um (dx,dz); pro Achse blockiert, was in eine Wand fuehrt
 // (erlaubt Gleiten an Waenden). `radius` ist der Spieler-Sicherheitsabstand.
+// Der Spieler ist ein Quadrat der Halbbreite radius: der Vorderkanten-Check
+// prueft BEIDE Ecken, sonst rutscht man an Wandenden seitlich naeher als radius
+// an eine parallele Wand heran (und unterschreitet die Render-Near-Plane --
+// die Wand verdeckt dann nichts mehr und dahinterliegende Linien werden hell).
 // Liefert die neue Position [x,z].
 export function tryMove(maze, x, z, dx, dz, opts = {}) {
   const cell = opts.cell ?? 1;
@@ -74,11 +78,11 @@ export function tryMove(maze, x, z, dx, dz, opts = {}) {
 
   if (dx !== 0) {
     const edge = x + dx + Math.sign(dx) * radius;
-    if (isWalkable(maze, edge, z, cell)) nx = x + dx;
+    if (isWalkable(maze, edge, z - radius, cell) && isWalkable(maze, edge, z + radius, cell)) nx = x + dx;
   }
   if (dz !== 0) {
     const edge = z + dz + Math.sign(dz) * radius;
-    if (isWalkable(maze, nx, edge, cell)) nz = z + dz;
+    if (isWalkable(maze, nx - radius, edge, cell) && isWalkable(maze, nx + radius, edge, cell)) nz = z + dz;
   }
   return [nx, nz];
 }
