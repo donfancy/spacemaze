@@ -116,3 +116,4 @@ test('blendPose: Karte -> Ego stetig fuer jede Flaeche und Blickrichtung', () =>
     }
   }
 });
+

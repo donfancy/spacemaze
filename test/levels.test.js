@@ -4,12 +4,26 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { LEVELS, MIN_LEVEL, MAX_LEVEL, levelConfig, stepLevel } from '../src/core/levels.js';
 
-test('Level 1 bis 5 haben die Maze-Groessen 9, 11, 13, 15, 17', () => {
+test('Level 1 bis 10: Maze-Groesse waechst je Level um ein Rastermass', () => {
   assert.equal(MIN_LEVEL, 1);
-  assert.equal(MAX_LEVEL, 5);
-  assert.deepEqual(LEVELS.map((l) => l.n), [9, 11, 13, 15, 17]);
-  for (let level = MIN_LEVEL; level <= MAX_LEVEL; level++) {
+  assert.equal(MAX_LEVEL, 10);
+  assert.deepEqual(LEVELS.map((l) => l.n), [9, 11, 13, 15, 17, 17, 19, 21, 23, 25]);
+  for (let level = 1; level <= 5; level++) {
     assert.equal(levelConfig(level).n, 7 + 2 * level);
+  }
+  for (let level = 6; level <= 10; level++) {
+    assert.equal(levelConfig(level).n, 5 + 2 * level);
+  }
+});
+
+test('Level 1 bis 5 sind Blockwelt mit Tank-Steuerung; ab 6: schmale Waende + Fahrt', () => {
+  for (let level = 1; level <= 5; level++) {
+    assert.equal(levelConfig(level).metric, undefined);
+    assert.equal(levelConfig(level).drive, undefined);
+  }
+  for (let level = 6; level <= 10; level++) {
+    assert.deepEqual(levelConfig(level).metric, { wall: 1, corridor: 5 });
+    assert.equal(levelConfig(level).drive, true);
   }
 });
 

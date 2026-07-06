@@ -21,6 +21,7 @@
 //     Blaettern machen -- beide gleichzeitig als Sackgasse waere unmoeglich.
 
 import { createRng, randomSeed, randInt } from '../util/rng.js';
+import { createMetric } from './metric.js';
 
 export const WALL = 0;
 export const OPEN = 1;
@@ -59,8 +60,10 @@ export function chambersInQuadrant(n, q) {
   return result;
 }
 
-// Erzeugt ein Labyrinth. options: { seed?, rng? }.
-// Rueckgabe: { n, grid (grid[y][x] = WALL|OPEN), start:[x,y], goal:[x,y], seed }.
+// Erzeugt ein Labyrinth. options: { seed?, rng?, metric? }.
+// `metric` ({ wall, corridor }) bestimmt nur die DARSTELLUNGS-Breiten der Zellen
+// (siehe world/metric.js) -- die Labyrinth-Struktur selbst ist davon unabhaengig.
+// Rueckgabe: { n, grid (grid[y][x] = WALL|OPEN), start:[x,y], goal:[x,y], seed, metric }.
 export function generateMaze(n = 11, options = {}) {
   if (!Number.isInteger(n) || n % 2 === 0) {
     throw new Error('n muss eine ungerade Ganzzahl sein, war ' + n);
@@ -92,7 +95,7 @@ export function generateMaze(n = 11, options = {}) {
   // Reihenfolge, in der Zellen begehbar werden (fuer die Wachstums-Animation).
   const order = carve(grid, n, start, goal, rng);
 
-  return { n, grid, start, goal, seed, order };
+  return { n, grid, start, goal, seed, order, metric: createMetric(options.metric) };
 }
 
 // Hoehlt die Zwischenwaende aus, bis ein Spannbaum ueber alle Kammern entsteht.

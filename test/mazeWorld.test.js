@@ -11,7 +11,7 @@ function tiny() {
 
 test('mazeWalls: 4 Kanten je Konturensegment, alle zwischen y=0 und y=height', () => {
   const m = generateMaze(11, { seed: 5 });
-  const walls = mazeWalls(m, { cell: 1, height: 1.2 });
+  const walls = mazeWalls(m, { unit: 1, height: 1.2 });
   assert.equal(walls.length, corridorOutline(m).length * 4);
   for (const [a, b] of walls) {
     assert.ok((a[1] === 0 || a[1] === 1.2) && (b[1] === 0 || b[1] === 1.2));
@@ -20,7 +20,7 @@ test('mazeWalls: 4 Kanten je Konturensegment, alle zwischen y=0 und y=height', (
 
 test('wallFootprints: ein xz-Segment je Korridor-Kontur, alle bei y=0', () => {
   const m = generateMaze(11, { seed: 5 });
-  const fp = wallFootprints(m, { cell: 1 });
+  const fp = wallFootprints(m, { unit: 1 });
   assert.equal(fp.length, corridorOutline(m).length);
   for (const [a, b] of fp) {
     assert.equal(a[1], 0);
@@ -29,11 +29,12 @@ test('wallFootprints: ein xz-Segment je Korridor-Kontur, alle bei y=0', () => {
 });
 
 test('cellAt / cellCenter sind zueinander konsistent', () => {
-  assert.deepEqual(cellAt(0.5, 0.5, 1), [0, 0]);
-  assert.deepEqual(cellAt(2.9, 1.1, 1), [2, 1]);
-  assert.deepEqual(cellCenter(3, 4, 1), [3.5, 4.5]);
-  const [cx, cz] = cellCenter(2, 5, 2);
-  assert.deepEqual(cellAt(cx, cz, 2), [2, 5]);
+  const t = tiny(); // uniforme Metrik (Fallback)
+  assert.deepEqual(cellAt(t, 0.5, 0.5, 1), [0, 0]);
+  assert.deepEqual(cellAt(t, 2.9, 1.1, 1), [2, 1]);
+  assert.deepEqual(cellCenter(t, 3, 4, 1), [3.5, 4.5]);
+  const [cx, cz] = cellCenter(t, 2, 5, 2);
+  assert.deepEqual(cellAt(t, cx, cz, 2), [2, 5]);
 });
 
 test('isWalkable: offen begehbar, Wand und Aussenraum nicht', () => {
@@ -53,7 +54,7 @@ test('isWalkable im echten Maze: Start offen, Pfeiler Wand', () => {
 
 test('tryMove: Bewegung innerhalb der offenen Zelle ist erlaubt', () => {
   const t = tiny();
-  const [nx, nz] = tryMove(t, 1.5, 1.5, 0.2, 0, { cell: 1, radius: 0.2 });
+  const [nx, nz] = tryMove(t, 1.5, 1.5, 0.2, 0, { unit: 1, radius: 0.2 });
   assert.ok(Math.abs(nx - 1.7) < 1e-9);
   assert.equal(nz, 1.5);
 });
@@ -61,10 +62,10 @@ test('tryMove: Bewegung innerhalb der offenen Zelle ist erlaubt', () => {
 test('tryMove: Wand blockiert die betroffene Achse, andere gleitet', () => {
   const t = tiny();
   // Nach +x gegen die Wand (Zelle 2,1 ist Wand): x bleibt, aber...
-  const [nx] = tryMove(t, 1.5, 1.5, 0.5, 0, { cell: 1, radius: 0.2 });
+  const [nx] = tryMove(t, 1.5, 1.5, 0.5, 0, { unit: 1, radius: 0.2 });
   assert.equal(nx, 1.5, 'x sollte an der Wand blockieren');
   // Diagonale: x blockiert (Wand), z ebenfalls (Wand) -> beide bleiben.
-  const [bx, bz] = tryMove(t, 1.5, 1.5, 0.5, 0.5, { cell: 1, radius: 0.2 });
+  const [bx, bz] = tryMove(t, 1.5, 1.5, 0.5, 0.5, { unit: 1, radius: 0.2 });
   assert.equal(bx, 1.5);
   assert.equal(bz, 1.5);
 });
@@ -84,33 +85,33 @@ test('tryMove: seitliches Vorbeirutschen an einem Wandende bleibt auf Abstand ra
     ],
   };
   // Zu nah an der Wandkante (z=0.95): +x wird blockiert (Ecke z+radius in der Wand).
-  const [bx] = tryMove(m, 0.8, 0.95, 0.1, 0, { cell: 1, radius: 0.25 });
+  const [bx] = tryMove(m, 0.8, 0.95, 0.1, 0, { unit: 1, radius: 0.25 });
   assert.equal(bx, 0.8, 'x muss blockieren, sonst unterschreitet man radius');
   // Mit genug Abstand (z=0.5) ist derselbe Schritt erlaubt.
-  const [nx] = tryMove(m, 0.8, 0.5, 0.1, 0, { cell: 1, radius: 0.25 });
+  const [nx] = tryMove(m, 0.8, 0.5, 0.1, 0, { unit: 1, radius: 0.25 });
   assert.ok(Math.abs(nx - 0.9) < 1e-9, 'mit Abstand gleitet man normal weiter');
 });
 
 test('tryMove haelt das ganze Spieler-Quadrat in offenen Zellen (deterministischer Zufallslauf)', () => {
   const m = generateMaze(11, { seed: 7 });
-  const cell = 1;
+  const unit = 1;
   const radius = 0.25;
-  let [x, z] = cellCenter(m.start[0], m.start[1], cell);
+  let [x, z] = cellCenter(m, m.start[0], m.start[1], unit);
   let yaw = startFacingYaw(m);
   for (let i = 0; i < 5000; i++) {
     yaw += Math.sin(i * 0.7) * 0.3; // pseudo-zufaellige, reproduzierbare Drehung
     const step = 0.05;
-    [x, z] = tryMove(m, x, z, -Math.sin(yaw) * step, -Math.cos(yaw) * step, { cell, radius });
+    [x, z] = tryMove(m, x, z, -Math.sin(yaw) * step, -Math.cos(yaw) * step, { unit, radius });
     // Alle 4 Ecken offen <=> Abstand zu jeder Wand >= radius (Quadrat < Zellgroesse).
     for (const [ox, oz] of [[-radius, -radius], [radius, -radius], [-radius, radius], [radius, radius]]) {
-      assert.ok(isWalkable(m, x + ox, z + oz, cell), `Schritt ${i}: Ecke bei (${(x + ox).toFixed(3)}, ${(z + oz).toFixed(3)}) in der Wand`);
+      assert.ok(isWalkable(m, x + ox, z + oz, unit), `Schritt ${i}: Ecke bei (${(x + ox).toFixed(3)}, ${(z + oz).toFixed(3)}) in der Wand`);
     }
   }
 });
 
 test('tryMove: ohne Bewegung bleibt die Position', () => {
   const t = tiny();
-  assert.deepEqual(tryMove(t, 1.5, 1.5, 0, 0, { cell: 1 }), [1.5, 1.5]);
+  assert.deepEqual(tryMove(t, 1.5, 1.5, 0, 0, { unit: 1 }), [1.5, 1.5]);
 });
 
 test('startFacingYaw blickt in den offenen Startgang', () => {

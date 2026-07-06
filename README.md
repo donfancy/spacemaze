@@ -28,9 +28,12 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
 
 ## Steuerung (aktueller Stand)
 
-- Startbildschirm: `↑/↓/←/→` Level wählen (1–5), `S` startet (Andock-Flug an den Würfel)
-- Im Labyrinth (Ego-Ansicht, Tank-Steuerung): `↑/W` vor, `↓/S` zurück,
+- Startbildschirm: `↑/↓/←/→` Level wählen (1–10), `S` startet (Andock-Flug an den Würfel)
+- Im Labyrinth (Ego-Ansicht, Tank-Steuerung, Level 1–5): `↑/W` vor, `↓/S` zurück,
   `←/A`/`→/D` drehen, `Q` Rückschwenk zur Karte (am Ziel automatisch nach 20 s)
+- Ab Level 6 Fahrt-Modus: automatischer Vortrieb, nur `←/→` lenken; Kurven
+  neigen die Kamera, Wandkontakt federt zurück — mit Kollisionswellen auf der
+  Wand und mechanischem Kamera-Nachschwingen
 - Auf der Karte: `Q` weiterspielen (fällt zurück an die Spielerlage, solange das
   Ziel offen ist), `X` beenden (nach 5 min automatisch) — die Karte blendet aus
   und die Kamera fliegt symmetrisch zum Start zurück in den Orbit
@@ -46,17 +49,22 @@ src/
     vec3.js        Vektor-Mathematik (rein, getestet)
     camera.js      6-DOF-Kamera + optionale freie Basis, worldToView (rein, getestet)
     quat.js        Quaternionen: Slerp fuer die Schwenks (rein, getestet)
+    oscillator.js  gedaempfter Oszillator: Kamera-Schwingungen (rein, getestet)
   render/
     projection.js  3D→2D-Projektion + Near-Clipping (rein, getestet)
     occlusion.js   analytische Hidden-Line-Bestimmung via Wand-Grundrisse (getestet)
     glyphs.js      eckiger Monospace-Vektorfont als Liniendaten (getestet)
     vectorText.js  Text-Layout → Polylinien in Pixeln (rein, getestet)
     compass.js     Kompass-Rose als Liniendaten (rein, getestet)
+    sway.js        Bildraum-Schwenk: Kurvenneigung/Schwingung ohne Kamera-Roll (getestet)
     renderer.js    EINZIGER Canvas-berührender Teil (Phosphor-Glow)
   world/
     maze.js        Labyrinth-Generator (DFS-Backtracker, seedbar, getestet)
     mazeGeometry.js  Korridor-Konturen + Wachstums-Animation (getestet)
+    metric.js      Achsen-Metrik: ungleiche Zellbreiten → schmale Wände (getestet)
     mazeWorld.js   begehbare Welt: Wände, Kollision (Spieler-Quadrat), getestet
+    drive.js       Fahr-Dynamik ab Level 6: Auto-Vortrieb, Abprall (getestet)
+    waves.js       Kollisionswellen auf der Wandfläche (getestet)
     cubeFaces.js   Würfel-Seitenflächen als Andock-Ziele + Grid-Mapping (getestet)
     cameraPaths.js Kamera-Choreografie: Orbit, An-/Abdocken (getestet)
     visibility.js  Kantenklassifikation für den Drahtwürfel (getestet)
@@ -64,7 +72,7 @@ src/
     trail.js       präzise Weg-Aufzeichnung (getestet)
   core/
     states.js      Zustands-Automat als reine Funktion (getestet)
-    levels.js      Level 1–5 als reine Daten: Maze-Größe n = 9/11/13/15/17
+    levels.js      Level 1–10 als reine Daten: Maze-Größe n, Metrik, Fahr-Modus
     game.js        Orchestrierung + animierte Übergänge
   scenes/
     startscreen.js Orbit um den Drahtwürfel, Level-Wahl, An-/Abdock-Flug

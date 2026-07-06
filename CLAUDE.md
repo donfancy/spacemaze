@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 156 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 194 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -28,7 +28,8 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 
 ## Architektur-Kurzüberblick
 - `src/math/` — vec3, camera (6-DOF + optionale freie Basis), projection
-- `src/world/` — maze (Generator), mazeGeometry, mazeWorld, cubeFaces, shapes, visibility
+- `src/world/` — maze (Generator), mazeGeometry, metric (Achsen-Metrik), mazeWorld,
+  drive (Fahr-Dynamik), waves (Kollisionswellen), cubeFaces, shapes, visibility
 - `src/render/` — renderer.js (EINZIGER Canvas-Teil), projection.js, occlusion.js
 - `src/core/` — states.js (Zustands-Automat), game.js (Orchestrierung)
 - `src/scenes/` — startscreen, mazegen, falling, playing, rising, map + mazeView.js
@@ -42,14 +43,39 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   `game.resume`); X (oder 5 min) → Karte blendet aus (Rahmen bleibt), dann
   Abdock-Flug zurück in den Orbit (`game.undock`, Startscreen-Phase `undocking`,
   `orbitTimeFacing`) — symmetrisch zum Andocken.
-- Levels 1–5 in `src/core/levels.js` (reine Daten): Maze-Größe n = 9/11/13/15/17;
-  `game.level` hält die Auswahl, MazeGen liest daraus.
+- Levels 1–10 in `src/core/levels.js` (reine Daten): n = 9/11/13/15/17 (Blockwelt,
+  Tank-Steuerung) und 17/19/21/23/25 (Level 6–10: schmale Wände + Fahrt);
+  `game.level` hält die Auswahl, MazeGen liest daraus. Ab Level 6 SCHMALE WÄNDE:
+  gleiche Maze-Topologie, aber `world/metric.js` streckt die Achsen ungleich
+  (gerade Zellen = Wände 1 Einheit, ungerade = Gänge 5). Grid↔Welt geht überall
+  durch die Metrik (`toUnits`/`toGrid`); Gameplay-Maßstab ist die GANG-Breite
+  (`cellSize`), Geometrie-Maßstab die Einheit (`unitSize`).
+- Level 6–10 (`drive: true`) haben außerdem FAHRT-Modus: `world/drive.js` (Auto-
+  Vortrieb, nur ←/→ lenken, Abprall federt zurück, cooldown gegen Doppel-
+  Trigger). Alle Übergänge als RAMPEN (linear ratenbegrenzt, `rampToward`):
+  Lenkrate fährt von 0 hoch (`steerRamp`), Tempo mit konstanter Beschleunigung
+  (`accel` — gilt auch fürs Losfahren nach dem Reinfallen), Q bremst erst
+  (`brake` + kurzer Halt `BRAKE_HOLD`), dann Abheben. Rückstoß beim Aufprall
+  ist ein FESTER Anteil der Reisegeschwindigkeit (sonst „zittert" man an der
+  Wand). `world/waves.js`: Kollisionswellen starten als weißes Blitz-Kreuz am
+  Sichtlinien-Auftreffpunkt, Arme wachsen mit, an die zusammenhängende Kontur-
+  Fläche geklippt. Kamera-Gefühl in `scenes/playing.js` (Kurvenneigung `bank`
+  + `math/oscillator.js` für mechanisches Nachschwingen — als Bildraum-Sway
+  gerendert, NICHT in der Kamerabasis, siehe Hidden-Lines-Falle 4).
 - Die Begehung spielt AUF der Andock-Würfelseite (nicht horizontal). Schlüssel:
   freie Kamera-Oben-Richtung (`camera.basis`), `faceLocalToWorld`, `scenes/mazeView.js`.
-- Hidden Lines: `render/occlusion.js` (analytisch). Drei Fallen beachten —
-  Occlusion beim Schwenk per `occWeight` einblenden; Near-Plane mit `cell` skalieren;
-  Kollisionsradius (0.25 Zellen) muss über der Near-Plane (0.1) bleiben, sonst
-  verlieren nahe Wände ihre Verdeckung (`tryMove` prüft dafür das Spieler-Quadrat).
+- Hidden Lines: `render/occlusion.js` (analytisch). VIER Fallen beachten —
+  Occlusion beim Schwenk per `occWeight` einblenden; Near-Plane mit `cell`
+  skalieren — auch bei `renderer.renderScene` (Effekte nah am Auge wie die
+  Kollisionswellen brauchen den `near`-Override, sonst clippt der feste
+  Standardwert alles weg);
+  Kollisionsradius (0.25 Gangbreiten) muss über der Near-Plane (0.1) bleiben, sonst
+  verlieren nahe Wände ihre Verdeckung (Kollision prüft dafür das GANZE
+  Spieler-Quadrat via `rectWalkable` — bei schmalen Wänden reichen Eck-Checks
+  nicht, ein 1-Einheit-Pfosten passt zwischen zwei Ecken); und die 3D-Kamera
+  muss HORIZONTAL bleiben — Roll/Nicken (Kurvenneigung, Schwingungen) NIE in die
+  Kamerabasis, sondern als Bildraum-Transform (`render/sway.js`,
+  `renderer.pushSway/popSway`), sonst bricht die azimutale Annahme.
 - Schwenks (Reinfallen/Rückschwenk) interpolieren die Orientierung per
   Quaternion-Slerp (`math/quat.js`, `blendPose` in `mazeView.js`) — getrenntes
   forward/up-Lerp kippt um, wenn beide antiparallel werden (Ego-Blick „Süd“).

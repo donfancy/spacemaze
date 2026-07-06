@@ -43,6 +43,21 @@ export class Renderer {
     ctx.fillRect(0, 0, this.width, this.height);
   }
 
+  // Bildraum-Schwenk (siehe render/sway.js): dreht/verschiebt alles bis popSway
+  // um die Bildmitte -- fuer Kurvenneigung und Kollisions-Schwingungen, ohne die
+  // (horizontale) 3D-Kamera anzutasten. Immer mit popSway paaren.
+  pushSway({ angle = 0, dy = 0 } = {}) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(this.width / 2, this.height / 2);
+    ctx.rotate(angle);
+    ctx.translate(-this.width / 2, -this.height / 2 + dy);
+  }
+
+  popSway() {
+    this.ctx.restore();
+  }
+
   // Schwarzes Overlay mit gegebener Deckkraft -- fuer Fade-Uebergaenge.
   fillBlack(alpha) {
     if (alpha <= 0) return;
@@ -86,18 +101,23 @@ export class Renderer {
 
   // Projiziert eine 3D-Szene durch die Kamera und zeichnet sie als Drahtgitter.
   // scene.segments: Array von [aWorld, bWorld] Liniensegmenten.
+  // opts.near: Near-Plane-Override -- WICHTIG fuer Geometrie nah am Auge (z.B.
+  // Kollisionswellen auf der Wand direkt vor der Kamera): die Near-Plane muss
+  // wie ueberall mit der Zellgroesse skalieren, sonst clippt der Standardwert
+  // die Linien weg.
   renderScene(scene, camera, opts = {}) {
+    const near = opts.near ?? this.near;
     const viewport = {
       width: this.width,
       height: this.height,
       fov: camera.fov,
-      near: this.near,
+      near,
     };
     const polylines = [];
     for (const seg of scene.segments) {
       const va = worldToView(camera, seg[0]);
       const vb = worldToView(camera, seg[1]);
-      const clipped = clipNear(va, vb, this.near);
+      const clipped = clipNear(va, vb, near);
       if (!clipped) continue;
       const pa = project(clipped[0], viewport);
       const pb = project(clipped[1], viewport);

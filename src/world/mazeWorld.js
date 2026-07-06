@@ -1,22 +1,27 @@
 // Wandelt ein Labyrinth in die begehbare 3D-Spielwelt um (Ego-Perspektive).
 // Reine Berechnung, kein Canvas -> headless testbar.
 //
-// Welt-Konvention (horizontal): Grid-Zelle (gx,gy) belegt das Quadrat von
-// (gx*cell, gy*cell) bis ((gx+1)*cell, (gy+1)*cell) in der xz-Ebene (gx -> Welt-x,
-// gy -> Welt-z). Waende ragen von y=0 bis y=height nach oben.
+// Welt-Konvention (horizontal): Grid-Koordinaten werden pro Achse durch die
+// Maze-Metrik (world/metric.js) in Achsen-Einheiten gestreckt und dann mit
+// `unit` (Weltgroesse EINER Einheit) skaliert: Welt-x = toUnits(gx) * unit,
+// Welt-z = toUnits(gy) * unit (xz-Ebene). Bei der klassischen Blockwelt
+// (uniforme Metrik) ist unit einfach die alte Zellgroesse. Waende ragen von
+// y=0 bis y=height nach oben.
 
 import { OPEN } from './maze.js';
 import { corridorOutline } from './mazeGeometry.js';
+import { mazeMetric } from './metric.js';
 
 // Aufragende Wireframe-Waende aus den Korridor-Konturen. Jedes 2D-Konturensegment
 // wird zu 4 Kanten: Unterkante, Oberkante und zwei senkrechte Pfosten.
 export function mazeWalls(maze, opts = {}) {
-  const cell = opts.cell ?? 1;
+  const unit = opts.unit ?? 1;
   const height = opts.height ?? 1;
+  const { toUnits } = mazeMetric(maze);
   const walls = [];
   for (const [[x1, y1], [x2, y2]] of corridorOutline(maze)) {
-    const ax = x1 * cell, az = y1 * cell;
-    const bx = x2 * cell, bz = y2 * cell;
+    const ax = toUnits(x1) * unit, az = toUnits(y1) * unit;
+    const bx = toUnits(x2) * unit, bz = toUnits(y2) * unit;
     const aB = [ax, 0, az], bB = [bx, 0, bz];
     const aT = [ax, height, az], bT = [bx, height, bz];
     walls.push([aB, bB], [aT, bT], [aB, aT], [bB, bT]);
@@ -27,28 +32,50 @@ export function mazeWalls(maze, opts = {}) {
 // Die Wand-Grundrisse (xz-Liniensegmente bei y=0) -- die Verdecker fuer die
 // Hidden-Line-Bestimmung (siehe render/occlusion.js).
 export function wallFootprints(maze, opts = {}) {
-  const cell = opts.cell ?? 1;
+  const unit = opts.unit ?? 1;
+  const { toUnits } = mazeMetric(maze);
   return corridorOutline(maze).map(([[x1, y1], [x2, y2]]) => [
-    [x1 * cell, 0, y1 * cell],
-    [x2 * cell, 0, y2 * cell],
+    [toUnits(x1) * unit, 0, toUnits(y1) * unit],
+    [toUnits(x2) * unit, 0, toUnits(y2) * unit],
   ]);
 }
 
 // Weltkoordinaten -> Grid-Zelle.
-export function cellAt(worldX, worldZ, cell = 1) {
-  return [Math.floor(worldX / cell), Math.floor(worldZ / cell)];
+export function cellAt(maze, worldX, worldZ, unit = 1) {
+  const { toGrid } = mazeMetric(maze);
+  return [Math.floor(toGrid(worldX / unit)), Math.floor(toGrid(worldZ / unit))];
 }
 
 // Mittelpunkt einer Zelle in Weltkoordinaten (x,z).
-export function cellCenter(gx, gy, cell = 1) {
-  return [(gx + 0.5) * cell, (gy + 0.5) * cell];
+export function cellCenter(maze, gx, gy, unit = 1) {
+  const { toUnits } = mazeMetric(maze);
+  return [toUnits(gx + 0.5) * unit, toUnits(gy + 0.5) * unit];
 }
 
 // Ist die Weltposition begehbar (in einer offenen Zelle)?
-export function isWalkable(maze, worldX, worldZ, cell = 1) {
-  const [gx, gy] = cellAt(worldX, worldZ, cell);
+export function isWalkable(maze, worldX, worldZ, unit = 1) {
+  const [gx, gy] = cellAt(maze, worldX, worldZ, unit);
   if (gx < 0 || gx >= maze.n || gy < 0 || gy >= maze.n) return false;
   return maze.grid[gy][gx] === OPEN;
+}
+
+// Sind ALLE Zellen offen, die das achsparallele Rechteck [x0,x1] x [z0,z1]
+// ueberlappt? Eck-Checks allein reichen NICHT: bei schmalen Waenden ist eine
+// Wandspur (1 Einheit) schmaler als das Spieler-Quadrat (2*radius) -- ein
+// Pfosten passt dann komplett ZWISCHEN zwei Eckpunkte.
+export function rectWalkable(maze, x0, x1, z0, z1, unit = 1) {
+  const { toGrid } = mazeMetric(maze);
+  const gx0 = Math.floor(toGrid(x0 / unit));
+  const gx1 = Math.floor(toGrid(x1 / unit));
+  const gy0 = Math.floor(toGrid(z0 / unit));
+  const gy1 = Math.floor(toGrid(z1 / unit));
+  if (gx0 < 0 || gx1 >= maze.n || gy0 < 0 || gy1 >= maze.n) return false;
+  for (let gy = gy0; gy <= gy1; gy++) {
+    for (let gx = gx0; gx <= gx1; gx++) {
+      if (maze.grid[gy][gx] !== OPEN) return false;
+    }
+  }
+  return true;
 }
 
 // yaw, sodass die Kamera am Start in den (einzigen) offenen Nachbargang blickt.
@@ -65,24 +92,25 @@ export function startFacingYaw(maze) {
 
 // Versucht eine Bewegung um (dx,dz); pro Achse blockiert, was in eine Wand fuehrt
 // (erlaubt Gleiten an Waenden). `radius` ist der Spieler-Sicherheitsabstand.
-// Der Spieler ist ein Quadrat der Halbbreite radius: der Vorderkanten-Check
-// prueft BEIDE Ecken, sonst rutscht man an Wandenden seitlich naeher als radius
-// an eine parallele Wand heran (und unterschreitet die Render-Near-Plane --
-// die Wand verdeckt dann nichts mehr und dahinterliegende Linien werden hell).
-// Liefert die neue Position [x,z].
+// Der Spieler ist ein Quadrat der Halbbreite radius: geprueft wird das GANZE
+// Quadrat an der Zielposition (rectWalkable) -- nicht nur Eckpunkte. Das haelt
+// erstens den Abstand radius zu jeder Wand (sonst unterschreitet man die
+// Render-Near-Plane und die Wand verdeckt nichts mehr) und verhindert zweitens
+// bei schmalen Waenden das Durchrutschen an Pfosten, die schmaler als das
+// Quadrat sind. Liefert die neue Position [x,z].
 export function tryMove(maze, x, z, dx, dz, opts = {}) {
-  const cell = opts.cell ?? 1;
+  const unit = opts.unit ?? 1;
   const radius = opts.radius ?? 0.25;
   let nx = x;
   let nz = z;
 
   if (dx !== 0) {
-    const edge = x + dx + Math.sign(dx) * radius;
-    if (isWalkable(maze, edge, z - radius, cell) && isWalkable(maze, edge, z + radius, cell)) nx = x + dx;
+    const cx = x + dx;
+    if (rectWalkable(maze, cx - radius, cx + radius, z - radius, z + radius, unit)) nx = cx;
   }
   if (dz !== 0) {
-    const edge = z + dz + Math.sign(dz) * radius;
-    if (isWalkable(maze, nx - radius, edge, cell) && isWalkable(maze, nx + radius, edge, cell)) nz = z + dz;
+    const cz = z + dz;
+    if (rectWalkable(maze, nx - radius, nx + radius, cz - radius, cz + radius, unit)) nz = cz;
   }
   return [nx, nz];
 }

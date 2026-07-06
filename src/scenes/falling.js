@@ -10,7 +10,7 @@ import { generateMaze } from '../world/maze.js';
 import { cellCenter, startFacingYaw } from '../world/mazeWorld.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
 import {
-  WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
+  WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, unitSize, faceWalls, faceFootprints, renderFaceWalls,
   egoPose, mapPose, blendPose, drawMapOverlay,
 } from './mazeView.js';
 
@@ -44,7 +44,7 @@ export function createFalling(game) {
         const ps = game.playerState; // Fortsetzung: zurueck zur Spielerlage
         endPose = egoPose(face, ps.px, ps.pz, ps.yaw, cell);
       } else {
-        const [cx, cz] = cellCenter(maze.start[0], maze.start[1], cell);
+        const [cx, cz] = cellCenter(maze, maze.start[0], maze.start[1], unitSize(maze));
         endPose = egoPose(face, cx, cz, startFacingYaw(maze), cell); // Ego auf S
       }
     },

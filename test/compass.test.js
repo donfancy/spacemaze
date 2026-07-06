@@ -4,8 +4,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { compassLayout } from '../src/render/compass.js';
-import { compassGridPoints, CUBE_SIZE } from '../src/scenes/mazeView.js';
-import { SIDE_FACES, mapGridToFace } from '../src/world/cubeFaces.js';
+import { compassUnitPoints, CUBE_SIZE } from '../src/scenes/mazeView.js';
+import { SIDE_FACES, mapUnitsToFace } from '../src/world/cubeFaces.js';
+import { UNIFORM_METRIC, createMetric } from '../src/world/metric.js';
 import { dot } from '../src/math/vec3.js';
 
 const OPTS = { cx: 700, cy: 500, radius: 40 };
@@ -92,11 +93,11 @@ test('vier Ticks haengen an der Kreis-Kante und rotieren mit', () => {
 
 test('Kartenrand: N oben, S unten, W/E entlang der uAxis -- auf allen Flaechen', () => {
   const n = 11;
-  const pts = compassGridPoints(n);
+  const pts = compassUnitPoints(n, UNIFORM_METRIC);
   for (const face of SIDE_FACES) {
     const world = {};
-    for (const [label, [gx, gy]] of Object.entries(pts)) {
-      world[label] = mapGridToFace(gx, gy, n, CUBE_SIZE, face);
+    for (const [label, [ux, uy]] of Object.entries(pts)) {
+      world[label] = mapUnitsToFace(ux, uy, UNIFORM_METRIC.total(n), CUBE_SIZE, face);
     }
     // vAxis ist auf allen Seitenflaechen [0,-1,0]: Norden liegt in Welt-y OBEN.
     assert.ok(world.N[1] > world.S[1], `Flaeche [${face.normal}]: N ueber S`);
@@ -110,5 +111,21 @@ test('Kartenrand: N oben, S unten, W/E entlang der uAxis -- auf allen Flaechen',
       ];
       assert.ok(Math.max(...inPlane.map(Math.abs)) > CUBE_SIZE / 2, `${label} ausserhalb des Rahmens`);
     }
+  }
+});
+
+test('Kartenrand-Punkte: mittig und mit festem Randabstand, auch bei schmalen Waenden', () => {
+  const n = 9;
+  for (const metric of [UNIFORM_METRIC, createMetric({ wall: 1, corridor: 5 })]) {
+    const total = metric.total(n);
+    const pts = compassUnitPoints(n, metric);
+    // N/S mittig ueber/unter der Flaeche, W/E mittig links/rechts.
+    assert.equal(pts.N[0], total / 2);
+    assert.equal(pts.S[0], total / 2);
+    assert.equal(pts.W[1], total / 2);
+    assert.equal(pts.E[1], total / 2);
+    // Der Abstand vom Rahmen ist ein fester Anteil der Gesamtbreite.
+    assert.ok(Math.abs(pts.N[1] / total + 0.06) < 1e-9);
+    assert.ok(Math.abs((pts.S[1] - total) / total - 0.06) < 1e-9);
   }
 });

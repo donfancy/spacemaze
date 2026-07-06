@@ -3,14 +3,19 @@
 //
 // Die Spiellogik rechnet in der lokalen "horizontalen" Welt (x=uAxis, y=Hoehe
 // entlang Normale, z=vAxis), die hier auf die Andock-Flaeche abgebildet wird.
-// Damit das Labyrinth zur Wuerfelseite passt, ist eine Zelle CUBE_SIZE/n gross;
-// alle Laengen skalieren mit dieser Zellgroesse.
+// Damit das Labyrinth zur Wuerfelseite passt, ist eine Achsen-Einheit der
+// Maze-Metrik CUBE_SIZE/total(n) gross (unitSize); alle Gameplay-Laengen
+// (Tempo, Radius, Wandhoehe, Near/Far) skalieren mit der GANG-Breite (cellSize).
+// Bei der klassischen Blockwelt ist beides dieselbe alte Zellgroesse CUBE_SIZE/n.
 
 import { basisFromForwardUp } from '../math/camera.js';
 import { quatFromBasis, basisFromQuat, slerpQuat } from '../math/quat.js';
 import { lerp } from '../math/vec3.js';
 import { mazeWalls, wallFootprints } from '../world/mazeWorld.js';
-import { faceLocalToWorld, faceDir, faceDockPose, mapGridToFace, gridBorderOnFace } from '../world/cubeFaces.js';
+import { mazeMetric } from '../world/metric.js';
+import {
+  faceLocalToWorld, faceDir, faceDockPose, mapGridToFace, mapUnitsToFace, gridBorderOnFace,
+} from '../world/cubeFaces.js';
 import { projectOccluders, occludeEdge } from '../render/occlusion.js';
 
 export const CUBE_SIZE = 2.4;   // Kantenlaenge des Wuerfels (= Bildflaeche)
@@ -21,11 +26,20 @@ export const NEAR_RATIO = 0.1;  // Near-Plane in Zellen -- MUSS mit der kleinen 
                                 // sonst werden nahe (verdeckende) Waende abgeschnitten
 const DIM = 0.1;
 
+// Weltgroesse EINER Achsen-Einheit der Maze-Metrik.
+export function unitSize(maze) {
+  return CUBE_SIZE / mazeMetric(maze).total(maze.n);
+}
+
+// Weltgroesse eines GANGS (Kammer-Breite) -- der Massstab fuer alles Gameplay.
 export function cellSize(maze) {
-  return CUBE_SIZE / maze.n;
+  return mazeMetric(maze).corridor * unitSize(maze);
 }
 
 // Ego-Pose auf der Flaeche: Position (lokale Flaecheneinheiten) + Blickwinkel yaw.
+// WICHTIG: bewusst OHNE roll/pitch -- die Kamera muss horizontal bleiben, sonst
+// bricht die azimutale Annahme der Hidden-Line-Verdeckung (render/occlusion.js).
+// Kurvenneigung und Schwingungen laufen als Bildraum-Transform (render/sway.js).
 export function egoPose(face, px, pz, yaw, cell) {
   return {
     position: faceLocalToWorld(px, EYE_RATIO * cell, pz, face, CUBE_SIZE),
@@ -55,25 +69,28 @@ export function blendPose(a, b, e) {
   return { position: lerp(a.position, b.position, e), forward, up };
 }
 
-function toFace(segments, face) {
+// Lokale Flaechen-Segmente [lx,ly,lz] -> Welt (auch fuer Effekte, z.B. Wellen).
+export function faceSegments(segments, face) {
   return segments.map(([a, b]) => [
     faceLocalToWorld(a[0], a[1], a[2], face, CUBE_SIZE),
     faceLocalToWorld(b[0], b[1], b[2], face, CUBE_SIZE),
   ]);
 }
 
+const toFace = faceSegments;
+
 // Wireframe-Waende auf der Flaeche (height in Welt-Einheiten).
 export function faceWalls(maze, face, height) {
-  return toFace(mazeWalls(maze, { cell: cellSize(maze), height }), face);
+  return toFace(mazeWalls(maze, { unit: unitSize(maze), height }), face);
 }
 
 // Verdecker-Grundrisse auf der Flaeche.
 export function faceFootprints(maze, face) {
-  return toFace(wallFootprints(maze, { cell: cellSize(maze) }), face);
+  return toFace(wallFootprints(maze, { unit: unitSize(maze) }), face);
 }
 
-function drawFaceMarker(renderer, gridCell, label, face, n, camera, intensity) {
-  const world = mapGridToFace(gridCell[0] + 0.5, gridCell[1] + 0.5, n, CUBE_SIZE, face);
+function drawFaceMarker(renderer, gridCell, label, face, maze, camera, intensity) {
+  const world = mapGridToFace(gridCell[0] + 0.5, gridCell[1] + 0.5, maze.n, CUBE_SIZE, face, mazeMetric(maze));
   const screen = renderer.worldToScreen(world, camera);
   if (!screen) return;
   renderer.drawText(label, {
@@ -83,26 +100,29 @@ function drawFaceMarker(renderer, gridCell, label, face, n, camera, intensity) {
 }
 
 // Himmelsrichtungen am Kartenrand: Grid-gy waechst nach unten -> Norden ist
-// oben (kleines gy), Osten rechts (grosses gx). Punkte in Grid-Koordinaten
-// knapp ausserhalb des Rahmens, mittig an jeder Seite.
+// oben (kleines gy), Osten rechts (grosses gx). Punkte in Achsen-EINHEITEN
+// knapp ausserhalb des Rahmens, mittig an jeder Seite (so bleibt der Abstand
+// auch bei ungleichen Zellbreiten ein fester Anteil der Flaechenkante).
 const COMPASS_MARGIN = 0.06; // Abstand vom Rahmen, Anteil der Flaechenkante
 
-export function compassGridPoints(n) {
-  const m = COMPASS_MARGIN * n;
+export function compassUnitPoints(n, metric) {
+  const total = metric.total(n);
+  const m = COMPASS_MARGIN * total;
   return {
-    N: [n / 2, -m],
-    S: [n / 2, n + m],
-    W: [-m, n / 2],
-    E: [n + m, n / 2],
+    N: [total / 2, -m],
+    S: [total / 2, total + m],
+    W: [-m, total / 2],
+    E: [total + m, total / 2],
   };
 }
 
 // Blendet N/W/E/S um den Kartenrand ein (Kartensicht bzw. Labyrinth-Aufbau).
 export function drawCompassLabels(renderer, maze, face, camera, intensity) {
   if (intensity <= 0.01) return;
-  const points = compassGridPoints(maze.n);
-  for (const [label, [gx, gy]] of Object.entries(points)) {
-    const world = mapGridToFace(gx, gy, maze.n, CUBE_SIZE, face);
+  const metric = mazeMetric(maze);
+  const points = compassUnitPoints(maze.n, metric);
+  for (const [label, [ux, uy]] of Object.entries(points)) {
+    const world = mapUnitsToFace(ux, uy, metric.total(maze.n), CUBE_SIZE, face);
     const screen = renderer.worldToScreen(world, camera);
     if (!screen) continue;
     renderer.drawText(label, {
@@ -137,8 +157,8 @@ export function drawMapOverlay(renderer, maze, face, camera, trail, intensity, b
     renderer.renderScene({ segments: segs, intensity: TRAIL_DIM * intensity }, camera);
   }
 
-  drawFaceMarker(renderer, maze.start, 'S', face, maze.n, camera, intensity);
-  drawFaceMarker(renderer, maze.goal, 'G', face, maze.n, camera, intensity);
+  drawFaceMarker(renderer, maze.start, 'S', face, maze, camera, intensity);
+  drawFaceMarker(renderer, maze.goal, 'G', face, maze, camera, intensity);
   drawCompassLabels(renderer, maze, face, camera, intensity);
 }
 

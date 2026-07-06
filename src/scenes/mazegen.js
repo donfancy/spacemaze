@@ -44,7 +44,7 @@ export function createMazeGen(game) {
   // Buchstaben-Marker an einer Zellmitte (3D-Position -> 2D-Bildposition).
   function drawMarker(renderer, cell, label, intensity) {
     if (intensity <= 0) return;
-    const world = mapGridToFace(cell[0] + 0.5, cell[1] + 0.5, maze.n, CUBE_SIZE, face);
+    const world = mapGridToFace(cell[0] + 0.5, cell[1] + 0.5, maze.n, CUBE_SIZE, face, maze.metric);
     const screen = renderer.worldToScreen(world, camera);
     if (!screen) return;
     renderer.drawText(label, {
@@ -60,7 +60,8 @@ export function createMazeGen(game) {
   return {
     enter() {
       t = 0;
-      maze = generateMaze(levelConfig(game.level).n, { seed: randomSeed() });
+      const cfg = levelConfig(game.level);
+      maze = generateMaze(cfg.n, { seed: randomSeed(), metric: cfg.metric });
       game.maze = maze; // an Playing weiterreichen
       game.resume = false; // frisches Labyrinth: keine Fortsetzung, Ziel offen
       game.reachedGoal = false;
@@ -87,7 +88,7 @@ export function createMazeGen(game) {
       const growT = clamp01((t - MARKER_TIME) / GROW_TIME);
       if (growT > 0) {
         const k = Math.round(growT * maze.order.length);
-        const world = mapSegmentsToFace(growthOutline(maze, k), maze.n, CUBE_SIZE, face);
+        const world = mapSegmentsToFace(growthOutline(maze, k), maze.n, CUBE_SIZE, face, maze.metric);
         renderer.renderScene({ segments: world }, camera);
       }
 

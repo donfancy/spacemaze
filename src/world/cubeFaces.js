@@ -10,6 +10,8 @@
 //   uAxis = Welt-Richtung fuer wachsendes Grid-gx (im Bild nach rechts)
 //   vAxis = Welt-Richtung fuer wachsendes Grid-gy (im Bild nach unten)
 
+import { UNIFORM_METRIC } from './metric.js';
+
 export const SIDE_FACES = [
   { normal: [0, 0, 1],  yaw: 0,            uAxis: [1, 0, 0],  vAxis: [0, -1, 0] }, // front (+z)
   { normal: [0, 0, -1], yaw: Math.PI,      uAxis: [-1, 0, 0], vAxis: [0, -1, 0] }, // back  (-z)
@@ -44,11 +46,12 @@ export function faceDockPose(face, squareSize, fov, fill = 0.85) {
   };
 }
 
-// Bildet eine Grid-Koordinate (gx,gy) in [0,n] auf einen Weltpunkt der Flaeche ab.
-export function mapGridToFace(gx, gy, n, squareSize, face) {
+// Bildet eine Achsen-Einheiten-Koordinate (ux,uy) in [0,totalUnits] auf einen
+// Weltpunkt der Flaeche ab (das Grid fuellt die Flaeche genau aus).
+export function mapUnitsToFace(ux, uy, totalUnits, squareSize, face) {
   const half = squareSize / 2;
-  const u = (gx / n - 0.5) * squareSize;
-  const v = (gy / n - 0.5) * squareSize;
+  const u = (ux / totalUnits - 0.5) * squareSize;
+  const v = (uy / totalUnits - 0.5) * squareSize;
   return [
     face.normal[0] * half + face.uAxis[0] * u + face.vAxis[0] * v,
     face.normal[1] * half + face.uAxis[1] * u + face.vAxis[1] * v,
@@ -56,10 +59,16 @@ export function mapGridToFace(gx, gy, n, squareSize, face) {
   ];
 }
 
+// Bildet eine Grid-Koordinate (gx,gy) in [0,n] auf einen Weltpunkt der Flaeche ab.
+// `metric` streckt die Achsen bei ungleichen Zellbreiten (schmale Waende).
+export function mapGridToFace(gx, gy, n, squareSize, face, metric = UNIFORM_METRIC) {
+  return mapUnitsToFace(metric.toUnits(gx), metric.toUnits(gy), metric.total(n), squareSize, face);
+}
+
 // Bildet einen Punkt der lokalen "horizontalen" Spielwelt auf die Flaeche ab:
 //   lx entlang uAxis, lz entlang vAxis (beide in Welt-Einheiten 0..squareSize),
 //   ly als Hoehe entlang der Flaechennormalen (0 = auf der Flaeche).
-// Mit ly=0 deckungsgleich mit mapGridToFace (gx*cell, gy*cell).
+// Mit ly=0 deckungsgleich mit mapGridToFace (lx = toUnits(gx)*unit, lz = toUnits(gy)*unit).
 export function faceLocalToWorld(lx, ly, lz, face, squareSize) {
   const half = squareSize / 2;
   const u = lx - half;
@@ -82,14 +91,15 @@ export function faceDir(lx, ly, lz, face) {
 }
 
 // Mappt eine Liste von 2D-Grid-Segmenten auf die Flaeche.
-export function mapSegmentsToFace(segments, n, squareSize, face) {
+export function mapSegmentsToFace(segments, n, squareSize, face, metric = UNIFORM_METRIC) {
   return segments.map(([a, b]) => [
-    mapGridToFace(a[0], a[1], n, squareSize, face),
-    mapGridToFace(b[0], b[1], n, squareSize, face),
+    mapGridToFace(a[0], a[1], n, squareSize, face, metric),
+    mapGridToFace(b[0], b[1], n, squareSize, face, metric),
   ]);
 }
 
 // Die vier Randlinien des Grid-Quadrats auf der Flaeche als Weltsegmente.
+// Metrik-unabhaengig: die Ecken 0 und n landen bei jeder Metrik auf 0 und total.
 export function gridBorderOnFace(n, squareSize, face) {
   const corners = [[0, 0], [n, 0], [n, n], [0, n]];
   const segments = [];

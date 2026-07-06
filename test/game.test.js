@@ -20,6 +20,8 @@ function fakeRenderer() {
     drawPolylines() { this.calls++; },
     renderScene() { this.calls++; },
     worldToScreen() { return { x: 400, y: 300 }; },
+    pushSway() {},
+    popSway() {},
   };
 }
 
@@ -123,7 +125,7 @@ test('Zustands-Zyklus direkt via dispatch (ohne Andocken)', () => {
   assert.equal(g.stateKey, State.STARTSCREEN);
 });
 
-test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..5', () => {
+test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..10', () => {
   const g = new Game();
   assert.equal(g.level, 1);
 
@@ -134,10 +136,10 @@ test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..5', () => {
   g.handleKey('ArrowUp');
   assert.equal(g.level, 3);
 
-  for (let i = 0; i < 10; i++) g.handleKey('ArrowUp'); // oben begrenzt
-  assert.equal(g.level, 5);
+  for (let i = 0; i < 20; i++) g.handleKey('ArrowUp'); // oben begrenzt
+  assert.equal(g.level, 10);
   g.handleKey('ArrowLeft');
-  assert.equal(g.level, 4);
+  assert.equal(g.level, 9);
 });
 
 test('gewaehltes Level bestimmt die Maze-Groesse (Level 3 -> n=13)', () => {
@@ -150,6 +152,54 @@ test('gewaehltes Level bestimmt die Maze-Groesse (Level 3 -> n=13)', () => {
   advance(g, r, 1.8); // Andocken -> MazeGen erzeugt das Labyrinth
   assert.equal(g.stateKey, State.MAZE_GEN);
   assert.equal(g.maze.n, 13);
+});
+
+test('Level 6 (schmale Waende, Fahrt): faehrt von selbst los, gelenkt wird mit links/rechts', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+
+  for (let i = 0; i < 5; i++) g.handleKey('ArrowUp'); // Level 6
+  g.handleKey('S');
+  advance(g, r, 1.8); // Andocken -> MazeGen
+  assert.equal(g.stateKey, State.MAZE_GEN);
+  assert.equal(g.maze.n, 17);
+  assert.equal(g.maze.metric.wall, 1);
+  assert.equal(g.maze.metric.corridor, 5);
+
+  advance(g, r, 4.5 + 2.0); // -> Falling -> Playing
+  assert.equal(g.stateKey, State.PLAYING);
+
+  // Automatischer Vortrieb: OHNE Tasten bewegt sich der Spieler.
+  const [sx, sz] = g.trail[0];
+  advance(g, r, 1.0);
+  const end = g.trail[g.trail.length - 1];
+  assert.ok(Math.hypot(end[0] - sx, end[1] - sz) > 0, 'faehrt ohne Eingabe los');
+
+  // Lenken: links aendert den Kurs.
+  const yawBefore = g.playerState.yaw;
+  g.keys.add('ArrowLeft');
+  advance(g, r, 0.3);
+  g.keys.delete('ArrowLeft');
+  assert.ok(g.playerState.yaw > yawBefore, 'links lenken erhoeht yaw');
+
+  // Q im Fahrt-Modus: erst abbremsen (Zustand bleibt Playing), dann abheben.
+  g.handleKey('Q');
+  advance(g, r, 0.1);
+  assert.equal(g.stateKey, State.PLAYING, 'direkt nach Q wird noch gebremst');
+  advance(g, r, 1.0); // ausrollen (~0.4 s) + kurzer Halt (0.2 s) -> Abheben
+  assert.equal(g.stateKey, State.RISING, 'nach dem Ausrollen hebt es ab');
+});
+
+test('Tank-Levels fahren NICHT von selbst (Level 1 bleibt stehen ohne Tasten)', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+  g.dispatch(GameEvent.START);
+  advance(g, r, 0.8 + 4.5 + 2.0); // -> MazeGen -> Falling -> Playing
+  assert.equal(g.stateKey, State.PLAYING);
+  const { px, pz } = g.playerState;
+  advance(g, r, 1.0);
+  assert.equal(g.playerState.px, px);
+  assert.equal(g.playerState.pz, pz);
 });
 
 test('Pfeiltasten aendern das Level nur im Startscreen (nicht waehrend des Spiels)', () => {
