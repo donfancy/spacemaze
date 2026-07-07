@@ -9,32 +9,48 @@
 // y=0 bis y=height nach oben.
 
 import { OPEN } from './maze.js';
-import { corridorOutline } from './mazeGeometry.js';
+import { corridorOutline, mergeCollinear } from './mazeGeometry.js';
 import { mazeMetric } from './metric.js';
 
-// Aufragende Wireframe-Waende aus den Korridor-Konturen. Jedes 2D-Konturensegment
-// wird zu 4 Kanten: Unterkante, Oberkante und zwei senkrechte Pfosten.
+// Aufragende Wireframe-Waende aus den Korridor-Konturen. Kollineare Wandzuege
+// sind zu LANGEN Unter-/Oberkanten zusammengefasst (weniger Kanten fuer den
+// Occlusion-Pass, der mit Kanten x Verdecker skaliert); die senkrechten
+// Pfosten stehen weiterhin an JEDEM Gitter-Vertex des Zuges -- der Zellen-
+// Rhythmus an den Waenden ist Teil des Looks. Nebeneffekt: frueher wurde
+// jeder Pfosten von beiden Nachbarsegmenten doppelt gezeichnet, jetzt genau
+// einmal pro Zug (nur an Ecken treffen sich zwei Zuege).
 export function mazeWalls(maze, opts = {}) {
   const unit = opts.unit ?? 1;
   const height = opts.height ?? 1;
   const { toUnits } = mazeMetric(maze);
   const walls = [];
-  for (const [[x1, y1], [x2, y2]] of corridorOutline(maze)) {
+  for (const [[x1, y1], [x2, y2]] of mergeCollinear(corridorOutline(maze))) {
     const ax = toUnits(x1) * unit, az = toUnits(y1) * unit;
     const bx = toUnits(x2) * unit, bz = toUnits(y2) * unit;
-    const aB = [ax, 0, az], bB = [bx, 0, bz];
-    const aT = [ax, height, az], bT = [bx, height, bz];
-    walls.push([aB, bB], [aT, bT], [aB, aT], [bB, bT]);
+    walls.push([[ax, 0, az], [bx, 0, bz]], [[ax, height, az], [bx, height, bz]]);
+    // Pfosten an jedem Gitter-Vertex entlang des Zuges (Endpunkte inklusive).
+    if (y1 === y2) {
+      for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+        const wx = toUnits(x) * unit;
+        walls.push([[wx, 0, az], [wx, height, az]]);
+      }
+    } else {
+      for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+        const wz = toUnits(y) * unit;
+        walls.push([[ax, 0, wz], [ax, height, wz]]);
+      }
+    }
   }
   return walls;
 }
 
 // Die Wand-Grundrisse (xz-Liniensegmente bei y=0) -- die Verdecker fuer die
-// Hidden-Line-Bestimmung (siehe render/occlusion.js).
+// Hidden-Line-Bestimmung (siehe render/occlusion.js). Ebenfalls zusammen-
+// gefasst: gleiche Geometrie-Union, ~3x weniger Verdecker pro occludeEdge.
 export function wallFootprints(maze, opts = {}) {
   const unit = opts.unit ?? 1;
   const { toUnits } = mazeMetric(maze);
-  return corridorOutline(maze).map(([[x1, y1], [x2, y2]]) => [
+  return mergeCollinear(corridorOutline(maze)).map(([[x1, y1], [x2, y2]]) => [
     [toUnits(x1) * unit, 0, toUnits(y1) * unit],
     [toUnits(x2) * unit, 0, toUnits(y2) * unit],
   ]);

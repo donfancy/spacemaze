@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 206 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 208 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -85,3 +85,9 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Quaternion-Slerp (`math/quat.js`, `blendPose` in `mazeView.js`) — getrenntes
   forward/up-Lerp kippt um, wenn beide antiparallel werden (Ego-Blick „Süd“).
 - Nächste mögliche Themen: höhere Levels, echter "Trench Run", Politur.
+  Aufgeschobene (Performance-)Ideen mit Messwerten: siehe IDEAS.md.
+- Performance-Basics sind drin: kollineare Wandzüge werden zusammengefasst
+  (`mergeCollinear` — Unter-/Oberkanten lang, Pfosten bleiben an jeder
+  Zellgrenze, Verdecker ~3x weniger; Occlusion-Pass skaliert mit
+  Kanten × Verdecker); Ziel-Strahlen werden pro Flacker-Stufe in EINEM
+  Stroke gezeichnet (shadowBlur ist der teuerste Canvas-Pfad).

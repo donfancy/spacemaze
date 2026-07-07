@@ -66,7 +66,7 @@ src/
     renderer.js    EINZIGER Canvas-berührender Teil (Phosphor-Glow)
   world/
     maze.js        Labyrinth-Generator (DFS-Backtracker, seedbar, getestet)
-    mazeGeometry.js  Korridor-Konturen + Wachstums-Animation (getestet)
+    mazeGeometry.js  Korridor-Konturen, Wandzug-Zusammenfassung, Wachstum (getestet)
     metric.js      Achsen-Metrik: ungleiche Zellbreiten → schmale Wände (getestet)
     mazeWorld.js   begehbare Welt: Wände, Kollision (Spieler-Quadrat), getestet
     drive.js       Fahr-Dynamik ab Level 6: Auto-Vortrieb, Abfedern (getestet)

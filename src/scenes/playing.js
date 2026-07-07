@@ -51,6 +51,18 @@ const GOAL_MARKER_INT = 0.9;     // Intensitaet des Boden-Quadrats
 const GOAL_OCC_DIM = 0.2;        // verdeckt: doppelt so hell wie Wandkanten (DIM 0.1)
 const GOAL_FLASH_TIME = 1.0;     // s: weisses Aufstrahlen + Erloeschen am Ziel
 
+// Stroke-Batching: jeder drawPolylines/renderScene-Aufruf ist ein eigener
+// Canvas-Stroke MIT Glow (shadowBlur -- der teuerste Zeichenpfad). Statt pro
+// Strahl einzeln zu stroken, wird der FLACKER-Wert auf wenige Stufen gerundet
+// und pro Stufe in EINEM Aufruf gezeichnet (die Faktoren fuer Grundhelligkeit
+// und Verdeckungs-Dimmung bleiben exakt).
+const FLICKER_STEPS = 4;
+function bucketAdd(buckets, key, segments) {
+  const list = buckets.get(key);
+  if (list) list.push(...segments);
+  else buckets.set(key, segments);
+}
+
 // Fahr-Modus: Kamera-Gefuehl und Kollisions-Effekte.
 const BANK_MAX = 0.2;         // rad: maximale Kurvenneigung
 const BANK_TAU = 0.22;        // s: Ein-/Ausschwenkzeit der Neigung
@@ -259,25 +271,31 @@ export function createPlaying(game) {
           perEdge: BEAM_PER_EDGE, rate: BEAM_WANDER_RATE,
           time: reached ? reachedAt : sceneT, // eingefroren beim Erloeschen
         });
-        for (let i = 0; i < feet.length; i++) {
-          const [bx, bz] = feet[i];
-          if (reached) {
-            const segs = faceSegments([[[bx, 0, bz], [bx, beamH, bz]]], face);
-            renderer.renderScene({ segments: segs, intensity: 1 - flashAge / GOAL_FLASH_TIME },
-              camera, { near: goalNear, color: FLASH_COLOR, glow: FLASH_GLOW });
-            continue;
+        if (reached) {
+          // Weisses Aufstrahlen: alle Strahlen gleich hell -> EIN Stroke.
+          const segs = faceSegments(feet.map(([bx, bz]) => [[bx, 0, bz], [bx, beamH, bz]]), face);
+          renderer.renderScene({ segments: segs, intensity: 1 - flashAge / GOAL_FLASH_TIME },
+            camera, { near: goalNear, color: FLASH_COLOR, glow: FLASH_GLOW });
+        } else {
+          // Flacker-Wert auf FLICKER_STEPS Stufen gerundet, pro Stufe EIN
+          // Stroke (statt bis zu 2 pro Strahl) -- sichtbar und verdeckt
+          // getrennt gebuendelt, deren Helligkeits-Faktoren bleiben exakt.
+          const visBuckets = new Map();
+          const dimBuckets = new Map();
+          for (let i = 0; i < feet.length; i++) {
+            const [bx, bz] = feet[i];
+            const cut = Math.min(beamH, beamOcclusionCut(localFoot, [px, pz], feet[i], {
+              eye: EYE_RATIO * cell, wallHeight: WALL_RATIO * cell,
+            }));
+            const qf = Math.ceil(beamFlicker(i, sceneT) * FLICKER_STEPS) / FLICKER_STEPS;
+            if (cut > 0) bucketAdd(dimBuckets, qf, faceSegments([[[bx, 0, bz], [bx, cut, bz]]], face));
+            if (cut < beamH) bucketAdd(visBuckets, qf, faceSegments([[[bx, cut, bz], [bx, beamH, bz]]], face));
           }
-          const cut = Math.min(beamH, beamOcclusionCut(localFoot, [px, pz], feet[i], {
-            eye: EYE_RATIO * cell, wallHeight: WALL_RATIO * cell,
-          }));
-          const int = BEAM_MAX_INT * beamFlicker(i, sceneT);
-          if (cut > 0) {
-            const segs = faceSegments([[[bx, 0, bz], [bx, cut, bz]]], face);
-            renderer.renderScene({ segments: segs, intensity: GOAL_OCC_DIM * int }, camera, { near: goalNear });
+          for (const [qf, segments] of visBuckets) {
+            renderer.renderScene({ segments, intensity: BEAM_MAX_INT * qf }, camera, { near: goalNear });
           }
-          if (cut < beamH) {
-            const segs = faceSegments([[[bx, cut, bz], [bx, beamH, bz]]], face);
-            renderer.renderScene({ segments: segs, intensity: int }, camera, { near: goalNear });
+          for (const [qf, segments] of dimBuckets) {
+            renderer.renderScene({ segments, intensity: GOAL_OCC_DIM * BEAM_MAX_INT * qf }, camera, { near: goalNear });
           }
         }
       }

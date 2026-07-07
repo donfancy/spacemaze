@@ -30,6 +30,39 @@ export function corridorOutline(maze) {
   return segments;
 }
 
+// Fasst kollineare, aneinanderstossende achsparallele Segmente zu langen
+// Zuegen zusammen (gleiche Geometrie-UNION, ~3x weniger Segmente). Fuer die
+// Render-/Occlusion-Seite: dort skalieren die Kosten mit Kanten x Verdecker,
+// das Zusammenfassen wirkt also quadratisch. growthOutline und die Wachstums-
+// Animation nutzen weiter die feine Kontur.
+export function mergeCollinear(segments) {
+  const groups = new Map(); // "h<y>" -> x-Intervalle, "v<x>" -> y-Intervalle
+  for (const [[x1, y1], [x2, y2]] of segments) {
+    const horizontal = y1 === y2;
+    const key = horizontal ? `h${y1}` : `v${x1}`;
+    const iv = horizontal
+      ? [Math.min(x1, x2), Math.max(x1, x2)]
+      : [Math.min(y1, y2), Math.max(y1, y2)];
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(iv);
+  }
+  const merged = [];
+  for (const [key, ivs] of groups) {
+    ivs.sort((a, b) => a[0] - b[0]);
+    const fixed = Number(key.slice(1));
+    const emit = ([s, e]) => merged.push(key[0] === 'h'
+      ? [[s, fixed], [e, fixed]]
+      : [[fixed, s], [fixed, e]]);
+    let run = ivs[0].slice();
+    for (let i = 1; i < ivs.length; i++) {
+      if (ivs[i][0] <= run[1]) run[1] = Math.max(run[1], ivs[i][1]);
+      else { emit(run); run = ivs[i].slice(); }
+    }
+    emit(run);
+  }
+  return merged;
+}
+
 // Liegt ein Segment auf dem aeusseren Grid-Rand (x in {0,n} bzw. y in {0,n})?
 function isOuterSegment([[x1, y1], [x2, y2]], n) {
   if (y1 === y2 && (y1 === 0 || y1 === n)) return true;

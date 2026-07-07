@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateMaze, OPEN } from '../src/world/maze.js';
-import { corridorOutline, growthOutline } from '../src/world/mazeGeometry.js';
+import { corridorOutline, growthOutline, mergeCollinear } from '../src/world/mazeGeometry.js';
 import { createRng } from '../src/util/rng.js';
 
 function maze(n = 11, seed = 20260627) {
@@ -68,6 +68,45 @@ test('robust ueber mehrere n und Seeds (immer geschlossene Konturen)', () => {
       }
     }
   }
+});
+
+test('mergeCollinear: fasst gerade Zuege zusammen, laesst Ecken/Luecken getrennt', () => {
+  // Gerader Zug aus drei Einheitskanten -> ein Segment.
+  assert.deepEqual(
+    mergeCollinear([[[0, 0], [1, 0]], [[1, 0], [2, 0]], [[2, 0], [3, 0]]]),
+    [[[0, 0], [3, 0]]],
+  );
+  // Ecke (horizontal + vertikal am selben Vertex) bleibt zwei Segmente.
+  const corner = mergeCollinear([[[0, 0], [1, 0]], [[1, 0], [1, 1]]]);
+  assert.equal(corner.length, 2);
+  // Luecke auf derselben Linie wird NICHT ueberbrueckt.
+  const gap = mergeCollinear([[[0, 0], [1, 0]], [[2, 0], [3, 0]]]);
+  assert.equal(gap.length, 2);
+  // Reihenfolge egal (unsortierte Eingabe).
+  assert.deepEqual(
+    mergeCollinear([[[2, 5], [3, 5]], [[0, 5], [1, 5]], [[1, 5], [2, 5]]]),
+    [[[0, 5], [3, 5]]],
+  );
+});
+
+test('mergeCollinear: Geometrie-Union bleibt exakt erhalten (echtes Labyrinth)', () => {
+  const fine = corridorOutline(maze(11));
+  const merged = mergeCollinear(fine);
+  assert.ok(merged.length < fine.length / 2, `deutlich weniger Segmente (${fine.length} -> ${merged.length})`);
+  // Jede feine Einheitskante liegt in genau einem zusammengefassten Zug,
+  // und die Gesamtlaenge ist identisch (nichts verlaengert/verkuerzt).
+  const covers = ([[ax, ay], [bx, by]], [[x1, y1], [x2, y2]]) => {
+    const [lo1, hi1] = [Math.min(x1, x2), Math.max(x1, x2)];
+    const [lo2, hi2] = [Math.min(y1, y2), Math.max(y1, y2)];
+    return Math.min(ax, bx) >= lo1 && Math.max(ax, bx) <= hi1
+      && Math.min(ay, by) >= lo2 && Math.max(ay, by) <= hi2;
+  };
+  for (const seg of fine) {
+    const hits = merged.filter((r) => covers(seg, r));
+    assert.equal(hits.length, 1, `Einheitskante ${JSON.stringify(seg)} in genau einem Zug`);
+  }
+  const len = (segs) => segs.reduce((s, [a, b]) => s + Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]), 0);
+  assert.equal(len(merged), len(fine), 'Gesamtlaenge unveraendert');
 });
 
 test('growthOutline: k=0 ist leer, voll deckt die inneren Konturen ab', () => {

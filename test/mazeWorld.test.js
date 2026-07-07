@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateMaze, OPEN, WALL } from '../src/world/maze.js';
-import { corridorOutline } from '../src/world/mazeGeometry.js';
+import { corridorOutline, mergeCollinear } from '../src/world/mazeGeometry.js';
 import { mazeWalls, wallFootprints, cellAt, cellCenter, isWalkable, tryMove, startFacingYaw } from '../src/world/mazeWorld.js';
 
 // Mini-Labyrinth fuer praezise Kollisionstests: nur Mitte (1,1) offen.
@@ -9,19 +9,41 @@ function tiny() {
   return { n: 3, grid: [[WALL, WALL, WALL], [WALL, OPEN, WALL], [WALL, WALL, WALL]] };
 }
 
-test('mazeWalls: 4 Kanten je Konturensegment, alle zwischen y=0 und y=height', () => {
+test('mazeWalls: lange Unter-/Oberkante je Wandzug, Pfosten an jedem Gitter-Vertex', () => {
   const m = generateMaze(11, { seed: 5 });
-  const walls = mazeWalls(m, { unit: 1, height: 1.2 });
-  assert.equal(walls.length, corridorOutline(m).length * 4);
+  const height = 1.2;
+  const walls = mazeWalls(m, { unit: 1, height });
+  const runs = mergeCollinear(corridorOutline(m));
+  // Pro Zug: Unterkante + Oberkante + (Laenge+1) Pfosten.
+  const runLen = ([[x1, y1], [x2, y2]]) => Math.abs(x2 - x1) + Math.abs(y2 - y1);
+  const expected = runs.reduce((sum, r) => sum + 2 + runLen(r) + 1, 0);
+  assert.equal(walls.length, expected);
+
+  let posts = 0;
   for (const [a, b] of walls) {
-    assert.ok((a[1] === 0 || a[1] === 1.2) && (b[1] === 0 || b[1] === 1.2));
+    if (a[1] === b[1]) {
+      assert.ok(a[1] === 0 || a[1] === height, 'horizontale Kante unten oder oben');
+    } else {
+      posts++;
+      assert.ok(a[0] === b[0] && a[2] === b[2], 'Pfosten senkrecht');
+      assert.equal(Math.min(a[1], b[1]), 0);
+      assert.equal(Math.max(a[1], b[1]), height);
+    }
   }
+  // Der Zellen-Rhythmus bleibt: genauso viele Pfosten-Positionen wie die
+  // feine Kontur Gitter-Vertices je Zug hat.
+  assert.equal(posts, runs.reduce((sum, r) => sum + runLen(r) + 1, 0));
 });
 
-test('wallFootprints: ein xz-Segment je Korridor-Kontur, alle bei y=0', () => {
+test('wallFootprints: zusammengefasste Zuege, gleiche Gesamtlaenge, alle bei y=0', () => {
   const m = generateMaze(11, { seed: 5 });
   const fp = wallFootprints(m, { unit: 1 });
-  assert.equal(fp.length, corridorOutline(m).length);
+  const fine = corridorOutline(m);
+  assert.equal(fp.length, mergeCollinear(fine).length);
+  assert.ok(fp.length < fine.length, 'weniger Verdecker als feine Kontur');
+  const fpLen = fp.reduce((s, [a, b]) => s + Math.abs(b[0] - a[0]) + Math.abs(b[2] - a[2]), 0);
+  const fineLen = fine.reduce((s, [a, b]) => s + Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]), 0);
+  assert.equal(fpLen, fineLen, 'Geometrie-Union unveraendert (Gesamtlaenge gleich)');
   for (const [a, b] of fp) {
     assert.equal(a[1], 0);
     assert.equal(b[1], 0);
