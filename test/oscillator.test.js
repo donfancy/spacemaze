@@ -29,6 +29,26 @@ test('kick loest eine abklingende Schwingung aus', () => {
   assert.ok(tail < maxAbs * 0.1, 'klingt ab');
 });
 
+test('grosse dt-Schritte bleiben stabil (Regression: Bild-Springen bei Frame-Rucklern)', () => {
+  // freq 8 = der Nick-Oszillator im Fahrt-Modus. Beim geclampten Maximal-dt
+  // von 0.1 s ist omega*dt ~ 5 -- OHNE Teilschritte explodiert semi-implizites
+  // Euler hier (Stabilitaetsgrenze omega*dt < 2) und die Kamera springt wild.
+  const o = createOscillator({ freq: 8, damping: 0.3 });
+  o.kick(0.8); // voller Kollisions-Impuls (SHAKE_PITCH)
+  const bound = 0.8 / (2 * Math.PI * 8); // Amplituden-Schranke v0/omega (ungedaempft)
+  let maxAbs = 0;
+  for (let i = 0; i < 100; i++) {
+    // Wilder Mix aus normalen und langsamen Frames, dazwischen neue Treffer.
+    const dt = i % 7 === 0 ? 0.1 : i % 3 === 0 ? 0.05 : 1 / 60;
+    if (i % 25 === 0) o.kick(0.8);
+    maxAbs = Math.max(maxAbs, Math.abs(o.step(dt)));
+  }
+  assert.ok(maxAbs <= bound * 1.5, `Auslenkung bleibt beschraenkt (${maxAbs.toFixed(4)} <= ${(bound * 1.5).toFixed(4)})`);
+  // Und sie klingt ab: nach 2 s Ruhe praktisch null.
+  for (let i = 0; i < 120; i++) o.step(1 / 60);
+  assert.ok(Math.abs(o.x) < 1e-4, 'klingt vollstaendig ab');
+});
+
 test('staerkerer kick -> groessere Auslenkung; reset nullt', () => {
   const peak = (kick) => {
     const o = createOscillator({ freq: 6, damping: 0.3 });

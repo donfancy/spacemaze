@@ -1,7 +1,9 @@
 // Fahrdynamik fuer die "Auto-Bewegung" (ab Level 6): der Spieler faehrt von
 // selbst mit Reisegeschwindigkeit, gelenkt wird nur mit links/rechts. Beim
-// Aufprall auf eine Wand federt er zurueck (Geschwindigkeit kehrt sich
-// anteilig um und erholt sich dann wieder auf Reisetempo).
+// Aufprall auf eine Wand federt er SEITLICH ab: ein abklingender Feder-Impuls
+// senkrecht zur Wand drueckt ihn von ihr weg, waehrend Vorwaertstempo und
+// Blickrichtung unveraendert bleiben -- er driftet zurueck zur Wand und
+// schlaegt weiter vorne erneut ein.
 // Reine Berechnung, kein Canvas -> headless testbar.
 //
 // Laengen-Konvention wie ueberall: Weltkoordinaten; `unit` ist die Weltgroesse
@@ -20,13 +22,16 @@ export const DRIVE = {
   accel: 2.0,      // Beschleunigungs-Rampe (Gangbreiten/s^2): Anfahren nach dem
                    // Reinfallen und Erholung nach dem Abprall
   brake: 4.0,      // Brems-Rampe (Gangbreiten/s^2): Q -> kurz abbremsen
-  bounce: 0.6,     // Rueckstoss beim Aufprall, Anteil der REISEgeschwindigkeit
+  bounce: 0.6,     // Abfeder-Staerke: Netto-Tempo weg von der Wand direkt nach
+                   // dem Treffer, Anteil der REISEgeschwindigkeit
+  pushDecay: 3.0,  // Abklingrate des Feder-Impulses (Gangbreiten/s^2)
   minImpact: 0.3,  // Mindest-Aufprallstaerke fuer Abprall/Effekte (sonst Gleiten)
   cooldown: 0.3,   // s Sperrzeit zwischen zwei Abprall-Ereignissen
 };
 
 export function createDriveState() {
-  return { vel: 0, steer: 0, cooldown: 0 };
+  // push: Feder-Impuls in Weltrichtungen (Gangbreiten/s), klingt auf 0 ab.
+  return { vel: 0, steer: 0, cooldown: 0, push: { x: 0, z: 0 } };
 }
 
 // Bewegt `value` ratenbegrenzt auf `target` zu (lineare Rampe).
@@ -67,9 +72,17 @@ export function driveStep(maze, state, pose, turn, dt, opts) {
   const rate = target < state.vel ? params.brake : params.accel;
   state.vel = rampToward(state.vel, target, rate, dt);
 
-  const speed = state.vel * cell;
-  const dx = -Math.sin(yaw) * speed * dt;
-  const dz = -Math.cos(yaw) * speed * dt;
+  // Feder-Impuls klingt linear auf 0 ab (Betrag schrumpft, Richtung bleibt).
+  const pushMag = Math.hypot(state.push.x, state.push.z);
+  if (pushMag > 0) {
+    const scale = rampToward(pushMag, 0, params.pushDecay, dt) / pushMag;
+    state.push.x *= scale;
+    state.push.z *= scale;
+  }
+
+  // Bewegung = Vortrieb entlang der Blickrichtung + Feder-Impuls (Weltraum).
+  const dx = (-Math.sin(yaw) * state.vel + state.push.x) * cell * dt;
+  const dz = (-Math.cos(yaw) * state.vel + state.push.z) * cell * dt;
 
   // Achsweise bewegen wie tryMove (ganzes Spieler-Quadrat via rectWalkable,
   // Gleiten an Waenden), aber mit Buchfuehrung, WELCHE Achse blockiert hat.
@@ -96,11 +109,17 @@ export function driveStep(maze, state, pose, turn, dt, opts) {
     const impact = Math.min(1, Math.abs(comp) / dt / (params.cruise * cell));
     if (impact >= params.minImpact) {
       collision = collisionInfo(maze, axis, dx, dz, nx, nz, impact, unit, radius);
-      // Entschiedener Rueckstoss relativ zur REISEgeschwindigkeit -- NICHT zur
-      // Restgeschwindigkeit: sonst wird der Rueckstoss bei wiederholtem Anliegen
-      // immer schwaecher und der Spieler "zittert" an der Wand (Treffer im
-      // Cooldown-Takt knapp ueber der Schwelle statt sauberem Abprallen).
-      state.vel = -params.bounce * params.cruise;
+      // Seitlicher Feder-Impuls statt Vollbremsung: Vorwaertstempo und
+      // Blickrichtung bleiben, nur senkrecht zur Wand wird abgefedert. Der
+      // Impuls hebt die Normal-Komponente des Vortriebs auf und setzt ein
+      // FESTES Netto-Tempo weg von der Wand (Anteil der REISEgeschwindigkeit)
+      // obendrauf -- NICHT proportional zur Aufprallwucht: sonst wird der
+      // Abpraller bei wiederholtem Anliegen immer schwaecher und der Spieler
+      // "zittert" an der Wand (Treffer im Cooldown-Takt knapp ueber der
+      // Schwelle statt sauberem Abfedern).
+      const side = Math.sign(comp);
+      const fwd = (axis === 'x' ? -Math.sin(yaw) : -Math.cos(yaw)) * state.vel;
+      state.push[axis] = -side * params.bounce * params.cruise - fwd;
       state.cooldown = params.cooldown;
     }
   }

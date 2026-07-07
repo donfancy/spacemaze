@@ -163,7 +163,9 @@ export function drawMapOverlay(renderer, maze, face, camera, trail, intensity, b
 }
 
 // Rendert weltweite Wand-Segmente aus einer Pose {position, forward, up} mit
-// exakter Hidden-Line-Dimmung. Mutiert camera (position + basis).
+// exakter Hidden-Line-Dimmung. Mutiert camera (position + basis). Liefert
+// { occ, vp } (projizierte Verdecker + Viewport) fuer renderFaceOverlay --
+// so koennen Zusatz-Segmente dieselbe Verdeckung nutzen, ohne sie neu zu rechnen.
 export function renderFaceWalls(renderer, walls, footprints, camera, pose, opts = {}) {
   camera.position = pose.position;
   camera.basis = basisFromForwardUp(pose.forward, pose.up);
@@ -171,7 +173,7 @@ export function renderFaceWalls(renderer, walls, footprints, camera, pose, opts 
   // alpha skaliert alles gleichmaessig (Karten-Ausblenden beim Verlassen);
   // die Kamera-Basis ist dann bereits gesetzt (das Overlay braucht sie).
   const alpha = opts.alpha ?? 1;
-  if (alpha <= 0.01) return;
+  if (alpha <= 0.01) return null;
 
   const vp = { width: renderer.width, height: renderer.height, fov: camera.fov, near: opts.near ?? 0.1 };
   const occ = projectOccluders(footprints, camera, vp);
@@ -198,4 +200,24 @@ export function renderFaceWalls(renderer, walls, footprints, camera, pose, opts 
   if (fadeIntensity > 0.01) renderer.drawPolylines(faded, { intensity: alpha * fadeIntensity });
   renderer.drawPolylines(dimmed, { intensity: alpha * dimIntensity });
   renderer.drawPolylines(visible, { intensity: alpha });
+  return { occ, vp };
+}
+
+// Zusatz-Segmente (Welt) mit derselben Hidden-Line-Verdeckung wie die Waende
+// rendern (view = Rueckgabe von renderFaceWalls). Verdeckte Stuecke werden auf
+// `dim` * intensity gedimmt statt weggelassen -- z.B. das Ziel-Leuchtfeuer,
+// das staerker durchscheinen darf als normale Kanten.
+export function renderFaceOverlay(renderer, segments, camera, view, opts = {}) {
+  if (!view) return;
+  const intensity = opts.intensity ?? 1;
+  const dim = opts.dim ?? DIM;
+  const visible = [];
+  const hidden = [];
+  for (const edge of segments) {
+    for (const s of occludeEdge(edge, camera, view.vp, view.occ)) {
+      (s.occluded ? hidden : visible).push([s.a, s.b]);
+    }
+  }
+  renderer.drawPolylines(hidden, { intensity: intensity * dim });
+  renderer.drawPolylines(visible, { intensity });
 }

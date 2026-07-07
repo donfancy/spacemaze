@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 194 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 206 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -29,7 +29,8 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 ## Architektur-Kurzüberblick
 - `src/math/` — vec3, camera (6-DOF + optionale freie Basis), projection
 - `src/world/` — maze (Generator), mazeGeometry, metric (Achsen-Metrik), mazeWorld,
-  drive (Fahr-Dynamik), waves (Kollisionswellen), cubeFaces, shapes, visibility
+  drive (Fahr-Dynamik), waves (Kollisionswellen), goal (Ziel-Zone + Leuchtfeuer),
+  cubeFaces, shapes, visibility
 - `src/render/` — renderer.js (EINZIGER Canvas-Teil), projection.js, occlusion.js
 - `src/core/` — states.js (Zustands-Automat), game.js (Orchestrierung)
 - `src/scenes/` — startscreen, mazegen, falling, playing, rising, map + mazeView.js
@@ -51,13 +52,17 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   durch die Metrik (`toUnits`/`toGrid`); Gameplay-Maßstab ist die GANG-Breite
   (`cellSize`), Geometrie-Maßstab die Einheit (`unitSize`).
 - Level 6–10 (`drive: true`) haben außerdem FAHRT-Modus: `world/drive.js` (Auto-
-  Vortrieb, nur ←/→ lenken, Abprall federt zurück, cooldown gegen Doppel-
-  Trigger). Alle Übergänge als RAMPEN (linear ratenbegrenzt, `rampToward`):
-  Lenkrate fährt von 0 hoch (`steerRamp`), Tempo mit konstanter Beschleunigung
-  (`accel` — gilt auch fürs Losfahren nach dem Reinfallen), Q bremst erst
-  (`brake` + kurzer Halt `BRAKE_HOLD`), dann Abheben. Rückstoß beim Aufprall
-  ist ein FESTER Anteil der Reisegeschwindigkeit (sonst „zittert" man an der
-  Wand). `world/waves.js`: Kollisionswellen starten als weißes Blitz-Kreuz am
+  Vortrieb, nur ←/→ lenken, cooldown gegen Doppel-Trigger). Aufprall = seitlicher
+  FEDER-IMPULS (`state.push`, Weltraum, klingt mit `pushDecay` linear auf 0 ab):
+  drückt senkrecht von der Wand weg, Vorwärtstempo und Blickrichtung bleiben —
+  man driftet zurück und schlägt weiter vorne erneut ein. Das Netto-Tempo weg
+  von der Wand direkt nach dem Treffer ist ein FESTER Anteil der
+  Reisegeschwindigkeit (`bounce` — NICHT proportional zur Wucht, sonst
+  „zittert" man an der Wand). Alle Übergänge als RAMPEN (linear ratenbegrenzt,
+  `rampToward`): Lenkrate fährt von 0 hoch (`steerRamp`), Tempo mit konstanter
+  Beschleunigung (`accel` — gilt auch fürs Losfahren nach dem Reinfallen), Q
+  bremst erst (`brake` + kurzer Halt `BRAKE_HOLD`, abgehoben wird erst, wenn
+  auch der Feder-Impuls abgeklungen ist), dann Abheben. `world/waves.js`: Kollisionswellen starten als weißes Blitz-Kreuz am
   Sichtlinien-Auftreffpunkt, Arme wachsen mit, an die zusammenhängende Kontur-
   Fläche geklippt. Kamera-Gefühl in `scenes/playing.js` (Kurvenneigung `bank`
   + `math/oscillator.js` für mechanisches Nachschwingen — als Bildraum-Sway

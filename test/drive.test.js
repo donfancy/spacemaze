@@ -107,7 +107,7 @@ test('Bremsen (targetSpeed 0): rollt mit der Brems-Rampe aus und bleibt stehen',
   assert.equal(state.vel, 0, 'bleibt stehen');
 });
 
-test('frontaler Aufprall: Kollision gemeldet, Geschwindigkeit federt zurueck', () => {
+test('frontaler Aufprall: Kollision gemeldet, Feder-Impuls drueckt von der Wand weg', () => {
   const m = corridorMaze();
   const state = createDriveState();
   let pose = { px: 3.5, pz: 9.5, yaw: 0 };
@@ -124,7 +124,8 @@ test('frontaler Aufprall: Kollision gemeldet, Geschwindigkeit federt zurueck', (
   assert.deepEqual(collision.wallCell, [1, 0]);
   assert.ok(Math.abs(collision.point[0] - 3.5) < 1e-9, 'Auftreffpunkt seitlich beim Spieler');
   assert.ok(collision.impact > 0.8, 'frontal = nahezu volle Wucht');
-  assert.ok(state.vel < 0, 'zurueckfedern: Geschwindigkeit negativ');
+  assert.ok(state.vel > 0, 'Vorwaertstempo bleibt erhalten (kein Rueckwaertsfahren)');
+  assert.ok(state.push.z > 0, 'Feder-Impuls zeigt von der Wand weg (+z bei side=-1)');
   assert.ok(pose.pz >= 1 + OPTS.radius - 1e-9, 'Spieler bleibt vor der Wand');
 });
 
@@ -161,7 +162,38 @@ test('schraeger Aufprall: Auftreffpunkt liegt auf der Sichtlinie, nicht am Lotpu
   assert.ok(collision.point[0] > pose.px, 'in Blickrichtung (+x) versetzt, nicht am Lotpunkt');
 });
 
-test('nach dem Abprall erholt sich das Tempo -> pinballt erneut (mit Sperrzeit)', () => {
+test('schraeger Aufprall: Fahrt geht weiter, zweiter Einschlag weiter vorne', () => {
+  const W = WALL, O = OPEN;
+  const m = {
+    n: 5,
+    grid: [
+      [W, W, W, W, W],
+      [W, O, O, O, W],
+      [W, W, W, W, W],
+      [W, W, W, W, W],
+      [W, W, W, W, W],
+    ],
+    metric: createMetric(THIN),
+  };
+  const state = createDriveState();
+  const yaw = -0.45; // vorwaerts (-z) mit Drift nach +x
+  let pose = { px: 3, pz: 4.5, yaw };
+  const hits = [];
+  for (let i = 0; i < 60 * 4; i++) {
+    const r = driveStep(m, state, pose, 0, 1 / 60, OPTS);
+    pose = { px: r.px, pz: r.pz, yaw: r.yaw };
+    if (r.collision) hits.push({ col: r.collision, px: pose.px });
+  }
+  assert.ok(hits.length >= 2, `mehrfacher Einschlag (${hits.length} Treffer)`);
+  assert.ok(hits[1].col.point[0] > hits[0].col.point[0] + 0.5,
+    'zweiter Einschlag deutlich WEITER VORNE entlang der Wand');
+  assert.equal(pose.yaw, yaw, 'Blickrichtung bleibt unveraendert');
+  // Zwischen den Treffern federt der Spieler von der Wand weg und faehrt
+  // trotzdem weiter vorwaerts (tangential) -- kein Rueckwaertsfahren.
+  assert.ok(hits[1].px > hits[0].px, 'Vorwaertsbewegung setzt sich fort');
+});
+
+test('nach dem Abfedern kehrt der Kurs zur Wand zurueck -> pinballt erneut (mit Sperrzeit)', () => {
   const m = corridorMaze();
   const state = createDriveState();
   let pose = { px: 3.5, pz: 9.5, yaw: 0 };
@@ -175,11 +207,12 @@ test('nach dem Abprall erholt sich das Tempo -> pinballt erneut (mit Sperrzeit)'
   }
   assert.ok(hits.length >= 2, `federt wiederholt (${hits.length} Treffer)`);
   for (let i = 1; i < hits.length; i++) {
-    // Deutlich mehr als die Sperrzeit: der Rueckstoss ist ein fester Anteil der
-    // REISEgeschwindigkeit. Ein Rueckstoss proportional zur Restgeschwindigkeit
-    // wuerde immer schwaecher -- der Spieler "zittert" dann im Cooldown-Takt an
-    // der Wand (Regression: Dauer-Blitzen der Kollisionswellen).
-    assert.ok(hits[i] - hits[i - 1] >= 0.5, `sauberes Abprallen statt Zittern (${(hits[i] - hits[i - 1]).toFixed(2)}s)`);
+    // Deutlich mehr als die Sperrzeit: das Netto-Tempo weg von der Wand nach
+    // dem Treffer ist ein FESTER Anteil der REISEgeschwindigkeit. Ein Impuls
+    // proportional zur Aufprallwucht wuerde immer schwaecher -- der Spieler
+    // "zittert" dann im Cooldown-Takt an der Wand (Regression: Dauer-Blitzen
+    // der Kollisionswellen).
+    assert.ok(hits[i] - hits[i - 1] >= 0.5, `sauberes Abfedern statt Zittern (${(hits[i] - hits[i - 1]).toFixed(2)}s)`);
   }
 });
 

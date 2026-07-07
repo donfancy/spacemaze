@@ -32,8 +32,14 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
 - Im Labyrinth (Ego-Ansicht, Tank-Steuerung, Level 1–5): `↑/W` vor, `↓/S` zurück,
   `←/A`/`→/D` drehen, `Q` Rückschwenk zur Karte (am Ziel automatisch nach 20 s)
 - Ab Level 6 Fahrt-Modus: automatischer Vortrieb, nur `←/→` lenken; Kurven
-  neigen die Kamera, Wandkontakt federt zurück — mit Kollisionswellen auf der
-  Wand und mechanischem Kamera-Nachschwingen
+  neigen die Kamera, Wandkontakt federt seitlich ab (die Fahrt geht weiter,
+  ohne Gegenlenken schlägt man weiter vorne wieder ein) — mit Kollisionswellen
+  auf der Wand und mechanischem Kamera-Nachschwingen
+- Das Ziel ist ein Boden-Quadrat (das Zielfeld, um 1/4 eingerückt — erst darin
+  gilt das Ziel als erreicht), auf dessen Kante flimmernde Lichtsäulen
+  entlangwandern und in den Himmel strahlen: hinter Mauern gedimmt
+  durchscheinend, oberhalb der Wand-Sichtlinie frei — so strahlt das Ziel von
+  weitem hoch; beim Erreichen blitzen alle Säulen weiß auf und erlöschen
 - Auf der Karte: `Q` weiterspielen (fällt zurück an die Spielerlage, solange das
   Ziel offen ist), `X` beenden (nach 5 min automatisch) — die Karte blendet aus
   und die Kamera fliegt symmetrisch zum Start zurück in den Orbit
@@ -63,8 +69,9 @@ src/
     mazeGeometry.js  Korridor-Konturen + Wachstums-Animation (getestet)
     metric.js      Achsen-Metrik: ungleiche Zellbreiten → schmale Wände (getestet)
     mazeWorld.js   begehbare Welt: Wände, Kollision (Spieler-Quadrat), getestet
-    drive.js       Fahr-Dynamik ab Level 6: Auto-Vortrieb, Abprall (getestet)
+    drive.js       Fahr-Dynamik ab Level 6: Auto-Vortrieb, Abfedern (getestet)
     waves.js       Kollisionswellen auf der Wandfläche (getestet)
+    goal.js        Ziel-Zone (eingerückt) + Leuchtfeuer: Quadrat, Strahlen (getestet)
     cubeFaces.js   Würfel-Seitenflächen als Andock-Ziele + Grid-Mapping (getestet)
     cameraPaths.js Kamera-Choreografie: Orbit, An-/Abdocken (getestet)
     visibility.js  Kantenklassifikation für den Drahtwürfel (getestet)

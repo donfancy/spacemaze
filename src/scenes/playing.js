@@ -12,8 +12,11 @@ import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
 import { createOscillator } from '../math/oscillator.js';
 import { generateMaze } from '../world/maze.js';
-import { cellCenter, cellAt, tryMove, startFacingYaw } from '../world/mazeWorld.js';
+import { cellCenter, tryMove, startFacingYaw, wallFootprints } from '../world/mazeWorld.js';
 import { DRIVE, createDriveState, driveStep } from '../world/drive.js';
+import {
+  goalZone, inGoalZone, goalMarkerSegments, goalBeamFeet, beamFlicker, beamOcclusionCut,
+} from '../world/goal.js';
 import { collisionWave, waveSegments } from '../world/waves.js';
 import { recordTrailPoint } from '../world/trail.js';
 import { compassLayout } from '../render/compass.js';
@@ -22,7 +25,7 @@ import { SIDE_FACES } from '../world/cubeFaces.js';
 import { levelConfig } from '../core/levels.js';
 import {
   WALL_RATIO, EYE_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, unitSize,
-  faceWalls, faceFootprints, faceSegments, renderFaceWalls, egoPose,
+  faceWalls, faceFootprints, faceSegments, renderFaceWalls, renderFaceOverlay, egoPose,
 } from './mazeView.js';
 
 const MOVE_RATIO = 2.2;     // Zellen pro Sekunde
@@ -30,6 +33,23 @@ const TURN_SPEED = 2.2;     // Radiant pro Sekunde
 const RADIUS_RATIO = 0.25;
 const GOAL_AUTO_EXIT = 20;  // Sekunden am Ziel bis automatischer Rueckschwenk
 const TRAIL_DIST_RATIO = 0.2; // Weg-Aufzeichnung: Mindestdistanz in Zellen
+
+// Ziel-Zone und -Leuchtfeuer: erreicht ist man erst 1/4 Feldgroesse "drinnen";
+// genau diese Zone markiert ein Boden-Quadrat, auf dessen Kante flimmernde
+// Leucht-Linien entlangwandern und in den Himmel strahlen. Beides MIT
+// Verdeckung, aber verdeckte Stuecke scheinen doppelt so stark durch wie
+// normale Kanten (0.2 statt DIM 0.1) -- und die Strahlen ragen oberhalb der
+// Wand-Sichtlinie frei heraus (beamOcclusionCut), so sieht man das Ziel von
+// weitem hinter den Mauern hochstrahlen. Am Ziel: alle Strahlen blitzen
+// weiss auf und erloeschen.
+const GOAL_INSET_RATIO = 0.25;   // Einrueckung pro Seite (Anteil der Feldgroesse)
+const BEAM_HEIGHT_RATIO = 60;    // Strahlhoehe in Zellen (quasi unendlich)
+const BEAM_PER_EDGE = 2;         // Zwischenstrahlen pro Quadratkante (+ 4 Ecken)
+const BEAM_MAX_INT = 0.7;        // hellster Flacker-Wert der Strahlen
+const BEAM_WANDER_RATE = 0.7;    // Wander-Stuetzstellen pro Sekunde
+const GOAL_MARKER_INT = 0.9;     // Intensitaet des Boden-Quadrats
+const GOAL_OCC_DIM = 0.2;        // verdeckt: doppelt so hell wie Wandkanten (DIM 0.1)
+const GOAL_FLASH_TIME = 1.0;     // s: weisses Aufstrahlen + Erloeschen am Ziel
 
 // Fahr-Modus: Kamera-Gefuehl und Kollisions-Effekte.
 const BANK_MAX = 0.2;         // rad: maximale Kurvenneigung
@@ -62,6 +82,11 @@ export function createPlaying(game) {
   let yaw = 0;
   let reached = false;
   let reachedTime = 0;
+  let goalInset = 0;    // Einrueckung der Ziel-Zone in Welt-Einheiten
+  let goalRect = null;  // Ziel-Zone (lokales Rechteck)
+  let goalSegs = null;  // Boden-Quadrat der Ziel-Zone (Welt-Segmente)
+  let localFoot = null; // Wand-Grundrisse LOKAL (fuer den Strahl-Schnitt)
+  let reachedAt = 0;    // Szenenzeit des Ziel-Erreichens (weisses Erloeschen)
 
   // Fahr-Modus (ab Level 6).
   let drive = false;
@@ -92,7 +117,10 @@ export function createPlaying(game) {
     }
     // Abheben, sobald ausgerollt (oder man waehrend des Ausrollens das Ziel
     // erreicht hat -- dann steht man ohnehin) plus ein kurzer Beat Stillstand.
-    if (braking && (reached || driveState.vel === 0)) {
+    // Auch der Feder-Impuls muss abgeklungen sein, sonst rutscht man beim
+    // Abheben noch seitwaerts.
+    const settled = driveState.vel === 0 && driveState.push.x === 0 && driveState.push.z === 0;
+    if (braking && (reached || settled)) {
       brakeHold += dt;
       if (brakeHold >= BRAKE_HOLD) game.dispatch(GameEvent.EXIT, { fade: false });
     }
@@ -127,6 +155,10 @@ export function createPlaying(game) {
       unit = unitSize(maze);
       walls = faceWalls(maze, face, WALL_RATIO * cell);
       footprints = faceFootprints(maze, face);
+      goalInset = GOAL_INSET_RATIO * cell;
+      goalRect = goalZone(maze, unit, goalInset);
+      goalSegs = faceSegments(goalMarkerSegments(goalRect), face);
+      localFoot = wallFootprints(maze, { unit });
       drive = !!levelConfig(game.level)?.drive;
       driveState = createDriveState(); // vel 0: nach dem Reinfallen faehrt man mit der Rampe los
       bank = 0;
@@ -149,6 +181,7 @@ export function createPlaying(game) {
       game.resume = false;
       reached = false;
       reachedTime = 0;
+      reachedAt = 0;
       game.reachedGoal = false;
       recordState();
     },
@@ -186,10 +219,11 @@ export function createPlaying(game) {
       recordTrailPoint(game.trail, px, pz, { minDist: TRAIL_DIST_RATIO * cell });
       recordState();
 
-      const [gx, gy] = cellAt(maze, px, pz, unit);
-
-      if (gx === maze.goal[0] && gy === maze.goal[1]) {
+      // Streng: die Kante des Zielfelds reicht nicht, man muss mindestens
+      // GOAL_INSET_RATIO der Feldgroesse "drinnen" stehen (= das Boden-Quadrat).
+      if (!reached && inGoalZone(maze, px, pz, unit, goalInset)) {
         reached = true;
+        reachedAt = sceneT; // ab hier: weisses Aufstrahlen + Erloeschen
         game.reachedGoal = true; // die Karte bietet dann kein Weiterspielen mehr an
       }
       if (reached) {
@@ -206,7 +240,47 @@ export function createPlaying(game) {
         renderer.pushSway(swayTransform(bank + rollOsc.x, pitchOsc.x, { height: renderer.height, fov: camera.fov }));
       }
       const pose = egoPose(face, px, pz, yaw, cell);
-      renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell });
+      const view = renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell });
+
+      // Ziel-Leuchtfeuer. Boden-Quadrat: normale Kanten-Verdeckung, aber
+      // verdeckt doppelt so hell wie Wandkanten. Near-Plane wie bei den
+      // Waenden skalieren (man faehrt direkt darueber).
+      const goalNear = NEAR_RATIO * cell;
+      renderFaceOverlay(renderer, goalSegs, camera, view, { intensity: GOAL_MARKER_INT, dim: GOAL_OCC_DIM });
+
+      // Strahlen: wandern auf der Quadratkante (am Ziel eingefroren) und
+      // flimmern. Verdeckung analytisch pro Strahl (beamOcclusionCut): unter
+      // der Wand-Sichtlinie gedimmt durchscheinend, darueber frei strahlend.
+      // Am Ziel blitzen alle weiss auf und erloeschen in GOAL_FLASH_TIME.
+      const flashAge = sceneT - reachedAt;
+      if (!reached || flashAge < GOAL_FLASH_TIME) {
+        const beamH = BEAM_HEIGHT_RATIO * cell;
+        const feet = goalBeamFeet(goalRect, {
+          perEdge: BEAM_PER_EDGE, rate: BEAM_WANDER_RATE,
+          time: reached ? reachedAt : sceneT, // eingefroren beim Erloeschen
+        });
+        for (let i = 0; i < feet.length; i++) {
+          const [bx, bz] = feet[i];
+          if (reached) {
+            const segs = faceSegments([[[bx, 0, bz], [bx, beamH, bz]]], face);
+            renderer.renderScene({ segments: segs, intensity: 1 - flashAge / GOAL_FLASH_TIME },
+              camera, { near: goalNear, color: FLASH_COLOR, glow: FLASH_GLOW });
+            continue;
+          }
+          const cut = Math.min(beamH, beamOcclusionCut(localFoot, [px, pz], feet[i], {
+            eye: EYE_RATIO * cell, wallHeight: WALL_RATIO * cell,
+          }));
+          const int = BEAM_MAX_INT * beamFlicker(i, sceneT);
+          if (cut > 0) {
+            const segs = faceSegments([[[bx, 0, bz], [bx, cut, bz]]], face);
+            renderer.renderScene({ segments: segs, intensity: GOAL_OCC_DIM * int }, camera, { near: goalNear });
+          }
+          if (cut < beamH) {
+            const segs = faceSegments([[[bx, cut, bz], [bx, beamH, bz]]], face);
+            renderer.renderScene({ segments: segs, intensity: int }, camera, { near: goalNear });
+          }
+        }
+      }
 
       // Kollisionswellen auf der Wand (camera.basis steht nach renderFaceWalls).
       // Jeder Wellenzug beginnt als weisses Blitz-Kreuz am Auftreffpunkt und

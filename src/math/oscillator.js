@@ -1,8 +1,15 @@
 // Gedaempfter harmonischer Oszillator: x'' = -omega^2 x - 2 zeta omega x'.
 // Fuer "mechanische" Kamera-Schwingungen nach Kollisionen: kick() versetzt dem
-// System einen Geschwindigkeits-Impuls, step() integriert (semi-implizites
-// Euler -- stabil bei Frame-dt), x ist die Auslenkung (z.B. Roll-Winkel).
+// System einen Geschwindigkeits-Impuls, step() integriert semi-implizit,
+// x ist die Auslenkung (z.B. Roll-Winkel).
 // Reine Berechnung, kein Canvas -> headless testbar.
+
+// Semi-implizites Euler ist nur fuer omega*dt < 2 stabil. Ein einziger
+// langsamer Frame (dt wird in main.js erst bei 0.1 s gekappt) liegt bei
+// freq 8 mit omega*dt ~ 5 WEIT darueber -- die Schwingung explodiert
+// numerisch statt abzuklingen (Bild springt wild). Deshalb wird jeder
+// Schritt in Teilschritte zerlegt, sodass omega*h klein bleibt.
+const MAX_OMEGA_DT = 0.5; // Stabilitaetsgrenze 2, mit ordentlich Reserve
 
 export function createOscillator({ freq = 7, damping = 0.35 } = {}) {
   const omega = 2 * Math.PI * freq;
@@ -16,8 +23,12 @@ export function createOscillator({ freq = 7, damping = 0.35 } = {}) {
     },
 
     step(dt) {
-      this.v += (-omega * omega * this.x - 2 * damping * omega * this.v) * dt;
-      this.x += this.v * dt;
+      const steps = Math.max(1, Math.ceil((omega * dt) / MAX_OMEGA_DT));
+      const h = dt / steps;
+      for (let i = 0; i < steps; i++) {
+        this.v += (-omega * omega * this.x - 2 * damping * omega * this.v) * h;
+        this.x += this.v * h;
+      }
       return this.x;
     },
 
