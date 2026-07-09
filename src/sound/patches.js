@@ -94,7 +94,9 @@ export function engineParams(mode, input = {}) {
     };
   }
   return {
-    motor: { shape: 'sawtooth', freq: 45 + 55 * speed, gain: 0.11 * speed },
+    // Grund-Fahrton bewusst zurueckhaltend (war Boris zu laut) -- die
+    // Ereignisse (Brutzeln) und das Kurven-Sirren tragen den Charakter.
+    motor: { shape: 'sawtooth', freq: 45 + 55 * speed, gain: 0.04 * speed },
     rumble: { cutoff: 250 + 450 * speed, gain: 0.05 * speed },
     whine: { freq: 220 + 240 * bank, gain: 0.06 * bank },
   };

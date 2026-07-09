@@ -91,8 +91,10 @@ test('Motor-Parameter: walk kaum merklich und im Stand still, drive deutlich', (
   assert.equal(still.whine.gain, 0, 'walk: nie Sirren');
   const walk = engineParams('walk', { speed: 1 });
   const drive = engineParams('drive', { speed: 1 });
-  assert.ok(walk.motor.gain + walk.rumble.gain < (drive.motor.gain + drive.rumble.gain) / 2,
-    'walk ist deutlich leiser als drive');
+  // walk bleibt hoerbar leiser als drive; der Abstand ist aber bewusst
+  // moderat -- der drive-Grundton selbst ist zurueckgenommen (war zu laut).
+  assert.ok(walk.motor.gain + walk.rumble.gain < (drive.motor.gain + drive.rumble.gain) * 0.7,
+    'walk ist hoerbar leiser als drive');
   assert.ok(walk.motor.gain + walk.rumble.gain + walk.whine.gain < 0.1, 'walk: kaum merklich');
   // Drehen im Stand ist als leises Servo-Rauschen hoerbar.
   const turning = engineParams('walk', { speed: 0, steer: 1 });
