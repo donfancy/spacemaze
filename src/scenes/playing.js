@@ -12,8 +12,10 @@ import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
 import { createOscillator } from '../math/oscillator.js';
 import { generateMaze } from '../world/maze.js';
-import { cellCenter, tryMove, startFacingYaw, wallFootprints } from '../world/mazeWorld.js';
+import { cellCenter, startFacingYaw, wallFootprints } from '../world/mazeWorld.js';
 import { DRIVE, createDriveState, driveStep } from '../world/drive.js';
+import { WALK, createWalkState, walkStep } from '../world/walk.js';
+import { bumpPatch, sizzlePatch, fanfarePatch, engineParams } from '../sound/patches.js';
 import {
   goalZone, inGoalZone, goalMarkerSegments, goalBeamFeet, beamFlicker, beamOcclusionCut,
 } from '../world/goal.js';
@@ -28,8 +30,6 @@ import {
   faceWalls, faceFootprints, faceSegments, renderFaceWalls, renderFaceOverlay, egoPose,
 } from './mazeView.js';
 
-const MOVE_RATIO = 2.2;     // Zellen pro Sekunde
-const TURN_SPEED = 2.2;     // Radiant pro Sekunde
 const RADIUS_RATIO = 0.25;
 const GOAL_AUTO_EXIT = 20;  // Sekunden am Ziel bis automatischer Rueckschwenk
 const TRAIL_DIST_RATIO = 0.2; // Weg-Aufzeichnung: Mindestdistanz in Zellen
@@ -103,6 +103,7 @@ export function createPlaying(game) {
   // Fahr-Modus (ab Level 6).
   let drive = false;
   let driveState = null;
+  let walkState = null; // Tank-Modus (Level 1-5): Rampen + Kollisions-Flanke
   let bank = 0;      // aktuelle Kurvenneigung (rad)
   let waves = [];    // aktive Kollisionswellen {wave, born, strength}
   let sceneT = 0;    // Szenenzeit fuer die Wellen-Alter
@@ -144,8 +145,10 @@ export function createPlaying(game) {
     waves = waves.filter((w) => sceneT - w.born < WAVE_LIFE);
   }
 
-  // Aufprall: Wellenzuege auf der getroffenen Wand + mechanische Schwingung.
+  // Aufprall: Wellenzuege auf der getroffenen Wand + mechanische Schwingung
+  // + elektrisches Brutzeln (Wucht bestimmt Lautstaerke und Dauer).
   function spawnCollision(col) {
+    game.audio?.play(sizzlePatch(col.impact));
     const wave = collisionWave(maze, col, { unit, eye: EYE_RATIO * cell });
     for (let i = 0; i < WAVE_PULSES; i++) {
       // Nur der ERSTE Wellenzug blitzt weiss auf -- ein Blitz pro Treffer.
@@ -173,6 +176,7 @@ export function createPlaying(game) {
       localFoot = wallFootprints(maze, { unit });
       drive = !!levelConfig(game.level)?.drive;
       driveState = createDriveState(); // vel 0: nach dem Reinfallen faehrt man mit der Rampe los
+      walkState = createWalkState();   // ebenso zu Fuss: Anfahren ueber die Rampe
       bank = 0;
       waves = [];
       sceneT = 0;
@@ -202,6 +206,7 @@ export function createPlaying(game) {
       // Letzte Position exakt festhalten (auch unterhalb der Mindestdistanz),
       // damit die Weglinie genau dort endet, wo der Rueckschwenk beginnt.
       recordTrailPoint(game.trail, px, pz, { force: true });
+      game.audio?.engine(null); // Motor-Klang ausblenden (die Karte ist still)
     },
 
     update(dt) {
@@ -213,18 +218,27 @@ export function createPlaying(game) {
 
       if (drive) {
         updateDrive(turn, dt);
+        // Motor-Klang: Tonhoehe/Pegel folgen dem Tempo, das Sirren der
+        // Kurvenneigung (bank ist schon weich nachgefuehrt).
+        game.audio?.engine(engineParams('drive', {
+          speed: reached ? 0 : driveState.vel / DRIVE.cruise,
+          bank: Math.abs(bank) / BANK_MAX,
+        }));
       } else {
         const fwd = keys.has('ArrowUp') || keys.has('W');
         const back = keys.has('ArrowDown') || keys.has('S');
-        yaw += turn * TURN_SPEED * dt;
-
-        const move = (fwd ? 1 : 0) - (back ? 1 : 0);
-        if (move !== 0 && !reached) {
-          const step = MOVE_RATIO * cell * dt * move;
-          const dx = -Math.sin(yaw) * step;
-          const dz = -Math.cos(yaw) * step;
-          [px, pz] = tryMove(maze, px, pz, dx, dz, { unit, radius: RADIUS_RATIO * cell });
-        }
+        const move = reached ? 0 : (fwd ? 1 : 0) - (back ? 1 : 0);
+        const res = walkStep(maze, walkState, { px, pz, yaw }, { move, turn }, dt, {
+          unit, cell, radius: RADIUS_RATIO * cell,
+        });
+        ({ px, pz, yaw } = res);
+        if (res.collision) game.audio?.play(bumpPatch(res.collision.impact));
+        // Kaum merkliches Gleiten: nur das ERREICHTE Tempo klingt -- an der
+        // Wand angedrueckt ist es still, obwohl die Taste gehalten wird.
+        game.audio?.engine(engineParams('walk', {
+          speed: res.speed / WALK.speed,
+          steer: Math.abs(walkState.steer),
+        }));
       }
 
       // Weg praezise aufzeichnen: echte Position, gerade Strecken zusammengefasst.
@@ -237,6 +251,7 @@ export function createPlaying(game) {
         reached = true;
         reachedAt = sceneT; // ab hier: weisses Aufstrahlen + Erloeschen
         game.reachedGoal = true; // die Karte bietet dann kein Weiterspielen mehr an
+        game.audio?.play(fanfarePatch()); // drei aufsteigende Toene zum weissen Aufblitzen
       }
       if (reached) {
         reachedTime += dt;

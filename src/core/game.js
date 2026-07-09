@@ -17,6 +17,7 @@ const TRANSITION_DURATION = 0.7; // Sekunden fuer den gesamten Fade out+in
 export class Game {
   constructor(options = {}) {
     this.debug = options.debug ?? null;
+    this.audio = options.audio ?? null; // Sound-Ausgabe (sound/audio.js); null = stumm (Tests)
     this.time = 0;
     this.level = 1;       // im Startscreen gewaehltes Level (bestimmt die Maze-Groesse)
     this.dockFace = null; // vom Startscreen gewaehlte Andock-Flaeche (fuer MazeGen)

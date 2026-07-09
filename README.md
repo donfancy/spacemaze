@@ -30,7 +30,11 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
 
 - Startbildschirm: `↑/↓/←/→` Level wählen (1–10), `S` startet (Andock-Flug an den Würfel)
 - Im Labyrinth (Ego-Ansicht, Tank-Steuerung, Level 1–5): `↑/W` vor, `↓/S` zurück,
-  `←/A`/`→/D` drehen, `Q` Rückschwenk zur Karte (am Ziel automatisch nach 20 s)
+  `←/A`/`→/D` drehen, `Q` Rückschwenk zur Karte (am Ziel automatisch nach 20 s);
+  Anfahren, Bremsen und Drehen laufen über Beschleunigungs-Rampen
+- `M` schaltet den Sound stumm/laut (alles synthetisch per Web Audio: leises
+  Fahrgeräusch, dumpfer Bump an der Wand, ab Level 6 Motor + Kurven-Sirren und
+  elektrisches Brutzeln bei Kollisionen, Drei-Ton-Fanfare am Ziel)
 - Ab Level 6 Fahrt-Modus: automatischer Vortrieb, nur `←/→` lenken; Kurven
   neigen die Kamera, Wandkontakt federt seitlich ab (die Fahrt geht weiter,
   ohne Gegenlenken schlägt man weiter vorne wieder ein) — mit Kollisionswellen
@@ -70,6 +74,7 @@ src/
     metric.js      Achsen-Metrik: ungleiche Zellbreiten → schmale Wände (getestet)
     mazeWorld.js   begehbare Welt: Wände, Kollision (Spieler-Quadrat), getestet
     drive.js       Fahr-Dynamik ab Level 6: Auto-Vortrieb, Abfedern (getestet)
+    walk.js        Geh-Kinetik Level 1–5: Rampen + Kollisions-Flanke (getestet)
     waves.js       Kollisionswellen auf der Wandfläche (getestet)
     goal.js        Ziel-Zone (eingerückt) + Leuchtfeuer: Quadrat, Strahlen (getestet)
     cubeFaces.js   Würfel-Seitenflächen als Andock-Ziele + Grid-Mapping (getestet)
@@ -89,6 +94,9 @@ src/
     rising.js      Rückschwenk zur Kartensicht (Wände schrumpfen)
     map.js         Kartensicht mit abgelaufenem Weg; X blendet aus → Abdocken
     mazeView.js    gemeinsamer Flächen-Renderer (Posen, Overlay, Hidden Lines)
+  sound/
+    patches.js     Klänge als reine Daten: Bump, Brutzeln, Fanfare, Motor (getestet)
+    audio.js       EINZIGER Web-Audio-berührender Teil (Patches → Knoten, Motor-Stimmen)
   util/
     rng.js         seedbarer Zufall (getestet)
   debug/

@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 208 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 221 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -29,9 +29,11 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 ## Architektur-Kurzüberblick
 - `src/math/` — vec3, camera (6-DOF + optionale freie Basis), projection
 - `src/world/` — maze (Generator), mazeGeometry, metric (Achsen-Metrik), mazeWorld,
-  drive (Fahr-Dynamik), waves (Kollisionswellen), goal (Ziel-Zone + Leuchtfeuer),
-  cubeFaces, shapes, visibility
+  drive (Fahr-Dynamik), walk (Geh-Kinetik mit Rampen), waves (Kollisionswellen),
+  goal (Ziel-Zone + Leuchtfeuer), cubeFaces, shapes, visibility
 - `src/render/` — renderer.js (EINZIGER Canvas-Teil), projection.js, occlusion.js
+- `src/sound/` — patches.js (Klaenge als reine Daten, testbar), audio.js
+  (EINZIGER Web-Audio-Teil, analog renderer.js)
 - `src/core/` — states.js (Zustands-Automat), game.js (Orchestrierung)
 - `src/scenes/` — startscreen, mazegen, falling, playing, rising, map + mazeView.js
   (gemeinsamer Flächen-Renderer)
@@ -67,6 +69,19 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Fläche geklippt. Kamera-Gefühl in `scenes/playing.js` (Kurvenneigung `bank`
   + `math/oscillator.js` für mechanisches Nachschwingen — als Bildraum-Sway
   gerendert, NICHT in der Kamerabasis, siehe Hidden-Lines-Falle 4).
+- SOUND (alles synthetisch, Web Audio, keine Samples): `sound/patches.js` baut
+  Klaenge als reine Daten (Bump Level 1–5, elektrisches Brutzeln ab Level 6,
+  Drei-Ton-Fanfare am Ziel, Motor-Parameter als `engineParams`), `sound/audio.js`
+  ist der EINZIGE AudioContext-Teil (Autoplay-Falle: unlock() bei jedem
+  Tastendruck; drei stehende Motor-Stimmen, per setTargetAtTime zipperfrei
+  nachgefuehrt; M = Mute in main.js). Szenen rufen `game.audio?.play/engine`
+  (null in Tests). `playing.exit()` blendet den Motor aus (engine(null)).
+- Tank-Steuerung (Level 1–5) laeuft ueber `world/walk.js`: gleiche Rampen-Idee
+  wie drive.js (accel/brake/steerRamp via rampToward), Kollisions-Meldung als
+  FLANKE (ein Bump beim Auftreffen, kein Dauerfeuer beim Anliegen; `contact`
+  pro Achse). `vel` ist das ANGESTREBTE Tempo — Waende blockieren nur die
+  Bewegung (klassisches Gleiten, sonst kollabiert es); fuers Fahrgeraeusch
+  liefert walkStep das ERREICHTE Tempo (`speed`).
 - Die Begehung spielt AUF der Andock-Würfelseite (nicht horizontal). Schlüssel:
   freie Kamera-Oben-Richtung (`camera.basis`), `faceLocalToWorld`, `scenes/mazeView.js`.
 - Hidden Lines: `render/occlusion.js` (analytisch). VIER Fallen beachten —

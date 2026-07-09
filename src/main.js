@@ -3,6 +3,7 @@
 
 import { Renderer } from './render/renderer.js';
 import { Game } from './core/game.js';
+import { createAudioOutput } from './sound/audio.js';
 import { DebugConsole } from './debug/debugConsole.js';
 
 const canvas = document.getElementById('screen');
@@ -20,13 +21,16 @@ window.addEventListener('resize', resize);
 resize();
 
 // --- Spiel + Eingabe ------------------------------------------------------------
-const game = new Game({ debug: debugEnabled ? debug : null });
+const audio = createAudioOutput();
+const game = new Game({ debug: debugEnabled ? debug : null, audio });
 
 // Einzelzeichen (Buchstaben) normalisieren wir auf Grossbuchstaben.
 const normKey = (e) => (e.key.length === 1 ? e.key.toUpperCase() : e.key);
 
 window.addEventListener('keydown', (e) => {
   const key = normKey(e);
+  audio.unlock();              // Autoplay-Policy: Sound braucht eine User-Geste
+  if (key === 'M') audio.toggleMuted(); // globaler Stumm-Schalter
   game.keys.add(key);          // gehaltene Taste (kontinuierliche Steuerung)
   game.handleKey(key);         // diskrete Aktion (S, Q, ...)
   if (key.startsWith('Arrow')) e.preventDefault(); // kein Seiten-Scrollen

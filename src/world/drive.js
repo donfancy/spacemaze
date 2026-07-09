@@ -35,7 +35,8 @@ export function createDriveState() {
 }
 
 // Bewegt `value` ratenbegrenzt auf `target` zu (lineare Rampe).
-function rampToward(value, target, rate, dt) {
+// Auch von der Geh-Kinetik (walk.js) genutzt.
+export function rampToward(value, target, rate, dt) {
   const dv = target - value;
   const step = rate * dt;
   return Math.abs(dv) <= step ? target : value + Math.sign(dv) * step;
