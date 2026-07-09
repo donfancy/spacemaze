@@ -101,7 +101,8 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Schwenks (Reinfallen/Rückschwenk) interpolieren die Orientierung per
   Quaternion-Slerp (`math/quat.js`, `blendPose` in `mazeView.js`) — getrenntes
   forward/up-Lerp kippt um, wenn beide antiparallel werden (Ego-Blick „Süd“).
-- Nächste mögliche Themen: höhere Levels, echter "Trench Run", Politur.
+- Nächste mögliche Themen (Boris, 9.7.2026): was die höheren Levels bringen —
+  „ein paar Farben" und SHOOTING; dazu weiter: echter "Trench Run", Politur.
   Aufgeschobene (Performance-)Ideen mit Messwerten: siehe IDEAS.md.
 - Performance-Basics sind drin: kollineare Wandzüge werden zusammengefasst
   (`mergeCollinear` — Unter-/Oberkanten lang, Pfosten bleiben an jeder
