@@ -6,7 +6,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bumpPatch, sizzlePatch, fanfarePatch, engineParams } from '../src/sound/patches.js';
+import {
+  bumpPatch, sizzlePatch, fanfarePatch, fallPatch, risePatch, gnawPatch, engineParams,
+} from '../src/sound/patches.js';
 
 const EPS = 1e-9;
 
@@ -44,6 +46,44 @@ test('bump/sizzle/fanfare erfuellen die Patch-Invarianten', () => {
     checkPatch(sizzlePatch(impact), `sizzle(${impact})`);
   }
   checkPatch(fanfarePatch(), 'fanfare');
+  for (const dur of [1.0, 1.7, 3.0]) {
+    checkPatch(fallPatch(dur), `fall(${dur})`);
+    checkPatch(risePatch(dur), `rise(${dur})`);
+    checkPatch(gnawPatch(dur), `gnaw(${dur})`);
+  }
+});
+
+test('fall faellt, rise steigt, beide schwellen zur Mitte an', () => {
+  for (const [make, name] of [[fallPatch, 'fall'], [risePatch, 'rise']]) {
+    const p = make(1.7);
+    const osc = p.voices.find((v) => v.type === 'osc');
+    const first = osc.freq[0][1];
+    const last = osc.freq[osc.freq.length - 1][1];
+    if (name === 'fall') assert.ok(last < first / 3, 'Gleitton faellt deutlich');
+    else assert.ok(last > first * 3, 'Gleitton steigt deutlich');
+    for (const v of p.voices) {
+      const [peakT] = v.gain.reduce((a, b) => (b[1] > a[1] ? b : a));
+      assert.ok(peakT > 0.3 * p.duration && peakT < 0.7 * p.duration,
+        `${name}: lauteste Stelle um die Mitte (Schwenk-Maximum)`);
+    }
+  }
+  // Schweben ist sanfter als Stuerzen.
+  const peak = (p) => Math.max(...p.voices.flatMap((v) => v.gain.map(([, val]) => val)));
+  assert.ok(peak(risePatch(1.7)) < peak(fallPatch(1.7)), 'rise leiser als fall');
+});
+
+test('gnaw: viele getrennte Bisse, leise und ungleichmaessig', () => {
+  const p = gnawPatch(2.6);
+  const env = p.voices[0].gain;
+  // Bisse = lokale Spitzen (Pegel > 0 zwischen Nullen).
+  const levels = env.filter(([, val]) => val > 0).map(([, val]) => val);
+  assert.ok(levels.length >= 20, `~10 Bisse/s (${levels.length} bei 2.6 s)`);
+  assert.ok(Math.max(...levels) <= 0.25, 'Nagen bleibt leise (Hintergrund)');
+  assert.ok(new Set(levels.map((v) => v.toFixed(4))).size > levels.length / 2,
+    'Pegel variieren (kein Maschinen-Takt)');
+  // Zwischen den Bissen ist Stille (getrennte Knusper, kein Dauerrauschen).
+  const zeros = env.filter(([, val]) => val === 0).length;
+  assert.ok(zeros >= levels.length, 'jeder Biss ist von Stille umgeben');
 });
 
 test('bump ist dumpf, sizzle brutzelt elektrisch', () => {

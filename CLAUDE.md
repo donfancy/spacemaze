@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 221 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 223 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -71,7 +71,9 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   gerendert, NICHT in der Kamerabasis, siehe Hidden-Lines-Falle 4).
 - SOUND (alles synthetisch, Web Audio, keine Samples): `sound/patches.js` baut
   Klaenge als reine Daten (Bump Level 1–5, elektrisches Brutzeln ab Level 6,
-  Drei-Ton-Fanfare am Ziel, Motor-Parameter als `engineParams`), `sound/audio.js`
+  Drei-Ton-Fanfare am Ziel, fall/rise-Whoosh mit Gleitton — Dauer = Schwenk-
+  Dauer, in enter() gespielt —, gnaw-"Nagen" synchron zum Maze-Wachstum,
+  Motor-Parameter als `engineParams`), `sound/audio.js`
   ist der EINZIGE AudioContext-Teil (Autoplay-Falle: unlock() bei jedem
   Tastendruck; drei stehende Motor-Stimmen, per setTargetAtTime zipperfrei
   nachgefuehrt; M = Mute in main.js). Szenen rufen `game.audio?.play/engine`

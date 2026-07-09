@@ -34,7 +34,9 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
   Anfahren, Bremsen und Drehen laufen über Beschleunigungs-Rampen
 - `M` schaltet den Sound stumm/laut (alles synthetisch per Web Audio: leises
   Fahrgeräusch, dumpfer Bump an der Wand, ab Level 6 Motor + Kurven-Sirren und
-  elektrisches Brutzeln bei Kollisionen, Drei-Ton-Fanfare am Ziel)
+  elektrisches Brutzeln bei Kollisionen, Drei-Ton-Fanfare am Ziel; dazu ein
+  „Nagen" beim Labyrinth-Wachstum und Whoosh-Gleittöne beim Reinfallen
+  (abwärts) und Rausschweben (aufwärts))
 - Ab Level 6 Fahrt-Modus: automatischer Vortrieb, nur `←/→` lenken; Kurven
   neigen die Kamera, Wandkontakt federt seitlich ab (die Fahrt geht weiter,
   ohne Gegenlenken schlägt man weiter vorne wieder ein) — mit Kollisionswellen

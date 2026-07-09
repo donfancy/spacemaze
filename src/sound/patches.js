@@ -75,6 +75,66 @@ export function fanfarePatch() {
   };
 }
 
+// Reinfallen: Wind-Whoosh, der zur Mitte anschwillt (dort ist der Schwenk am
+// schnellsten) und weich landet, darunter ein FALLENDER Gleitton. Dauer =
+// Schwenk-Dauer der Szene, damit der Klang genau mit der Landung endet.
+export function fallPatch(duration = 1.7) {
+  const d = duration;
+  return {
+    duration: d,
+    voices: [
+      { type: 'noise',
+        filter: { type: 'lowpass', freq: [[0, 250], [0.5 * d, 1400], [d, 180]] },
+        gain: [[0, 0], [0.45 * d, 0.18], [d, 0]] },
+      { type: 'osc', shape: 'triangle',
+        freq: [[0, 320], [d, 55]],
+        gain: [[0, 0], [0.4 * d, 0.11], [0.9 * d, 0.04], [d, 0]] },
+    ],
+  };
+}
+
+// Rausschweben: das Reinfallen rueckwaerts -- der Gleitton STEIGT, der Whoosh
+// ist weicher (man schwebt, man stuerzt nicht).
+export function risePatch(duration = 1.7) {
+  const d = duration;
+  return {
+    duration: d,
+    voices: [
+      { type: 'noise',
+        filter: { type: 'lowpass', freq: [[0, 180], [0.5 * d, 1100], [d, 250]] },
+        gain: [[0, 0], [0.5 * d, 0.14], [d, 0]] },
+      { type: 'osc', shape: 'sine',
+        freq: [[0, 60], [d, 340]],
+        gain: [[0, 0], [0.45 * d, 0.1], [d, 0]] },
+    ],
+  };
+}
+
+// "Nagen" beim Labyrinth-Wachstum: eine Serie kurzer Knusper-Bisse (Rausch-
+// Spitzen durch einen mittigen Bandpass), deterministisch gejittert in
+// Timing, Pegel und Faerbung -- wie etwas, das sich in die Flaeche frisst.
+// Dauer = Wachstumszeit der Szene; die Beiss-Rate ist fest (~10/s), damit es
+// bei jeder Labyrinth-Groesse gleich klingt.
+export function gnawPatch(duration = 2.6) {
+  const bites = Math.max(6, Math.round(duration * 10));
+  const span = duration - 0.06; // Luft, damit der letzte Biss vor dem Ende ausklingt
+  const gain = [[0, 0]];
+  const freq = [];
+  for (let i = 0; i < bites; i++) {
+    const ti = 0.005 + ((i + 0.5) / bites) * span + 0.02 * Math.sin(i * 12.9898);
+    const level = 0.12 + 0.08 * Math.abs(Math.sin(i * 7.13));
+    gain.push([ti, 0], [ti + 0.005, level], [ti + 0.04, 0]);
+    freq.push([ti, 900 + 450 * Math.sin(i * 3.7)]);
+  }
+  gain.push([duration, 0]);
+  return {
+    duration,
+    voices: [
+      { type: 'noise', filter: { type: 'bandpass', freq, q: 2 }, gain },
+    ],
+  };
+}
+
 // Dauerklang "Motor": Ziel-Parameter fuer die drei stehenden Stimmen in
 // audio.js (motor-Brumm, rumble-Rauschen, whine-Kurven-Sirren). Pur -- das
 // Mapping Spielzustand -> Klang ist damit testbar.

@@ -14,6 +14,7 @@ import {
 } from '../world/cubeFaces.js';
 import { randomSeed } from '../util/rng.js';
 import { levelConfig } from '../core/levels.js';
+import { gnawPatch } from '../sound/patches.js';
 import { drawCompassLabels } from './mazeView.js';
 
 const CUBE_SIZE = 2.4;
@@ -33,6 +34,7 @@ export function createMazeGen(game) {
   let face = null;
   let border = null;
   let t = 0;
+  let gnawing = false; // Nage-Sound gestartet? (einmalig beim Wachstums-Beginn)
 
   function applyDock() {
     const dock = faceDockPose(face, CUBE_SIZE, camera.fov, 0.85);
@@ -60,6 +62,7 @@ export function createMazeGen(game) {
   return {
     enter() {
       t = 0;
+      gnawing = false;
       const cfg = levelConfig(game.level);
       maze = generateMaze(cfg.n, { seed: randomSeed(), metric: cfg.metric });
       game.maze = maze; // an Playing weiterreichen
@@ -72,6 +75,11 @@ export function createMazeGen(game) {
 
     update(dt) {
       t += dt;
+      // Das "Nagen" laeuft synchron zum Hineinfressen der Korridor-Linien.
+      if (!gnawing && t >= MARKER_TIME) {
+        gnawing = true;
+        game.audio?.play(gnawPatch(GROW_TIME));
+      }
       if (t >= MARKER_TIME + GROW_TIME + HOLD_TIME) {
         game.dispatch(GameEvent.MAZE_READY, { fade: false }); // nahtlos ins Reinfallen
       }

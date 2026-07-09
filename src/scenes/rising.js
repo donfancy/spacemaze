@@ -7,6 +7,7 @@ import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
+import { risePatch } from '../sound/patches.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
   egoPose, mapPose, blendPose, drawMapOverlay,
@@ -40,6 +41,7 @@ export function createRising(game) {
       const ps = game.playerState ?? { px: 0, pz: 0, yaw: 0 };
       startPose = egoPose(face, ps.px, ps.pz, ps.yaw, cell); // Ego (Spielerlage)
       endPose = mapPose(face, camera.fov);                   // Kartensicht
+      game.audio?.play(risePatch(DURATION)); // steigender Schweb-Klang bis zur Karte
     },
 
     update(dt) {
