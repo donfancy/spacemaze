@@ -89,12 +89,23 @@ export function faceFootprints(maze, face) {
   return toFace(wallFootprints(maze, { unit: unitSize(maze) }), face);
 }
 
-function drawFaceMarker(renderer, gridCell, label, face, maze, camera, intensity) {
-  const world = mapGridToFace(gridCell[0] + 0.5, gridCell[1] + 0.5, maze.n, CUBE_SIZE, face, mazeMetric(maze));
+// Buchstaben-Marker (S/G) mittig in einer Grid-Zelle. Die Groesse folgt der
+// PROJIZIERTEN Gangbreite (Zellmitte -> Zellkante am Bildschirm gemessen):
+// bei grossen Labyrinthen (Level 15: n=35) schrumpfen die Zellen so weit,
+// dass ein bildschirm-fester Buchstabe nicht mehr ins Raster passt.
+// Auch von MazeGen genutzt (gleiche Marker waehrend des Wachstums).
+export function drawFaceMarker(renderer, gridCell, label, face, maze, camera, intensity) {
+  const metric = mazeMetric(maze);
+  const world = mapGridToFace(gridCell[0] + 0.5, gridCell[1] + 0.5, maze.n, CUBE_SIZE, face, metric);
   const screen = renderer.worldToScreen(world, camera);
   if (!screen) return;
+  // Halbe Gangbreite in Pixeln: Zellmitte bis Zellkante (S/G sind Kammern).
+  const edge = renderer.worldToScreen(
+    mapGridToFace(gridCell[0] + 0.5, gridCell[1] + 1, maze.n, CUBE_SIZE, face, metric), camera);
+  const base = Math.max(12, renderer.height * 0.04);
+  const cellPx = edge ? 2 * Math.hypot(edge.x - screen.x, edge.y - screen.y) : Infinity;
   renderer.drawText(label, {
-    x: screen.x, y: screen.y, size: Math.max(12, renderer.height * 0.04),
+    x: screen.x, y: screen.y, size: Math.max(8, Math.min(base, 0.8 * cellPx)),
     align: 'center', baseline: 'middle', intensity,
   });
 }

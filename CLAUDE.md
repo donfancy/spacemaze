@@ -109,7 +109,11 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   normale Hidden-Line-Pipeline via `renderFaceOverlay` mit `color`, verdeckt
   0.25 statt 0.1 — man ahnt sie hinterm Eck). Berührung = Crash: Explosion
   (`world/burst.js`, deterministische Splitter), `crashPatch`, nach 1.3 s
-  schneller Rückschwenk (0.8 s) zur Karte mit rot pulsierendem GAME OVER;
+  schneller Rückschwenk (0.8 s) zur Karte mit GAME OVER (pulsiert in der
+  FARBE rot↔weiß bei voller Deckkraft — Helligkeits-Pulsieren wirkte über
+  den Linien „durchgestrichen", sagt Boris); S/G-Marker skalieren mit der
+  projizierten Gangbreite (`drawFaceMarker`, sonst passen sie bei n=35
+  nicht ins Raster);
   Q dort = Retry (gleiche Maze, `game.resume` bleibt false → frischer Fall zum
   Start, Feinde neu). SHOOTING (`world/shots.js`): Space-Dauerfeuer, Tempest-
   Regel max 8 unterwegs, Projektile = weiße rotierende Sterne (Billboard),

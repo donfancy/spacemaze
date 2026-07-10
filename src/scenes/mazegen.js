@@ -10,12 +10,12 @@ import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
 import { growthOutline } from '../world/mazeGeometry.js';
 import {
-  SIDE_FACES, faceDockPose, mapGridToFace, mapSegmentsToFace, gridBorderOnFace,
+  SIDE_FACES, faceDockPose, mapSegmentsToFace, gridBorderOnFace,
 } from '../world/cubeFaces.js';
 import { randomSeed } from '../util/rng.js';
 import { levelConfig } from '../core/levels.js';
 import { gnawPatch } from '../sound/patches.js';
-import { drawCompassLabels } from './mazeView.js';
+import { drawCompassLabels, drawFaceMarker } from './mazeView.js';
 
 const CUBE_SIZE = 2.4;
 
@@ -41,22 +41,6 @@ export function createMazeGen(game) {
     camera.position = dock.position;
     camera.yaw = dock.yaw;
     camera.pitch = dock.pitch;
-  }
-
-  // Buchstaben-Marker an einer Zellmitte (3D-Position -> 2D-Bildposition).
-  function drawMarker(renderer, cell, label, intensity) {
-    if (intensity <= 0) return;
-    const world = mapGridToFace(cell[0] + 0.5, cell[1] + 0.5, maze.n, CUBE_SIZE, face, maze.metric);
-    const screen = renderer.worldToScreen(world, camera);
-    if (!screen) return;
-    renderer.drawText(label, {
-      x: screen.x,
-      y: screen.y,
-      size: Math.max(12, renderer.height * 0.04),
-      align: 'center',
-      baseline: 'middle',
-      intensity,
-    });
   }
 
   return {
@@ -102,10 +86,13 @@ export function createMazeGen(game) {
         renderer.renderScene({ segments: world }, camera);
       }
 
-      // 3) S/G-Marker und Himmelsrichtungen blenden zu Beginn ein.
+      // 3) S/G-Marker (Groesse folgt der Zellgroesse, siehe mazeView) und
+      // Himmelsrichtungen blenden zu Beginn ein.
       const markerFade = clamp01(t / MARKER_TIME);
-      drawMarker(renderer, maze.start, 'S', markerFade);
-      drawMarker(renderer, maze.goal, 'G', markerFade);
+      if (markerFade > 0) {
+        drawFaceMarker(renderer, maze.start, 'S', face, maze, camera, markerFade);
+        drawFaceMarker(renderer, maze.goal, 'G', face, maze, camera, markerFade);
+      }
       drawCompassLabels(renderer, maze, face, camera, markerFade);
     },
   };

@@ -67,13 +67,17 @@ export function createMap(game) {
       });
       drawMapOverlay(renderer, maze, face, camera, game.trail, fade, 1); // Rahmen bleibt
 
-      // Nach der Feindberuehrung: GAME OVER pulsiert rot ueber der Karte.
+      // Nach der Feindberuehrung: GAME OVER pulsiert in der FARBE zwischen
+      // Feind-Rot und Weiss, bei voller Deckkraft -- blosses Helligkeits-
+      // Pulsieren wirkte ueber den Labyrinth-Linien wie durchgestrichen.
       if (game.gameOver && fade > 0.01) {
+        const k = 0.5 + 0.5 * Math.sin(2 * Math.PI * 1.2 * t); // 0=rot, 1=weiss
+        const ch = (v) => Math.round(v + (255 - v) * k).toString(16).padStart(2, '0');
         renderer.drawText('GAME OVER', {
           x: renderer.width / 2, y: renderer.height * 0.16,
           size: Math.min(52, renderer.height * 0.08),
-          align: 'center', baseline: 'middle', color: '#ff3b30',
-          intensity: fade * (0.7 + 0.3 * Math.sin(2 * Math.PI * 1.2 * t)),
+          align: 'center', baseline: 'middle',
+          color: `#ff${ch(0x3b)}${ch(0x30)}`, intensity: fade,
         });
       }
 
