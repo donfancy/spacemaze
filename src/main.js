@@ -33,7 +33,7 @@ window.addEventListener('keydown', (e) => {
   if (key === 'M') audio.toggleMuted(); // globaler Stumm-Schalter
   game.keys.add(key);          // gehaltene Taste (kontinuierliche Steuerung)
   game.handleKey(key);         // diskrete Aktion (S, Q, ...)
-  if (key.startsWith('Arrow')) e.preventDefault(); // kein Seiten-Scrollen
+  if (key.startsWith('Arrow') || key === ' ') e.preventDefault(); // kein Seiten-Scrollen (Pfeile, Space = Feuer)
 });
 
 window.addEventListener('keyup', (e) => {

@@ -7,6 +7,10 @@
 // Zeichnet den abgelaufenen Weg auf (game.trail) und merkt die Spielerlage
 // (game.playerState) fuer den Rueckschwenk. Q -> zurueck zur Karte; am Ziel
 // loest der Rueckschwenk nach 20 s automatisch aus.
+// Ab Level 11 (Level-Eigenschaften `enemies`/`shoot`): rote Rauten-Feinde
+// (world/enemies.js), Schiessen mit Space (world/shots.js, Tempest-Regel,
+// Fadenkreuz mit Lenk-Ausschlag); Feindberuehrung = krachende Explosion und
+// Game Over -> Karte (Q dort: Level-Neustart).
 
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
@@ -15,7 +19,14 @@ import { generateMaze } from '../world/maze.js';
 import { cellCenter, startFacingYaw, wallFootprints } from '../world/mazeWorld.js';
 import { DRIVE, createDriveState, driveStep } from '../world/drive.js';
 import { WALK, createWalkState, walkStep } from '../world/walk.js';
-import { bumpPatch, sizzlePatch, fanfarePatch, engineParams } from '../sound/patches.js';
+import { ENEMY, createEnemies, enemiesStep, enemyHit, enemySegments } from '../world/enemies.js';
+import { createShotsState, aimYaw, fireShot, shotsStep, shotSegments } from '../world/shots.js';
+import { burstSegments } from '../world/burst.js';
+import { createRng } from '../util/rng.js';
+import {
+  bumpPatch, sizzlePatch, fanfarePatch, engineParams,
+  shotPatch, poofPatch, boomPatch, crashPatch,
+} from '../sound/patches.js';
 import {
   goalZone, inGoalZone, goalMarkerSegments, goalBeamFeet, beamFlicker, beamOcclusionCut,
 } from '../world/goal.js';
@@ -23,10 +34,10 @@ import { collisionWave, waveSegments } from '../world/waves.js';
 import { recordTrailPoint } from '../world/trail.js';
 import { compassLayout } from '../render/compass.js';
 import { swayTransform } from '../render/sway.js';
-import { SIDE_FACES } from '../world/cubeFaces.js';
+import { SIDE_FACES, faceLocalToWorld } from '../world/cubeFaces.js';
 import { levelConfig } from '../core/levels.js';
 import {
-  WALL_RATIO, EYE_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, unitSize,
+  CUBE_SIZE, WALL_RATIO, EYE_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, unitSize,
   faceWalls, faceFootprints, faceSegments, renderFaceWalls, renderFaceOverlay, egoPose,
 } from './mazeView.js';
 
@@ -80,6 +91,17 @@ const FLASH_COLOR = '#ffffff';
 const FLASH_GLOW = 16;        // Glow des Blitzes (Standard: 8)
 const BRAKE_HOLD = 0.2;       // s Stillstand nach dem Bremsen (Q), bevor es abhebt
 
+// Kampf-Levels (ab Level 11): Feinde, Schiessen, Game Over.
+const ENEMY_COLOR = '#ff3b30';   // Feind-Rot (Rauten, Abschuss-Splitter)
+const SHOT_COLOR = '#ffffff';    // Projektile und Verpuffen
+const ENEMY_GLOW = 12;           // Rauten gluehen etwas staerker (Gefahr)
+const ENEMY_OCC_DIM = 0.25;      // verdeckte Rauten schimmern durch die Wand
+const CRASH_TIME = 1.3;          // s: Explosion austoben lassen, dann zur Karte
+const CRASH_SHAKE_ROLL = 3.0;    // rad/s Roll-Impuls des Crashs
+const CRASH_SHAKE_PITCH = 1.8;   // rad/s Nick-Impuls des Crashs
+const CROSSHAIR_DIST = 2.5;      // Fadenkreuz-Ankerpunkt (Gangbreiten voraus)
+const CROSSHAIR_SIZE = 0.12;     // Fadenkreuz-Radius (Gangbreiten, projiziert)
+
 export function createPlaying(game) {
   const camera = createCamera({ fov: Math.PI / 2.4 });
 
@@ -111,6 +133,44 @@ export function createPlaying(game) {
   let brakeHold = 0;    // s Stillstand vor dem Abheben (kurzer Beat)
   const rollOsc = createOscillator({ freq: 5, damping: 0.22 });
   const pitchOsc = createOscillator({ freq: 8, damping: 0.3 });
+
+  // Kampf-Levels (ab Level 11).
+  let shoot = false;      // Level-Eigenschaft: Space feuert
+  let enemies = [];       // rote Rauten (liegen auf game.enemies, s. enter())
+  let shotsState = null;  // Tempest-Schuesse (world/shots.js)
+  let bursts = [];        // aktive Splitter-Explosionen (Verpuffen/Abschuss/Crash)
+  let crash = false;      // Feindberuehrung: Explosion laeuft, dann Game Over
+  let crashT = 0;
+
+  // Feindberuehrung: krachende Explosion, dann schleudert es den Spieler
+  // hinaus in die Kartenansicht (update() dispatcht nach CRASH_TIME).
+  function startCrash(enemy) {
+    crash = true;
+    crashT = 0;
+    game.gameOver = true; // Karte zeigt GAME OVER, Q startet den Level neu
+    enemy.alive = false;  // die getroffene Raute geht in der Explosion auf
+    game.audio?.engine(null);
+    game.audio?.play(crashPatch());
+    const h = EYE_RATIO * cell;
+    bursts.push(
+      { born: sceneT, center: [enemy.x, h, enemy.z], seed: 11, count: 24, speed: 3.5 * cell, life: 1.2, size: 0.16 * cell, color: ENEMY_COLOR },
+      { born: sceneT, center: [enemy.x, h, enemy.z], seed: 47, count: 16, speed: 2.5 * cell, life: 0.9, size: 0.12 * cell, color: SHOT_COLOR },
+    );
+    rollOsc.kick(CRASH_SHAKE_ROLL);
+    pitchOsc.kick(CRASH_SHAKE_PITCH);
+  }
+
+  // Projektil-Ereignis (aus shotsStep): Verpuffen an der Wand oder Feind-Abschuss.
+  function spawnShotEvent(ev) {
+    const h = EYE_RATIO * cell;
+    if (ev.type === 'wall') {
+      game.audio?.play(poofPatch());
+      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 1, count: 8, speed: 1.2 * cell, life: 0.35, size: 0.07 * cell, color: SHOT_COLOR });
+    } else {
+      game.audio?.play(boomPatch());
+      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: ENEMY_COLOR });
+    }
+  }
 
   function recordState() {
     game.playerState = { px, pz, yaw };
@@ -174,7 +234,9 @@ export function createPlaying(game) {
       goalRect = goalZone(maze, unit, goalInset);
       goalSegs = faceSegments(goalMarkerSegments(goalRect), face);
       localFoot = wallFootprints(maze, { unit });
-      drive = !!levelConfig(game.level)?.drive;
+      const cfg = levelConfig(game.level);
+      drive = !!cfg?.drive;
+      shoot = !!cfg?.shoot;
       driveState = createDriveState(); // vel 0: nach dem Reinfallen faehrt man mit der Rampe los
       walkState = createWalkState();   // ebenso zu Fuss: Anfahren ueber die Rampe
       bank = 0;
@@ -184,6 +246,26 @@ export function createPlaying(game) {
       brakeHold = 0;
       rollOsc.reset();
       pitchOsc.reset();
+
+      // Feinde: gehoeren zum Labyrinth-Durchlauf (game.enemies) -- bei
+      // Fortsetzung von der Karte bleiben sie (samt Abschuessen) erhalten,
+      // ein frischer Anlauf (auch Retry nach Game Over) wuerfelt sie neu.
+      // Deterministisch aus dem Maze-Seed -> headless reproduzierbar.
+      if (cfg?.enemies) {
+        if (!game.resume || !game.enemies) {
+          game.enemies = createEnemies(maze, cfg.enemies, {
+            unit, cell, rng: createRng((maze.seed ^ 0x5bd1e995) >>> 0),
+          });
+        }
+      } else {
+        game.enemies = null;
+      }
+      enemies = game.enemies ?? [];
+      shotsState = createShotsState();
+      bursts = [];
+      crash = false;
+      crashT = 0;
+      game.gameOver = false;
       if (game.resume && game.playerState) {
         // Fortsetzung von der Karte: Lage und abgelaufener Weg bleiben erhalten.
         ({ px, pz, yaw } = game.playerState);
@@ -211,6 +293,19 @@ export function createPlaying(game) {
 
     update(dt) {
       sceneT += dt;
+
+      // Nach der Feindberuehrung: Steuerung eingefroren, nur die Explosion
+      // und das Nachschwingen laufen noch -- dann hinaus zur Karte.
+      if (crash) {
+        crashT += dt;
+        rollOsc.step(dt);
+        pitchOsc.step(dt);
+        waves = waves.filter((w) => sceneT - w.born < WAVE_LIFE);
+        bursts = bursts.filter((b) => sceneT - b.born < b.life);
+        if (crashT >= CRASH_TIME) game.dispatch(GameEvent.EXIT, { fade: false });
+        return;
+      }
+
       const keys = game.keys;
       const left = keys.has('ArrowLeft') || keys.has('A');
       const right = keys.has('ArrowRight') || keys.has('D');
@@ -244,6 +339,30 @@ export function createPlaying(game) {
       // Weg praezise aufzeichnen: echte Position, gerade Strecken zusammengefasst.
       recordTrailPoint(game.trail, px, pz, { minDist: TRAIL_DIST_RATIO * cell });
       recordState();
+
+      // Feinde: pulsieren/patrouillieren; Beruehrung einer Raute = Game Over.
+      if (enemies.length) {
+        enemiesStep(enemies, dt);
+        const hit = enemyHit(enemies, px, pz, (RADIUS_RATIO + ENEMY.hitRadius) * cell);
+        if (hit && !reached) {
+          startCrash(hit);
+          return;
+        }
+      }
+
+      // Schiessen: Space als Dauerfeuer, Tempest-Regel (max 8 unterwegs).
+      // Zielrichtung = Blick + Lenk-Ausschlag zum Abschusszeitpunkt.
+      if (shoot) {
+        const steer = drive ? driveState.steer : walkState.steer;
+        if (keys.has(' ') && !reached && fireShot(shotsState, { px, pz, yaw }, steer)) {
+          game.audio?.play(shotPatch());
+        }
+        const events = shotsStep(maze, shotsState, dt, {
+          unit, cell, enemies, enemyRadius: ENEMY.shotRadius * cell,
+        });
+        for (const ev of events) spawnShotEvent(ev);
+      }
+      bursts = bursts.filter((b) => sceneT - b.born < b.life);
 
       // Streng: die Kante des Zielfelds reicht nicht, man muss mindestens
       // GOAL_INSET_RATIO der Feldgroesse "drinnen" stehen (= das Boden-Quadrat).
@@ -337,6 +456,63 @@ export function createPlaying(game) {
           renderer.renderScene({ segments, intensity: whiteness }, camera, { near, color: FLASH_COLOR, glow: FLASH_GLOW });
         }
       }
+
+      // Feinde: rote pulsierende Rauten, mit derselben Hidden-Line-Dimmung
+      // wie die Waende -- verdeckt schimmern sie staerker durch als normale
+      // Kanten (man ahnt die Gefahr hinterm Eck).
+      const aliveEnemies = enemies.filter((e) => e.alive);
+      if (aliveEnemies.length) {
+        const segs = [];
+        for (const e of aliveEnemies) {
+          segs.push(...enemySegments(e, sceneT, { cell, px, pz, height: EYE_RATIO * cell }));
+        }
+        renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
+          intensity: 0.95, dim: ENEMY_OCC_DIM, color: ENEMY_COLOR, glow: ENEMY_GLOW,
+        });
+      }
+
+      // Projektile: weisse rotierende Sterne. Keine Verdeckung noetig -- sie
+      // fliegen im eigenen Sichtgang und verpuffen an der ersten Wand.
+      if (shotsState && shotsState.shots.length) {
+        const segs = [];
+        for (const s of shotsState.shots) {
+          segs.push(...shotSegments(s, sceneT, { cell, yaw, height: EYE_RATIO * cell }));
+        }
+        renderer.renderScene({ segments: faceSegments(segs, face) }, camera,
+          { near: NEAR_RATIO * cell, color: SHOT_COLOR, glow: 10 });
+      }
+
+      // Splitter-Explosionen (Verpuffen, Feind-Abschuss, Crash).
+      for (const b of bursts) {
+        const geo = burstSegments(sceneT - b.born, b);
+        if (!geo) continue;
+        renderer.renderScene({ segments: faceSegments(geo.segments, face), intensity: geo.fade },
+          camera, { near: NEAR_RATIO * cell, color: b.color, glow: 10 });
+      }
+
+      // Fadenkreuz: zeigt die aktuelle ZIELRICHTUNG der Projektile -- bei
+      // Geradeausflug exakt die Blickrichtung, beim Lenken schlaegt es weiter
+      // aus als die Flugbahn (aimYaw). Innerhalb des Sway gezeichnet, es
+      // haengt am Schiff, nicht am Bildschirm.
+      if (shoot && !crash && !reached) {
+        const aim = aimYaw(yaw, drive ? driveState.steer : walkState.steer);
+        const d = CROSSHAIR_DIST * cell;
+        const anchor = renderer.worldToScreen(
+          faceLocalToWorld(px - Math.sin(aim) * d, EYE_RATIO * cell, pz - Math.cos(aim) * d, face, CUBE_SIZE), camera);
+        const above = renderer.worldToScreen(
+          faceLocalToWorld(px - Math.sin(aim) * d, (EYE_RATIO + CROSSHAIR_SIZE) * cell, pz - Math.cos(aim) * d, face, CUBE_SIZE), camera);
+        if (anchor && above) {
+          // Groesse aus der Projektion -- das Fadenkreuz atmet mit der Perspektive.
+          const r = Math.max(6, Math.hypot(above.x - anchor.x, above.y - anchor.y));
+          const g = r * 0.4; // Luecke in der Mitte
+          renderer.drawPolylines([
+            [[anchor.x, anchor.y - r], [anchor.x, anchor.y - g]],
+            [[anchor.x, anchor.y + g], [anchor.x, anchor.y + r]],
+            [[anchor.x - r, anchor.y], [anchor.x - g, anchor.y]],
+            [[anchor.x + g, anchor.y], [anchor.x + r, anchor.y]],
+          ], { intensity: 0.85, lineWidth: 1.5 });
+        }
+      }
       if (drive) renderer.popSway();
 
       const w = renderer.width;
@@ -345,7 +521,9 @@ export function createPlaying(game) {
         x: 24, y: 24, size: Math.min(20, h * 0.03),
         align: 'left', baseline: 'top', intensity: 0.7,
       });
-      renderer.drawText(drive ? 'LEFT/RIGHT STEER - Q MAP' : 'ARROWS MOVE - Q MAP', {
+      const hint = shoot ? 'LEFT/RIGHT STEER - SPACE FIRE - Q MAP'
+        : drive ? 'LEFT/RIGHT STEER - Q MAP' : 'ARROWS MOVE - Q MAP';
+      renderer.drawText(hint, {
         x: w - 24, y: h - 20, size: 13,
         align: 'right', baseline: 'bottom', intensity: 0.5,
       });
@@ -369,7 +547,7 @@ export function createPlaying(game) {
     },
 
     onKey(key) {
-      if (key !== 'Q') return;
+      if (key !== 'Q' || crash) return; // waehrend der Explosion kein Abheben mehr
       if (drive && !reached) {
         braking = true; // Fahrt-Modus: erst abbremsen, updateDrive hebt dann ab
       } else {

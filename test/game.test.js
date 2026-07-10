@@ -125,7 +125,7 @@ test('Zustands-Zyklus direkt via dispatch (ohne Andocken)', () => {
   assert.equal(g.stateKey, State.STARTSCREEN);
 });
 
-test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..10', () => {
+test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..15', () => {
   const g = new Game();
   assert.equal(g.level, 1);
 
@@ -137,9 +137,57 @@ test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..10', () => {
   assert.equal(g.level, 3);
 
   for (let i = 0; i < 20; i++) g.handleKey('ArrowUp'); // oben begrenzt
-  assert.equal(g.level, 10);
+  assert.equal(g.level, 15);
   g.handleKey('ArrowLeft');
-  assert.equal(g.level, 9);
+  assert.equal(g.level, 14);
+});
+
+test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+  for (let i = 0; i < 10; i++) g.handleKey('ArrowUp'); // Level 11
+  assert.equal(g.level, 11);
+
+  g.dispatch(GameEvent.START);
+  advance(g, r, 0.8);
+  assert.equal(g.stateKey, State.MAZE_GEN);
+  advance(g, r, 4.5); // MazeGen -> Falling
+  advance(g, r, 2.0); // Falling -> Playing
+  assert.equal(g.stateKey, State.PLAYING);
+
+  // Feinde stehen: Level 11 hat 6 Rauten, alle lebendig.
+  assert.equal(g.enemies.length, 6);
+  assert.ok(g.enemies.every((e) => e.alive));
+
+  // Space-Dauerfeuer laeuft ohne Fehler mit (Tempest-Logik ist unit-getestet).
+  g.keys.add(' ');
+  advance(g, r, 0.3);
+  g.keys.delete(' ');
+
+  // Feindberuehrung erzwingen: eine Raute auf die Spielerposition setzen.
+  const victim = g.enemies[1];
+  victim.x = g.playerState.px;
+  victim.z = g.playerState.pz;
+  advance(g, r, 0.1);
+  assert.equal(g.gameOver, true, 'Crash setzt Game Over');
+  assert.equal(victim.alive, false, 'die getroffene Raute zerplatzt');
+  assert.equal(g.stateKey, State.PLAYING, 'die Explosion tobt noch');
+
+  advance(g, r, 1.4); // Crash ausgetobt -> hinausgeschleudert
+  assert.equal(g.stateKey, State.RISING);
+  advance(g, r, 1.0); // schneller Crash-Schwenk (0.8s statt 1.7s)
+  assert.equal(g.stateKey, State.MAP);
+  assert.equal(g.gameOver, true, 'Karte zeigt GAME OVER');
+
+  // Q auf der Karte: Retry -- frischer Fall zum Start, Feinde neu aufgestellt.
+  g.handleKey('Q');
+  assert.equal(g.stateKey, State.FALLING);
+  assert.equal(g.resume, false, 'Retry ist KEINE Fortsetzung (zurueck auf S)');
+  advance(g, r, 2.0);
+  assert.equal(g.stateKey, State.PLAYING);
+  assert.equal(g.gameOver, false);
+  assert.equal(g.enemies.length, 6);
+  assert.ok(g.enemies.every((e) => e.alive), 'alle Rauten leben wieder');
 });
 
 test('gewaehltes Level bestimmt die Maze-Groesse (Level 3 -> n=13)', () => {

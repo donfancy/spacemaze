@@ -67,9 +67,20 @@ export function createMap(game) {
       });
       drawMapOverlay(renderer, maze, face, camera, game.trail, fade, 1); // Rahmen bleibt
 
+      // Nach der Feindberuehrung: GAME OVER pulsiert rot ueber der Karte.
+      if (game.gameOver && fade > 0.01) {
+        renderer.drawText('GAME OVER', {
+          x: renderer.width / 2, y: renderer.height * 0.16,
+          size: Math.min(52, renderer.height * 0.08),
+          align: 'center', baseline: 'middle', color: '#ff3b30',
+          intensity: fade * (0.7 + 0.3 * Math.sin(2 * Math.PI * 1.2 * t)),
+        });
+      }
+
       // Klein unten rechts (wie die Steuerungszeile in der Ego-Ansicht).
       if (fade > 0.01) {
-        renderer.drawText(game.reachedGoal ? 'X EXIT' : 'Q RETURN  X EXIT', {
+        const hint = game.reachedGoal ? 'X EXIT' : game.gameOver ? 'Q RETRY  X EXIT' : 'Q RETURN  X EXIT';
+        renderer.drawText(hint, {
           x: renderer.width - 24, y: renderer.height - 20, size: 13,
           align: 'right', baseline: 'bottom', intensity: 0.5 * fade,
         });
@@ -79,8 +90,10 @@ export function createMap(game) {
     onKey(key) {
       if (exiting) return; // waehrend des Ausblendens keine Eingaben mehr
       if (key === 'Q' && !game.reachedGoal) {
-        // Weiterspielen: nahtlos zurueck ins Labyrinth fallen (gleiche Kamera-Pose).
-        game.resume = true;
+        // Weiterspielen: nahtlos zurueck ins Labyrinth fallen -- zur gemerkten
+        // Spielerlage; nach Game Over dagegen frischer Versuch vom Start
+        // (gleiche Maze, Weg und Feinde werden in Playing neu aufgesetzt).
+        game.resume = !game.gameOver;
         if (!game.dispatch(GameEvent.RESUME, { fade: false })) game.resume = false;
       } else if (key === 'X') {
         beginExit(); // Karte abblenden, dann -> Startscreen (Abdock-Flug)

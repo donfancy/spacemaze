@@ -4,7 +4,11 @@
 // (Waende so breit wie Gaenge), mit wall=1/corridor=5 schmale Waende.
 // `drive` (optional) schaltet die Fahr-Dynamik ein (world/drive.js): auto-
 // matischer Vortrieb, nur lenken, Abprall mit Wellen und Kamera-Schwingung.
-// Weitere Eigenschaften (Gegner, Zeitlimit, ...) kommen spaeter als Felder dazu.
+// Ab Level 11 (Kampf-Levels):
+//   `straight` (0..1)  Geradeaus-Bias des Generators (laengere Gangstuecke)
+//   `shoot`            Space feuert Projektile (world/shots.js, Tempest-Regel)
+//   `enemies`          { count, patrol }: Anzahl roter Rauten (world/enemies.js)
+//                      und Anteil davon, der im Gang patrouilliert (0..1)
 
 const THIN = { wall: 1, corridor: 5 }; // schmale Waende (ab Level 6)
 
@@ -19,6 +23,12 @@ export const LEVELS = [
   { n: 21, metric: THIN, drive: true }, // Level 8
   { n: 23, metric: THIN, drive: true }, // Level 9
   { n: 25, metric: THIN, drive: true }, // Level 10
+  // Level 11+: groesser, laengere Geraden, rote Rauten-Feinde + Schiessen.
+  { n: 27, metric: THIN, drive: true, straight: 0.6, shoot: true, enemies: { count: 6, patrol: 0 } },    // Level 11
+  { n: 29, metric: THIN, drive: true, straight: 0.6, shoot: true, enemies: { count: 8, patrol: 0 } },    // Level 12
+  { n: 31, metric: THIN, drive: true, straight: 0.6, shoot: true, enemies: { count: 10, patrol: 0.4 } }, // Level 13
+  { n: 33, metric: THIN, drive: true, straight: 0.6, shoot: true, enemies: { count: 12, patrol: 0.7 } }, // Level 14
+  { n: 35, metric: THIN, drive: true, straight: 0.6, shoot: true, enemies: { count: 14, patrol: 1 } },   // Level 15
 ];
 
 export const MIN_LEVEL = 1;

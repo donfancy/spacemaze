@@ -28,6 +28,8 @@ export class Game {
     this.resume = false;     // Q auf der Karte: naechstes Reinfallen kehrt zur Spielerlage zurueck
     this.undock = false;     // X auf der Karte: Startscreen beginnt mit dem Abdock-Flug
     this.reachedGoal = false; // Ziel erreicht? (steuert Q/X-Angebot auf der Karte)
+    this.enemies = null;      // Feinde des Levels (ab 11), von Playing verwaltet -- bleiben ueber Karte/Resume erhalten
+    this.gameOver = false;    // Feindberuehrung: Karte zeigt GAME OVER, Q startet den Level neu
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.
     this.scenes = {

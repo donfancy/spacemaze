@@ -64,10 +64,12 @@ export function createMazeGen(game) {
       t = 0;
       gnawing = false;
       const cfg = levelConfig(game.level);
-      maze = generateMaze(cfg.n, { seed: randomSeed(), metric: cfg.metric });
+      maze = generateMaze(cfg.n, { seed: randomSeed(), metric: cfg.metric, straight: cfg.straight });
       game.maze = maze; // an Playing weiterreichen
       game.resume = false; // frisches Labyrinth: keine Fortsetzung, Ziel offen
       game.reachedGoal = false;
+      game.gameOver = false;
+      game.enemies = null; // Feinde gehoeren zum Labyrinth -> Playing erzeugt neue
       face = game.dockFace ?? SIDE_FACES[0]; // Fallback, falls ohne Andocken erreicht
       border = gridBorderOnFace(maze.n, CUBE_SIZE, face);
       applyDock();

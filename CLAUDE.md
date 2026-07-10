@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 223 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 247 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -46,8 +46,10 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   `game.resume`); X (oder 5 min) → Karte blendet aus (Rahmen bleibt), dann
   Abdock-Flug zurück in den Orbit (`game.undock`, Startscreen-Phase `undocking`,
   `orbitTimeFacing`) — symmetrisch zum Andocken.
-- Levels 1–10 in `src/core/levels.js` (reine Daten): n = 9/11/13/15/17 (Blockwelt,
-  Tank-Steuerung) und 17/19/21/23/25 (Level 6–10: schmale Wände + Fahrt);
+- Levels 1–15 in `src/core/levels.js` (reine Daten): n = 9/11/13/15/17 (Blockwelt,
+  Tank-Steuerung), 17/19/21/23/25 (Level 6–10: schmale Wände + Fahrt) und
+  27/29/31/33/35 (Level 11–15: Kampf — `straight` 0.6 = Geradeaus-Bias des
+  Generators, `shoot`, `enemies {count, patrol}`);
   `game.level` hält die Auswahl, MazeGen liest daraus. Ab Level 6 SCHMALE WÄNDE:
   gleiche Maze-Topologie, aber `world/metric.js` streckt die Achsen ungleich
   (gerade Zellen = Wände 1 Einheit, ungerade = Gänge 5). Grid↔Welt geht überall
@@ -101,8 +103,24 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Schwenks (Reinfallen/Rückschwenk) interpolieren die Orientierung per
   Quaternion-Slerp (`math/quat.js`, `blendPose` in `mazeView.js`) — getrenntes
   forward/up-Lerp kippt um, wenn beide antiparallel werden (Ego-Blick „Süd“).
-- Nächste mögliche Themen (Boris, 9.7.2026): was die höheren Levels bringen —
-  „ein paar Farben" und SHOOTING; dazu weiter: echter "Trench Run", Politur.
+- KAMPF-LEVELS 11–15 (10.7.2026, umgesetzt): rote pulsierende Rauten-Feinde
+  (`world/enemies.js`: ~Hälfte auf dem Lösungsweg mit Schutzzone um S/G, Rest
+  zufällig; `patrol`-Anteil pendelt im Gang; Rauten als Segmente durch die
+  normale Hidden-Line-Pipeline via `renderFaceOverlay` mit `color`, verdeckt
+  0.25 statt 0.1 — man ahnt sie hinterm Eck). Berührung = Crash: Explosion
+  (`world/burst.js`, deterministische Splitter), `crashPatch`, nach 1.3 s
+  schneller Rückschwenk (0.8 s) zur Karte mit rot pulsierendem GAME OVER;
+  Q dort = Retry (gleiche Maze, `game.resume` bleibt false → frischer Fall zum
+  Start, Feinde neu). SHOOTING (`world/shots.js`): Space-Dauerfeuer, Tempest-
+  Regel max 8 unterwegs, Projektile = weiße rotierende Sterne (Billboard),
+  verpuffen an Wänden (Substeps gegen Tunneln durch 1-Einheit-Wände!),
+  Zielrichtung `aimYaw = yaw + steer*deflect` — das Fadenkreuz nutzt die
+  GERAMPTE Lenkgröße und schlägt dadurch weich weiter aus als die Flugbahn.
+  Feinde leben auf `game.enemies` (Resume behält Abschüsse, Retry/neues Maze
+  würfelt neu, deterministisch aus maze.seed). Space braucht preventDefault
+  (main.js). Feind-Farbe #ff3b30, Schüsse weiß.
+- Nächste mögliche Themen: mehr Farben in den hohen Levels, echter
+  "Trench Run", Politur; evtl. Feinde auf der Karte zeigen, Score/HUD.
   Aufgeschobene (Performance-)Ideen mit Messwerten: siehe IDEAS.md.
 - Performance-Basics sind drin: kollineare Wandzüge werden zusammengefasst
   (`mergeCollinear` — Unter-/Oberkanten lang, Pfosten bleiben an jeder

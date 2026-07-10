@@ -60,9 +60,12 @@ export function chambersInQuadrant(n, q) {
   return result;
 }
 
-// Erzeugt ein Labyrinth. options: { seed?, rng?, metric? }.
+// Erzeugt ein Labyrinth. options: { seed?, rng?, metric?, straight? }.
 // `metric` ({ wall, corridor }) bestimmt nur die DARSTELLUNGS-Breiten der Zellen
 // (siehe world/metric.js) -- die Labyrinth-Struktur selbst ist davon unabhaengig.
+// `straight` (0..1, Standard 0) ist ein Geradeaus-Bias beim Graben: mit dieser
+// Wahrscheinlichkeit graebt der Backtracker in der Richtung weiter, aus der er
+// kam (falls frei) -- das erzeugt laengere gerade Gangstuecke (Fahr-Levels).
 // Rueckgabe: { n, grid (grid[y][x] = WALL|OPEN), start:[x,y], goal:[x,y], seed, metric }.
 export function generateMaze(n = 11, options = {}) {
   if (!Number.isInteger(n) || n % 2 === 0) {
@@ -93,7 +96,7 @@ export function generateMaze(n = 11, options = {}) {
 
   // Recursive Backtracker (iterativ mit Stack) ueber die Kammern. Liefert die
   // Reihenfolge, in der Zellen begehbar werden (fuer die Wachstums-Animation).
-  const order = carve(grid, n, start, goal, rng);
+  const order = carve(grid, n, start, goal, rng, options.straight ?? 0);
 
   return { n, grid, start, goal, seed, order, metric: createMetric(options.metric) };
 }
@@ -101,8 +104,9 @@ export function generateMaze(n = 11, options = {}) {
 // Hoehlt die Zwischenwaende aus, bis ein Spannbaum ueber alle Kammern entsteht.
 // Liefert `order`: alle offen werdenden Zellen in der Reihenfolge ihrer Oeffnung
 // (Start zuerst, dann je Schritt Zwischenwand und neue Kammer). Grundlage der
-// "Reinfress"-Animation.
-function carve(grid, n, start, goal, rng) {
+// "Reinfress"-Animation. `straight` (0..1): Wahrscheinlichkeit, die Grab-
+// Richtung beizubehalten, wenn geradeaus frei ist (laengere Gaenge).
+function carve(grid, n, start, goal, rng, straight = 0) {
   const key = (x, y) => x + ',' + y;
   const goalKey = key(goal[0], goal[1]);
   const visited = new Set([key(start[0], start[1])]);
@@ -117,10 +121,12 @@ function carve(grid, n, start, goal, rng) {
   grid[swy][swx] = OPEN;
   order.push([swx, swy], [fx, fy]); // Zwischenwand, dann erste Nachbarkammer
   visited.add(key(fx, fy));
-  const stack = [[fx, fy]];
+  // Stack-Eintraege merken sich die Richtung, aus der die Kammer betreten
+  // wurde -- Grundlage fuer den Geradeaus-Bias.
+  const stack = [[fx, fy, fdx, fdy]];
 
   while (stack.length > 0) {
-    const [cx, cy] = stack[stack.length - 1];
+    const [cx, cy, pdx, pdy] = stack[stack.length - 1];
     const candidates = neighborsOf([cx, cy], n).filter(([nx, ny]) => !visited.has(key(nx, ny)));
 
     if (candidates.length === 0) {
@@ -128,7 +134,15 @@ function carve(grid, n, start, goal, rng) {
       continue;
     }
 
-    const [nx, ny, dx, dy] = candidates[randInt(rng, candidates.length)];
+    // Geradeaus-Bias: mit Wahrscheinlichkeit `straight` in der Eintritts-
+    // Richtung weitergraben, wenn dort frei ist -- sonst gleichverteilt.
+    let next = null;
+    if (straight > 0) {
+      const ahead = candidates.find(([, , dx, dy]) => dx === pdx && dy === pdy);
+      if (ahead && rng() < straight) next = ahead;
+    }
+    if (!next) next = candidates[randInt(rng, candidates.length)];
+    const [nx, ny, dx, dy] = next;
     // Zwischenwand zwischen aktueller und Nachbarkammer oeffnen.
     const wx = cx + dx / 2, wy = cy + dy / 2;
     grid[wy][wx] = OPEN;
@@ -139,7 +153,7 @@ function carve(grid, n, start, goal, rng) {
     // NICHT auf den Stack gelegt -> von G wird nie weitergegraben. So behaelt G
     // genau eine Verbindung und bleibt eine Sackgasse.
     if (key(nx, ny) !== goalKey) {
-      stack.push([nx, ny]);
+      stack.push([nx, ny, dx, dy]);
     }
   }
   return order;

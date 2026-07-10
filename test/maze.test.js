@@ -217,3 +217,50 @@ test('order enthaelt jede offene Zelle genau einmal, Start zuerst, Ziel enthalte
 test('order ist deterministisch fuer gleichen Seed', () => {
   assert.deepEqual(generateMaze(11, { seed: 123 }).order, generateMaze(11, { seed: 123 }).order);
 });
+
+// Anteil der Kammern, die GERADE durchlaufen werden (genau zwei offene
+// Verbindungen, die sich gegenueberliegen) -- Mass fuer lange Gangstuecke.
+function straightShare(straight) {
+  let straightCount = 0;
+  let total = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const m = generateMaze(15, { seed, straight });
+    for (let y = 1; y <= 13; y += 2) {
+      for (let x = 1; x <= 13; x += 2) {
+        total++;
+        const open = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+          .filter(([dx, dy]) => m.grid[y + dy][x + dx] === OPEN);
+        if (open.length === 2 && open[0][0] === -open[1][0] && open[0][1] === -open[1][1]) {
+          straightCount++;
+        }
+      }
+    }
+  }
+  return straightCount / total;
+}
+
+test('straight-Bias erzeugt deutlich mehr gerade Gangstuecke', () => {
+  const unbiased = straightShare(0);
+  const biased = straightShare(0.6);
+  assert.ok(biased > unbiased * 1.3,
+    `Bias wirkt nicht: ${biased.toFixed(3)} vs. ${unbiased.toFixed(3)} ohne`);
+});
+
+test('straight-Bias erhaelt das perfekte Labyrinth (Spannbaum, Sackgassen S/G)', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const m = generateMaze(15, { seed, straight: 0.6 });
+    const seen = reachable(m, m.start);
+    let chambers = 0;
+    let openWalls = 0;
+    for (let y = 0; y < 15; y++) {
+      for (let x = 0; x < 15; x++) {
+        if (isChamber(x, y) && seen.has(`${x},${y}`)) chambers++;
+        if (((x % 2) !== (y % 2)) && m.grid[y][x] === OPEN) openWalls++;
+      }
+    }
+    assert.equal(chambers, chamberCount(15), `seed ${seed}: nicht alle Kammern verbunden`);
+    assert.equal(openWalls, chamberCount(15) - 1, `seed ${seed}: kein Spannbaum`);
+    assert.equal(openLinks(m, m.start), 1, `seed ${seed}: S keine Sackgasse`);
+    assert.equal(openLinks(m, m.goal), 1, `seed ${seed}: G keine Sackgasse`);
+  }
+});

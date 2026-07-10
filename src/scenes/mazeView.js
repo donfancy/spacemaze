@@ -206,7 +206,8 @@ export function renderFaceWalls(renderer, walls, footprints, camera, pose, opts 
 // Zusatz-Segmente (Welt) mit derselben Hidden-Line-Verdeckung wie die Waende
 // rendern (view = Rueckgabe von renderFaceWalls). Verdeckte Stuecke werden auf
 // `dim` * intensity gedimmt statt weggelassen -- z.B. das Ziel-Leuchtfeuer,
-// das staerker durchscheinen darf als normale Kanten.
+// das staerker durchscheinen darf als normale Kanten. `color`/`glow` erlauben
+// andersfarbige Overlays (die roten Feind-Rauten).
 export function renderFaceOverlay(renderer, segments, camera, view, opts = {}) {
   if (!view) return;
   const intensity = opts.intensity ?? 1;
@@ -218,6 +219,6 @@ export function renderFaceOverlay(renderer, segments, camera, view, opts = {}) {
       (s.occluded ? hidden : visible).push([s.a, s.b]);
     }
   }
-  renderer.drawPolylines(hidden, { intensity: intensity * dim });
-  renderer.drawPolylines(visible, { intensity });
+  renderer.drawPolylines(hidden, { intensity: intensity * dim, color: opts.color, glow: opts.glow });
+  renderer.drawPolylines(visible, { intensity, color: opts.color, glow: opts.glow });
 }

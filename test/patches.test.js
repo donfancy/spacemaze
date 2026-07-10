@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, fallPatch, risePatch, gnawPatch, engineParams,
+  shotPatch, poofPatch, boomPatch, crashPatch,
 } from '../src/sound/patches.js';
 
 const EPS = 1e-9;
@@ -50,6 +51,40 @@ test('bump/sizzle/fanfare erfuellen die Patch-Invarianten', () => {
     checkPatch(fallPatch(dur), `fall(${dur})`);
     checkPatch(risePatch(dur), `rise(${dur})`);
     checkPatch(gnawPatch(dur), `gnaw(${dur})`);
+  }
+  checkPatch(shotPatch(), 'shot');
+  checkPatch(poofPatch(), 'poof');
+  checkPatch(boomPatch(), 'boom');
+  checkPatch(crashPatch(), 'crash');
+});
+
+test('Schuss kurz und leise, Verpuffen weich, Crash kracht am laengsten und lautesten', () => {
+  const shot = shotPatch();
+  assert.ok(shot.duration <= 0.15, 'Schuss ist knapp (Dauerfeuer 5/s)');
+  assert.ok(peakGain(shot) <= 0.2, 'Schuss bleibt leise');
+  const osc = shot.voices.find((v) => v.type === 'osc');
+  assert.ok(osc.freq[0][1] > osc.freq[osc.freq.length - 1][1] * 3, 'Pew: Gleitton faellt deutlich');
+
+  const poof = poofPatch();
+  assert.ok(poof.voices.every((v) => v.type === 'noise'), 'Verpuffen ist reines Rauschen');
+  assert.equal(poof.voices[0].filter.type, 'lowpass', 'weich, kein Zischen');
+  assert.ok(peakGain(poof) <= 0.2, 'Verpuffen bleibt leise');
+
+  const boom = boomPatch();
+  const crash = crashPatch();
+  // Steigerung: Abschuss kracht lauter als das Wand-Brutzeln, der Game-Over-
+  // Crash uebertrifft alles -- und trudelt am laengsten aus.
+  assert.ok(peakGain(boom) > peakGain(sizzlePatch(1)), 'Abschuss > Wand-Brutzeln');
+  assert.ok(peakGain(crash) > peakGain(boom), 'Crash ist der lauteste Knall');
+  assert.ok(crash.duration > 2 * boom.duration, 'Crash trudelt lange aus');
+  // Beide mit gezackter Rausch-Huellkurve (Truemmer-Wellen, kein glatter Puff).
+  for (const [p, name] of [[boom, 'boom'], [crash, 'crash']]) {
+    const noise = p.voices.find((v) => v.type === 'noise');
+    const vals = noise.gain.map(([, v]) => v);
+    assert.ok(vals.some((v, i) => i > 1 && v > vals[i - 1]), `${name}: Pegel zackt`);
+    // Tiefer Koerper: ein Oszillator faellt in den Keller.
+    const body = p.voices.find((v) => v.type === 'osc' && v.shape === 'sine');
+    assert.ok(body.freq[body.freq.length - 1][1] < 50, `${name}: Bass faellt in den Keller`);
   }
 });
 

@@ -135,6 +135,74 @@ export function gnawPatch(duration = 2.6) {
   };
 }
 
+// Schuss: kurzer "Pew"-Zap (fallender Rechteck-Gleitton + Hauch Hochpass-
+// Rauschen). Bewusst leise und knapp -- bei Dauerfeuer (5/s) darf er nicht nerven.
+export function shotPatch() {
+  return {
+    duration: 0.12,
+    voices: [
+      { type: 'osc', shape: 'square',
+        freq: [[0, 950], [0.1, 160]],
+        gain: [[0, 0], [0.005, 0.14], [0.05, 0.08], [0.12, 0]] },
+      { type: 'noise',
+        filter: { type: 'highpass', freq: [[0, 2500]] },
+        gain: [[0, 0], [0.004, 0.05], [0.05, 0]] },
+    ],
+  };
+}
+
+// Verpuffen eines Projektils an der Wand: weicher, kurzer Rausch-Puff.
+export function poofPatch() {
+  return {
+    duration: 0.18,
+    voices: [
+      { type: 'noise',
+        filter: { type: 'lowpass', freq: [[0, 1600], [0.15, 300]] },
+        gain: [[0, 0], [0.01, 0.12], [0.18, 0]] },
+    ],
+  };
+}
+
+// Feind-Abschuss: mittlerer Krach -- Rauschexplosion mit gezackter Huellkurve
+// (wie das Brutzeln, aber breiter), harter Rechteck-Schlag, dumpfer Koerper.
+export function boomPatch() {
+  return {
+    duration: 0.5,
+    voices: [
+      { type: 'noise',
+        filter: { type: 'lowpass', freq: [[0, 2400], [0.5, 150]] },
+        gain: [[0, 0], [0.008, 0.62], [0.08, 0.25], [0.12, 0.42], [0.3, 0.15], [0.5, 0]] },
+      { type: 'osc', shape: 'square',
+        freq: [[0, 180], [0.3, 35]],
+        gain: [[0, 0], [0.01, 0.25], [0.35, 0]] },
+      { type: 'osc', shape: 'sine',
+        freq: [[0, 100], [0.4, 45]],
+        gain: [[0, 0], [0.015, 0.3], [0.45, 0]] },
+    ],
+  };
+}
+
+// Game-Over-Crash: DIE grosse Explosion -- lauter und laenger als der Feind-
+// Abschuss, mit tiefem, lange austrudelndem Bass-Koerper und nachzackenden
+// Trummer-Wellen im Rauschen.
+export function crashPatch() {
+  return {
+    duration: 1.3,
+    voices: [
+      { type: 'noise',
+        filter: { type: 'lowpass', freq: [[0, 3200], [1.3, 60]] },
+        gain: [[0, 0], [0.008, 0.8], [0.15, 0.35], [0.22, 0.55], [0.4, 0.25],
+               [0.6, 0.32], [1.3, 0]] },
+      { type: 'osc', shape: 'square',
+        freq: [[0, 140], [0.8, 25]],
+        gain: [[0, 0], [0.01, 0.4], [0.9, 0]] },
+      { type: 'osc', shape: 'sine',
+        freq: [[0, 65], [1.0, 28]],
+        gain: [[0, 0], [0.02, 0.5], [1.2, 0]] },
+    ],
+  };
+}
+
 // Dauerklang "Motor": Ziel-Parameter fuer die drei stehenden Stimmen in
 // audio.js (motor-Brumm, rumble-Rauschen, whine-Kurven-Sirren). Pur -- das
 // Mapping Spielzustand -> Klang ist damit testbar.

@@ -28,7 +28,7 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
 
 ## Steuerung (aktueller Stand)
 
-- Startbildschirm: `↑/↓/←/→` Level wählen (1–10), `S` startet (Andock-Flug an den Würfel)
+- Startbildschirm: `↑/↓/←/→` Level wählen (1–15), `S` startet (Andock-Flug an den Würfel)
 - Im Labyrinth (Ego-Ansicht, Tank-Steuerung, Level 1–5): `↑/W` vor, `↓/S` zurück,
   `←/A`/`→/D` drehen, `Q` Rückschwenk zur Karte (am Ziel automatisch nach 20 s);
   Anfahren, Bremsen und Drehen laufen über Beschleunigungs-Rampen
@@ -46,9 +46,20 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
   entlangwandern und in den Himmel strahlen: hinter Mauern gedimmt
   durchscheinend, oberhalb der Wand-Sichtlinie frei — so strahlt das Ziel von
   weitem hoch; beim Erreichen blitzen alle Säulen weiß auf und erlöschen
+- Ab Level 11 Kampf-Modus: das Labyrinth wird größer und hat (per Generator-Bias)
+  längere gerade Gangstücke; darin schweben pulsierende **rote Rauten** —
+  Berührung ist ein krachendes GAME OVER, das den Spieler zur Karte
+  hinausschleudert (dort `Q` = neuer Versuch). `Space` feuert (Dauerfeuer
+  erlaubt, aber wie bei Tempest: max. 8 Schuss gleichzeitig unterwegs);
+  die weißen rotierenden Projektil-Sterne verpuffen an Wänden, Treffer lassen
+  Rauten in Splitter zerplatzen. Ein Fadenkreuz zeigt die Zielrichtung: bei
+  Geradeausflug exakt die Blickrichtung, beim Lenken schlägt es weiter aus
+  als die Flugbahn. Ab Level 13 patrouilliert ein wachsender Teil der Rauten
+  seinen Gang auf und ab
 - Auf der Karte: `Q` weiterspielen (fällt zurück an die Spielerlage, solange das
-  Ziel offen ist), `X` beenden (nach 5 min automatisch) — die Karte blendet aus
-  und die Kamera fliegt symmetrisch zum Start zurück in den Orbit
+  Ziel offen ist; nach GAME OVER: Neustart des Levels vom Start), `X` beenden
+  (nach 5 min automatisch) — die Karte blendet aus und die Kamera fliegt
+  symmetrisch zum Start zurück in den Orbit
 
 ## Architektur
 
@@ -77,6 +88,9 @@ src/
     mazeWorld.js   begehbare Welt: Wände, Kollision (Spieler-Quadrat), getestet
     drive.js       Fahr-Dynamik ab Level 6: Auto-Vortrieb, Abfedern (getestet)
     walk.js        Geh-Kinetik Level 1–5: Rampen + Kollisions-Flanke (getestet)
+    enemies.js     rote Rauten ab Level 11: Platzierung, Patrouillen, Treffer (getestet)
+    shots.js       Schießen à la Tempest: max 8 unterwegs, Zielrichtung, Verpuffen (getestet)
+    burst.js       Splitter-Explosionen (Verpuffen bis Game-Over-Crash, getestet)
     waves.js       Kollisionswellen auf der Wandfläche (getestet)
     goal.js        Ziel-Zone (eingerückt) + Leuchtfeuer: Quadrat, Strahlen (getestet)
     cubeFaces.js   Würfel-Seitenflächen als Andock-Ziele + Grid-Mapping (getestet)
@@ -86,7 +100,8 @@ src/
     trail.js       präzise Weg-Aufzeichnung (getestet)
   core/
     states.js      Zustands-Automat als reine Funktion (getestet)
-    levels.js      Level 1–10 als reine Daten: Maze-Größe n, Metrik, Fahr-Modus
+    levels.js      Level 1–15 als reine Daten: Maze-Größe n, Metrik, Fahr-Modus,
+                   Geraden-Bias, Feinde, Schießen
     game.js        Orchestrierung + animierte Übergänge
   scenes/
     startscreen.js Orbit um den Drahtwürfel, Level-Wahl, An-/Abdock-Flug
@@ -97,7 +112,8 @@ src/
     map.js         Kartensicht mit abgelaufenem Weg; X blendet aus → Abdocken
     mazeView.js    gemeinsamer Flächen-Renderer (Posen, Overlay, Hidden Lines)
   sound/
-    patches.js     Klänge als reine Daten: Bump, Brutzeln, Fanfare, Motor (getestet)
+    patches.js     Klänge als reine Daten: Bump, Brutzeln, Fanfare, Motor,
+                   Schuss/Verpuffen/Abschuss/Crash (getestet)
     audio.js       EINZIGER Web-Audio-berührender Teil (Patches → Knoten, Motor-Stimmen)
   util/
     rng.js         seedbarer Zufall (getestet)
