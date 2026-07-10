@@ -28,8 +28,15 @@ export function collisionWave(maze, collision, { unit = 1, eye = 0 } = {}) {
 
   let k0 = axis === 'x' ? wy : wx;
   let k1 = k0;
-  while (k0 - 1 >= 0 && wallAt(k0 - 1)) k0--;
-  while (k1 + 1 < maze.n && wallAt(k1 + 1)) k1++;
+  // Nur von einer echten spieler-seitigen Wandzelle aus ausdehnen. Sicher-
+  // heitsnetz: zeigt wallCell (wider Erwarten) auf eine offene Zelle, bleibt
+  // die Ausdehnung auf deren Spanne begrenzt -- sonst "brueckte" die Suche
+  // ueber die offene Luecke zu den Waenden links und rechts davon, und die
+  // Welle liefe in die Luft.
+  if (wallAt(k0)) {
+    while (k0 - 1 >= 0 && wallAt(k0 - 1)) k0--;
+    while (k1 + 1 < maze.n && wallAt(k1 + 1)) k1++;
+  }
 
   const extent = [toUnits(k0) * unit, toUnits(k1 + 1) * unit];
   const along = axis === 'x' ? point[1] : point[0];

@@ -58,6 +58,30 @@ test('collisionWave: laengere Wand liefert breitere Ausdehnung, u0 wird geklemmt
   assert.equal(wave.u0, 12, 'Auftreffpunkt wird auf die Flaeche geklemmt');
 });
 
+test('collisionWave-Sicherheitsnetz: offene Start-Zelle brueckt nicht ueber die Luecke', () => {
+  const W = WALL, O = OPEN;
+  // Zwei frei stehende Pfeiler (2,2) und (2,4) mit offener Luecke (2,3)
+  // dazwischen. Eine (kuenstlich) falsche Wandzelle IN der Luecke darf die
+  // Ausdehnung nicht bis zu den Pfeilern ausweiten -- sonst laufen die
+  // Wellen-Linien quer durch die Luft der offenen Kreuzung.
+  const n = 7;
+  const grid = [];
+  for (let y = 0; y < n; y++) {
+    const row = [];
+    for (let x = 0; x < n; x++) {
+      const border = x === 0 || y === 0 || x === n - 1 || y === n - 1;
+      const pillar = x % 2 === 0 && y % 2 === 0;
+      row.push(border || pillar ? W : O);
+    }
+    grid.push(row);
+  }
+  const m = { n, grid, metric: createMetric(THIN) };
+  const bogus = { axis: 'x', side: -1, plane: 7, wallCell: [2, 3], point: [7, 9], impact: 1 };
+  const wave = collisionWave(m, bogus, { unit: 1, eye: 2.5 });
+  // Ohne Netz waere die Ausdehnung [6, 13] (Pfeiler..Pfeiler ueber die Luecke).
+  assert.deepEqual(wave.extent, [7, 12], 'bleibt auf der Zellspanne der Start-Zelle');
+});
+
 test('waveSegments: beginnt als Kreuz am Auftreffpunkt (Alter 0, Halbarm `arm`)', () => {
   const wave = { axis: 'z', plane: 1, u0: 3.5, y0: 2.5, extent: [1, 6] };
   const geo = waveSegments(wave, 0, { height: 6, speed: 15, life: 0.8, arm: 1 });

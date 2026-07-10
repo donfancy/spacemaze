@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 248 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 250 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -68,7 +68,14 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   bremst erst (`brake` + kurzer Halt `BRAKE_HOLD`, abgehoben wird erst, wenn
   auch der Feder-Impuls abgeklungen ist), dann Abheben. `world/waves.js`: Kollisionswellen starten als weißes Blitz-Kreuz am
   Sichtlinien-Auftreffpunkt, Arme wachsen mit, an die zusammenhängende Kontur-
-  Fläche geklippt. Kamera-Gefühl in `scenes/playing.js` (Kurvenneigung `bank`
+  Fläche geklippt. FALLE (10.7.2026 gefixt): `collisionInfo` braucht die Lage
+  ZUM ZEITPUNKT der Blockade (x wird vor z bewegt — blockiert x, zieht z im
+  selben Schritt weiter), und der Sichtlinien-Auftreffpunkt wird auf die
+  Kontaktspanne (±radius) geklemmt — sonst greift die Zellsuche beim Streifen
+  eines frei stehenden Pfeilers eine falsche/offene Zelle und die Wellen laufen
+  „in die Luft" (die Extent-Suche brückte über offene Lücken; waves.js hat
+  jetzt zusätzlich ein Sicherheitsnetz: offene Startzelle → keine Ausdehnung).
+  Kamera-Gefühl in `scenes/playing.js` (Kurvenneigung `bank`
   + `math/oscillator.js` für mechanisches Nachschwingen — als Bildraum-Sway
   gerendert, NICHT in der Kamerabasis, siehe Hidden-Lines-Falle 4).
 - SOUND (alles synthetisch, Web Audio, keine Samples): `sound/patches.js` baut

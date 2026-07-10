@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DRIVE, createDriveState, driveStep } from '../src/world/drive.js';
+import { collisionWave } from '../src/world/waves.js';
 import { generateMaze, OPEN, WALL } from '../src/world/maze.js';
 import { createMetric } from '../src/world/metric.js';
 import { cellCenter, rectWalkable, startFacingYaw } from '../src/world/mazeWorld.js';
@@ -160,6 +161,46 @@ test('schraeger Aufprall: Auftreffpunkt liegt auf der Sichtlinie, nicht am Lotpu
   assert.ok(Math.abs(collision.point[0] - expected) < 1e-6,
     `Punkt ${collision.point[0].toFixed(3)} != Sichtlinie ${expected.toFixed(3)}`);
   assert.ok(collision.point[0] > pose.px, 'in Blickrichtung (+x) versetzt, nicht am Lotpunkt');
+});
+
+test('frei stehender Pfeiler, versetzt gestreift: Wandzelle ist der Pfeiler, Welle bleibt dran', () => {
+  // Offene Halle: alle Zwischenwaende offen, nur die Pfeiler (gerade/gerade)
+  // und der Rand stehen -- Pfeiler (2,2) steht frei (Einheiten x 6..7, z 6..7).
+  const W = WALL, O = OPEN;
+  const n = 7;
+  const grid = [];
+  for (let y = 0; y < n; y++) {
+    const row = [];
+    for (let x = 0; x < n; x++) {
+      const border = x === 0 || y === 0 || x === n - 1 || y === n - 1;
+      const pillar = x % 2 === 0 && y % 2 === 0;
+      row.push(border || pillar ? W : O);
+    }
+    grid.push(row);
+  }
+  const m = { n, grid, metric: createMetric(THIN) };
+
+  // Spieler rechts neben dem Pfeiler, Blick +z (yaw PI), volle Fahrt; ein
+  // seitlicher Feder-Impuls (wie nach einem Abpraller) drueckt nach links in
+  // den Pfeiler, waehrend die Fahrt in +z am Pfeiler VORBEIZIEHT: x blockiert
+  // an der Pfeilerkante, der z-Schritt verlaesst die Pfeilerzeile noch im
+  // selben Simulationsschritt (grosses dt = Clamp-Maximum).
+  const state = createDriveState();
+  state.vel = DRIVE.cruise;
+  state.push = { x: -0.9, z: 0 };
+  const res = driveStep(m, state, { px: 8.3, pz: 8.2, yaw: Math.PI }, 0, 0.1, OPTS);
+  assert.ok(res.collision, 'Streifen loest eine Kollision aus');
+  assert.equal(res.collision.axis, 'x');
+  assert.deepEqual(res.collision.wallCell, [2, 2], 'Wandzelle ist der Pfeiler selbst');
+  // Auftreffpunkt bleibt in der Kontaktspanne (Spielerkante +- radius) --
+  // nicht auf der Sichtlinie weit voraus, wo gar keine Beruehrung war.
+  assert.ok(Math.abs(res.collision.point[1] - 8.2) <= OPTS.radius + 1e-9,
+    `Auftreffpunkt ${res.collision.point[1].toFixed(2)} in der Kontaktspanne um 8.2`);
+  // Und die Welle bleibt auf den Pfeiler begrenzt, statt "in die Luft" ueber
+  // den offenen Gang davor zu laufen.
+  const wave = collisionWave(m, res.collision, { unit: 1, eye: 2.5 });
+  assert.ok(wave.extent[0] >= 6 - 1e-9 && wave.extent[1] <= 7 + 1e-9,
+    `Wellen-Ausdehnung [${wave.extent}] bleibt am Pfeiler (6..7)`);
 });
 
 test('schraeger Aufprall: Fahrt geht weiter, zweiter Einschlag weiter vorne', () => {

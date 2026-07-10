@@ -109,7 +109,14 @@ export function driveStep(maze, state, pose, turn, dt, opts) {
     const comp = axis === 'x' ? dx : dz;
     const impact = Math.min(1, Math.abs(comp) / dt / (params.cruise * cell));
     if (impact >= params.minImpact) {
-      collision = collisionInfo(maze, axis, dx, dz, nx, nz, impact, unit, radius);
+      // WICHTIG: die Lage ZUM ZEITPUNKT der Blockade uebergeben. Bewegt wird
+      // achsweise x, dann z -- blockiert x, kann z im selben Schritt noch
+      // weiterziehen (nz != pose.pz). Mit der weitergezogenen Lage verfehlte
+      // die Wandzellen-Suche die getroffene Zelle (z.B. einen frei stehenden
+      // Pfeiler beim Streifen) und die Wellen liefen "in die Luft".
+      // nx passt fuer beide Achsen: bei axis 'x' unbewegt, bei axis 'z' ist
+      // der x-Schritt zum Zeitpunkt der z-Pruefung bereits geschehen.
+      collision = collisionInfo(maze, axis, dx, dz, nx, pose.pz, impact, unit, radius);
       // Seitlicher Feder-Impuls statt Vollbremsung: Vorwaertstempo und
       // Blickrichtung bleiben, nur senkrecht zur Wand wird abgefedert. Der
       // Impuls hebt die Normal-Komponente des Vortriebs auf und setzt ein
@@ -129,30 +136,35 @@ export function driveStep(maze, state, pose, turn, dt, opts) {
 }
 
 // Baut die Kollisions-Beschreibung: getroffene Wandebene, Wandzelle, Auftreffpunkt.
+// px/pz ist die Spieler-Lage ZUM ZEITPUNKT der Blockade (siehe Aufrufer).
 // Der Auftreffpunkt ist der Schnitt der SICHTLINIE (= Fahrtrichtung) mit der
-// Wandebene, vom Standort nach dem Schritt aus: frontal liegt er damit exakt in
-// der Bildmitte, bei schraegem Aufprall genau da, wo man hinschaut -- nicht am
-// Lotpunkt seitlich versetzt.
-function collisionInfo(maze, axis, dx, dz, nx, nz, impact, unit, radius) {
+// Wandebene: frontal liegt er damit exakt in der Bildmitte, bei schraegem
+// Aufprall da, wo man hinschaut -- nicht am Lotpunkt seitlich versetzt.
+// Er wird aber auf die KONTAKTSPANNE (Spielerkante +- radius) geklemmt: bei
+// sehr flachem Winkel (Streifen) laeuft die Sichtlinie sonst Zellen weit
+// voraus, die Zellsuche griffe eine falsche Wand (oder gar keine) und die
+// Kollisionswellen zeichneten sich "in die Luft".
+function collisionInfo(maze, axis, dx, dz, px, pz, impact, unit, radius) {
   const { toUnits, toGrid } = mazeMetric(maze);
   const cellOf = (w) => Math.floor(toGrid(w / unit));
-  const [pgx, pgy] = cellAt(maze, nx, nz, unit);
+  const clampSpan = (v, c) => Math.min(Math.max(v, c - radius), c + radius);
+  const [pgx, pgy] = cellAt(maze, px, pz, unit);
 
   if (axis === 'x') {
     const side = Math.sign(dx);
     const wallX = pgx + side;
     const plane = toUnits(side > 0 ? pgx + 1 : pgx) * unit;
-    const pz = nz + (dz / dx) * (plane - nx); // Sichtlinie trifft die Wandebene
+    const hit = clampSpan(pz + (dz / dx) * (plane - px), pz); // Sichtlinie, geklemmt
     // Welche Zeile blockiert? Sichtpunkt zuerst, dann Mitte und die Ecken.
-    const rows = [pz, nz, nz - radius, nz + radius].map(cellOf);
+    const rows = [hit, pz, pz - radius, pz + radius].map(cellOf);
     const wallY = rows.find((r) => !isOpenCell(maze, wallX, r)) ?? pgy;
-    return { axis, side, plane, wallCell: [wallX, wallY], point: [plane, pz], impact };
+    return { axis, side, plane, wallCell: [wallX, wallY], point: [plane, hit], impact };
   }
   const side = Math.sign(dz);
   const wallY = pgy + side;
   const plane = toUnits(side > 0 ? pgy + 1 : pgy) * unit;
-  const px = nx + (dx / dz) * (plane - nz); // Sichtlinie trifft die Wandebene
-  const cols = [px, nx, nx - radius, nx + radius].map(cellOf);
+  const hit = clampSpan(px + (dx / dz) * (plane - pz), px); // Sichtlinie, geklemmt
+  const cols = [hit, px, px - radius, px + radius].map(cellOf);
   const wallX = cols.find((c) => !isOpenCell(maze, c, wallY)) ?? pgx;
-  return { axis, side, plane, wallCell: [wallX, wallY], point: [px, plane], impact };
+  return { axis, side, plane, wallCell: [wallX, wallY], point: [hit, plane], impact };
 }
