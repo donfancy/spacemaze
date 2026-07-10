@@ -35,8 +35,11 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
 - `M` schaltet den Sound stumm/laut (alles synthetisch per Web Audio: leises
   Fahrgeräusch, dumpfer Bump an der Wand, ab Level 6 Motor + Kurven-Sirren und
   elektrisches Brutzeln bei Kollisionen, Drei-Ton-Fanfare am Ziel; dazu ein
-  „Nagen" beim Labyrinth-Wachstum und Whoosh-Gleittöne beim Reinfallen
-  (abwärts) und Rausschweben (aufwärts))
+  „Nagen" beim Labyrinth-Wachstum, Whoosh-Gleittöne beim Reinfallen
+  (abwärts) und Rausschweben (aufwärts), ein dezenter Tick bei der Level-Wahl
+  (Tonhöhe steigt mit dem Level) und ein leiser Schwebe-Whoosh beim
+  An-/Abdock-Flug; ab Level 11 Pew-Schüsse, Verpuffen, Abschuss-Boom und
+  der Game-Over-Crash)
 - Ab Level 6 Fahrt-Modus: automatischer Vortrieb, nur `←/→` lenken; Kurven
   neigen die Kamera, Wandkontakt federt seitlich ab (die Fahrt geht weiter,
   ohne Gegenlenken schlägt man weiter vorne wieder ein) — mit Kollisionswellen
@@ -56,7 +59,8 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
   Geradeausflug exakt die Blickrichtung, beim Lenken schlägt es weiter aus
   als die Flugbahn. Ab Level 13 patrouilliert ein wachsender Teil der Rauten
   seinen Gang auf und ab
-- Auf der Karte: `Q` weiterspielen (fällt zurück an die Spielerlage, solange das
+- Auf der Karte: lebende Rauten erscheinen als kleine rote Kreuze; `Q`
+  weiterspielen (fällt zurück an die Spielerlage, solange das
   Ziel offen ist; nach GAME OVER: Neustart des Levels vom Start), `X` beenden
   (nach 5 min automatisch) — die Karte blendet aus und die Kamera fliegt
   symmetrisch zum Start zurück in den Orbit

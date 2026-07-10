@@ -145,6 +145,28 @@ export function drawCompassLabels(renderer, maze, face, camera, intensity) {
 
 const TRAIL_DIM = 0.5; // Weglinie zu 50% gedimmt (gegen Rahmen/Waende absetzen)
 
+// Feind-Marker fuer die Kartensicht: kleine rote Kreuze an den Positionen der
+// LEBENDEN Rauten (abgeschossene verschwinden auch von der Karte). Genutzt von
+// der Karte selbst und den Schwenks (dort mit ein-/ausblendender Intensitaet).
+const ENEMY_MARK_COLOR = '#ff3b30';   // Feind-Rot wie in der Ego-Ansicht
+const ENEMY_MARK_RATIO = 0.22;        // Kreuz-Halbarm (Anteil der Gangbreite)
+
+export function drawEnemyMarkers(renderer, enemies, face, camera, cell, intensity) {
+  if (!enemies || intensity <= 0.01) return;
+  const r = ENEMY_MARK_RATIO * cell;
+  const segments = [];
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    segments.push(
+      [faceLocalToWorld(e.x - r, 0, e.z, face, CUBE_SIZE), faceLocalToWorld(e.x + r, 0, e.z, face, CUBE_SIZE)],
+      [faceLocalToWorld(e.x, 0, e.z - r, face, CUBE_SIZE), faceLocalToWorld(e.x, 0, e.z + r, face, CUBE_SIZE)],
+    );
+  }
+  if (segments.length) {
+    renderer.renderScene({ segments, intensity }, camera, { color: ENEMY_MARK_COLOR });
+  }
+}
+
 // Karten-Overlay: Grid-Rahmen, S/G-Marker und (optional) der abgelaufene Weg.
 // Erwartet eine bereits gesetzte camera.basis (nach renderFaceWalls). `trail` ist
 // eine Polyline praeziser lokaler Flaechenpunkte [x,z] (siehe world/trail.js) oder null.

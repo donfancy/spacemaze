@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, fallPatch, risePatch, gnawPatch, engineParams,
-  shotPatch, poofPatch, boomPatch, crashPatch,
+  shotPatch, poofPatch, boomPatch, crashPatch, tickPatch, dockPatch,
 } from '../src/sound/patches.js';
 
 const EPS = 1e-9;
@@ -56,6 +56,31 @@ test('bump/sizzle/fanfare erfuellen die Patch-Invarianten', () => {
   checkPatch(poofPatch(), 'poof');
   checkPatch(boomPatch(), 'boom');
   checkPatch(crashPatch(), 'crash');
+  for (const p of [0, 0.5, 1]) checkPatch(tickPatch(p), `tick(${p})`);
+  for (const dur of [1.0, 1.6]) {
+    checkPatch(dockPatch(dur, false), `dock(${dur})`);
+    checkPatch(dockPatch(dur, true), `undock(${dur})`);
+  }
+});
+
+test('Startscreen-Sounds sind sehr dezent: Tick winzig, Dock-Whoosh leiser als rise', () => {
+  const tick = tickPatch(0.5);
+  assert.ok(tick.duration <= 0.1, 'Tick ist ein Blip');
+  assert.ok(peakGain(tick) <= 0.1, 'Tick bleibt winzig');
+  // Tonhoehe steigt mit dem Level (man hoert die Leiter).
+  const hz = (p) => tickPatch(p).voices[0].freq[0][1];
+  assert.ok(hz(0) < hz(0.5) && hz(0.5) < hz(1), 'Tick-Tonhoehe steigt mit dem Level');
+
+  const dock = dockPatch(1.6, false);
+  const undock = dockPatch(1.6, true);
+  assert.ok(peakGain(dock) < 0.5 * Math.max(...risePatch(1.7).voices.flatMap((v) => v.gain.map(([, g]) => g))),
+    'Andocken deutlich leiser als das Rausschweben');
+  // Andocken: Gleitton steigt (Ankunft); Abdocken: er faellt.
+  const glide = (p) => p.voices.find((v) => v.type === 'osc').freq;
+  assert.ok(glide(dock)[0][1] < glide(dock)[1][1], 'dock steigt');
+  assert.ok(glide(undock)[0][1] > glide(undock)[1][1], 'undock faellt');
+  // Dauer folgt der Flugdauer (Klang endet mit der Ankunft).
+  assert.equal(dockPatch(1.6).duration, 1.6);
 });
 
 test('Schuss kurz und leise, Verpuffen weich, Crash kracht am laengsten und lautesten', () => {

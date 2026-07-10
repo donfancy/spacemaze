@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 247 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 248 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -122,9 +122,15 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   GERAMPTE Lenkgröße und schlägt dadurch weich weiter aus als die Flugbahn.
   Feinde leben auf `game.enemies` (Resume behält Abschüsse, Retry/neues Maze
   würfelt neu, deterministisch aus maze.seed). Space braucht preventDefault
-  (main.js). Feind-Farbe #ff3b30, Schüsse weiß.
+  (main.js). Feind-Farbe #ff3b30, Schüsse weiß. Auf der Karte (und in den
+  Schwenks) erscheinen lebende Rauten als kleine rote Kreuze
+  (`drawEnemyMarkers` in mazeView; beim Reinfallen nur bei `resume` — bei
+  frischem Anlauf wären es noch die alten Feinde). Startscreen-Sounds:
+  Level-Wahl tickt (Tonhöhe steigt mit dem Level, an den Rändern still,
+  `tickPatch`), An-/Abdock-Flug hat einen sehr dezenten Schwebe-Whoosh
+  (`dockPatch`, deutlich leiser als fall/rise, Gleitton rauf/runter).
 - Nächste mögliche Themen: mehr Farben in den hohen Levels, echter
-  "Trench Run", Politur; evtl. Feinde auf der Karte zeigen, Score/HUD.
+  "Trench Run", Politur; Score/HUD.
   Aufgeschobene (Performance-)Ideen mit Messwerten: siehe IDEAS.md.
 - Performance-Basics sind drin: kollineare Wandzüge werden zusammengefasst
   (`mergeCollinear` — Unter-/Oberkanten lang, Pfosten bleiben an jeder

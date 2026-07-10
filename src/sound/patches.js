@@ -135,6 +135,41 @@ export function gnawPatch(duration = 2.6) {
   };
 }
 
+// Level-Waehl-Tick (Startscreen): winziger, weicher Dreieck-Blip. Die
+// Tonhoehe steigt mit dem gewaehlten Level (pitch01 = 0..1 ueber die
+// Level-Skala) -- man "hoert", wo man auf der Leiter steht.
+export function tickPatch(pitch01 = 0) {
+  const hz = 500 + 500 * clamp01(pitch01);
+  return {
+    duration: 0.07,
+    voices: [
+      { type: 'osc', shape: 'triangle',
+        freq: [[0, hz]],
+        gain: [[0, 0], [0.005, 0.09], [0.07, 0]] },
+    ],
+  };
+}
+
+// An-/Abdock-Flug (Startscreen <-> Karte): sehr dezenter Schwebe-Whoosh,
+// deutlich leiser als fall/rise -- man gleitet nur ans Grid heran. Beim
+// Andocken STEIGT der Gleitton sacht (Ankunft), beim Abdocken (out) faellt
+// er. Dauer = Flugdauer, damit der Klang genau mit der Ankunft endet.
+export function dockPatch(duration = 1.6, out = false) {
+  const d = duration;
+  const [f0, f1] = out ? [150, 70] : [70, 150];
+  return {
+    duration: d,
+    voices: [
+      { type: 'noise',
+        filter: { type: 'lowpass', freq: [[0, 150], [0.5 * d, 700], [d, 150]] },
+        gain: [[0, 0], [0.5 * d, 0.06], [d, 0]] },
+      { type: 'osc', shape: 'sine',
+        freq: [[0, f0], [d, f1]],
+        gain: [[0, 0], [0.5 * d, 0.04], [d, 0]] },
+    ],
+  };
+}
+
 // Schuss: kurzer "Pew"-Zap (fallender Rechteck-Gleitton + Hauch Hochpass-
 // Rauschen). Bewusst leise und knapp -- bei Dauerfeuer (5/s) darf er nicht nerven.
 export function shotPatch() {

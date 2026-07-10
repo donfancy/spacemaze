@@ -12,7 +12,7 @@ import { SIDE_FACES } from '../world/cubeFaces.js';
 import { fallPatch } from '../sound/patches.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, unitSize, faceWalls, faceFootprints, renderFaceWalls,
-  egoPose, mapPose, blendPose, drawMapOverlay,
+  egoPose, mapPose, blendPose, drawMapOverlay, drawEnemyMarkers,
 } from './mazeView.js';
 
 const DURATION = 1.7;
@@ -64,8 +64,11 @@ export function createFalling(game) {
 
       const walls = faceWalls(maze, face, WALL_RATIO * cell * e); // Waende wachsen auf
       renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight });
-      // Rahmen + S/G verblassen; bei Fortsetzung verblasst auch der Weg mit.
+      // Rahmen + S/G verblassen; bei Fortsetzung verblassen auch Weg und
+      // Feind-Kreuze mit (nur dann sind die Feinde schon die aktuellen --
+      // ein frischer Anlauf stellt sie erst in Playing auf).
       drawMapOverlay(renderer, maze, face, camera, game.resume ? game.trail : null, 1 - e);
+      if (game.resume) drawEnemyMarkers(renderer, game.enemies, face, camera, cell, 1 - e);
     },
   };
 }

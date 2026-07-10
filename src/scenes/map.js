@@ -10,7 +10,8 @@ import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
 import {
-  FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls, mapPose, drawMapOverlay,
+  FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls, mapPose,
+  drawMapOverlay, drawEnemyMarkers,
 } from './mazeView.js';
 
 const AUTO_EXIT = 300; // 5 Minuten
@@ -66,6 +67,7 @@ export function createMap(game) {
         far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight: 0, alpha: fade,
       });
       drawMapOverlay(renderer, maze, face, camera, game.trail, fade, 1); // Rahmen bleibt
+      drawEnemyMarkers(renderer, game.enemies, face, camera, cell, fade); // rote Kreuze
 
       // Nach der Feindberuehrung: GAME OVER pulsiert in der FARBE zwischen
       // Feind-Rot und Weiss, bei voller Deckkraft -- blosses Helligkeits-

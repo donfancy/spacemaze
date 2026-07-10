@@ -13,7 +13,8 @@
 // Nach Abschluss des Andockens uebernimmt MazeGen nahtlos dieselbe Flaeche.
 
 import { GameEvent } from '../core/states.js';
-import { stepLevel } from '../core/levels.js';
+import { stepLevel, MIN_LEVEL, MAX_LEVEL } from '../core/levels.js';
+import { tickPatch, dockPatch } from '../sound/patches.js';
 import { createCamera } from '../math/camera.js';
 import { normalize } from '../math/vec3.js';
 import { cubeMesh } from '../world/shapes.js';
@@ -78,6 +79,7 @@ export function createStartscreen(game) {
         undockStart = faceDockPose(face, CUBE_SIZE, camera.fov, 0.85);
         undockTarget = orbitCamera(t, ORBIT_OPTS);
         phase = 'undocking';
+        game.audio?.play(dockPatch(UNDOCK_DURATION, true)); // dezentes Weggleiten
       }
     },
 
@@ -139,10 +141,14 @@ export function createStartscreen(game) {
 
     onKey(key) {
       if (phase !== 'orbiting') return;
-      if (key === 'ArrowUp' || key === 'ArrowRight') {
-        game.level = stepLevel(game.level, +1);
-      } else if (key === 'ArrowDown' || key === 'ArrowLeft') {
-        game.level = stepLevel(game.level, -1);
+      if (key === 'ArrowUp' || key === 'ArrowRight' || key === 'ArrowDown' || key === 'ArrowLeft') {
+        // Level waehlen; nur ein ECHTER Wechsel tickt (an den Raendern still).
+        // Die Tick-Tonhoehe steigt mit dem Level -- man hoert die Leiter.
+        const next = stepLevel(game.level, (key === 'ArrowUp' || key === 'ArrowRight') ? +1 : -1);
+        if (next !== game.level) {
+          game.level = next;
+          game.audio?.play(tickPatch((next - MIN_LEVEL) / (MAX_LEVEL - MIN_LEVEL)));
+        }
       } else if (key === 'S') {
         const o = orbitCamera(t, ORBIT_OPTS);
         // Blickrichtung zur Wuerfelmitte -> zugewandte Seitenflaeche waehlen.
@@ -153,6 +159,7 @@ export function createStartscreen(game) {
         dockStart = { position: o.position, yaw: o.yaw, pitch: o.pitch };
         phase = 'docking';
         dockT = 0;
+        game.audio?.play(dockPatch(DOCK_DURATION)); // dezentes Herangleiten
       }
     },
   };

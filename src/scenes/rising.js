@@ -12,7 +12,7 @@ import { SIDE_FACES } from '../world/cubeFaces.js';
 import { risePatch } from '../sound/patches.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
-  egoPose, mapPose, blendPose, drawMapOverlay,
+  egoPose, mapPose, blendPose, drawMapOverlay, drawEnemyMarkers,
 } from './mazeView.js';
 
 const DURATION = 1.7;
@@ -63,6 +63,7 @@ export function createRising(game) {
       const walls = faceWalls(maze, face, WALL_RATIO * cell * (1 - e)); // Waende schrumpfen
       renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight });
       drawMapOverlay(renderer, maze, face, camera, game.trail, e); // Rahmen + S/G + Weg blenden ein
+      drawEnemyMarkers(renderer, game.enemies, face, camera, cell, e); // rote Kreuze blenden mit ein
     },
   };
 }
