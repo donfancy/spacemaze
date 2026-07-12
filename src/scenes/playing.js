@@ -11,6 +11,9 @@
 // (world/enemies.js), Schiessen mit Space (world/shots.js, Tempest-Regel,
 // Fadenkreuz mit Lenk-Ausschlag); Feindberuehrung = krachende Explosion und
 // Game Over -> Karte (Q dort: Level-Neustart).
+// Ab Level 16 (`spinners`): gruene Spiral-Spinner an den End-Waenden langer
+// Gaenge (world/spinners.js) -- ihr Spike sperrt den Gang und will per
+// Dauerfeuer gekuerzt werden; Aufspiessen oder Koerper-Beruehrung = Crash.
 
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
@@ -20,12 +23,16 @@ import { cellCenter, startFacingYaw, wallFootprints } from '../world/mazeWorld.j
 import { DRIVE, createDriveState, driveStep } from '../world/drive.js';
 import { WALK, createWalkState, walkStep } from '../world/walk.js';
 import { ENEMY, createEnemies, enemiesStep, enemyHit, enemySegments } from '../world/enemies.js';
+import {
+  SPINNER, createSpinners, spinnersStep, spinnerShotHit, spinnerPlayerHit, spinnerSegments,
+} from '../world/spinners.js';
 import { createShotsState, aimYaw, fireShot, shotsStep, shotSegments } from '../world/shots.js';
 import { burstSegments } from '../world/burst.js';
 import { createRng } from '../util/rng.js';
+import { PHOSPHOR_GREEN } from '../render/colors.js';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams,
-  shotPatch, poofPatch, boomPatch, crashPatch,
+  shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch,
 } from '../sound/patches.js';
 import {
   goalZone, inGoalZone, goalMarkerSegments, goalBeamFeet, beamFlicker, beamOcclusionCut,
@@ -93,6 +100,7 @@ const BRAKE_HOLD = 0.2;       // s Stillstand nach dem Bremsen (Q), bevor es abh
 
 // Kampf-Levels (ab Level 11): Feinde, Schiessen, Game Over.
 const ENEMY_COLOR = '#ff3b30';   // Feind-Rot (Rauten, Abschuss-Splitter)
+const SPINNER_COLOR = PHOSPHOR_GREEN; // Spinner-Gruen (Spiralen, ab Level 16 auf Blau)
 const SHOT_COLOR = '#ffffff';    // Projektile und Verpuffen
 const ENEMY_GLOW = 12;           // Rauten gluehen etwas staerker (Gefahr)
 const ENEMY_OCC_DIM = 0.25;      // verdeckte Rauten schimmern durch die Wand
@@ -137,35 +145,50 @@ export function createPlaying(game) {
   // Kampf-Levels (ab Level 11).
   let shoot = false;      // Level-Eigenschaft: Space feuert
   let enemies = [];       // rote Rauten (liegen auf game.enemies, s. enter())
+  let spinners = [];      // gruene Spinner (liegen auf game.spinners, s. enter())
   let shotsState = null;  // Tempest-Schuesse (world/shots.js)
   let bursts = [];        // aktive Splitter-Explosionen (Verpuffen/Abschuss/Crash)
   let crash = false;      // Feindberuehrung: Explosion laeuft, dann Game Over
   let crashT = 0;
 
-  // Feindberuehrung: krachende Explosion, dann schleudert es den Spieler
-  // hinaus in die Kartenansicht (update() dispatcht nach CRASH_TIME).
-  function startCrash(enemy) {
+  // Feindberuehrung: krachende Explosion an `at` {x,z}, dann schleudert es den
+  // Spieler hinaus in die Kartenansicht (update() dispatcht nach CRASH_TIME).
+  // opts: `kill` (Objekt mit alive-Flag, das in der Explosion aufgeht -- beim
+  // Aufspiessen am Spike ueberlebt der Spinner!), `color` (Splitter-Farbe,
+  // Standard Feind-Rot), `height` (Explosions-Hoehe, Standard Augenhoehe).
+  function startCrash(at, opts = {}) {
     crash = true;
     crashT = 0;
     game.gameOver = true; // Karte zeigt GAME OVER, Q startet den Level neu
-    enemy.alive = false;  // die getroffene Raute geht in der Explosion auf
+    if (opts.kill) opts.kill.alive = false;
     game.audio?.engine(null);
     game.audio?.play(crashPatch());
-    const h = EYE_RATIO * cell;
+    const h = opts.height ?? EYE_RATIO * cell;
+    const color = opts.color ?? ENEMY_COLOR;
     bursts.push(
-      { born: sceneT, center: [enemy.x, h, enemy.z], seed: 11, count: 24, speed: 3.5 * cell, life: 1.2, size: 0.16 * cell, color: ENEMY_COLOR },
-      { born: sceneT, center: [enemy.x, h, enemy.z], seed: 47, count: 16, speed: 2.5 * cell, life: 0.9, size: 0.12 * cell, color: SHOT_COLOR },
+      { born: sceneT, center: [at.x, h, at.z], seed: 11, count: 24, speed: 3.5 * cell, life: 1.2, size: 0.16 * cell, color },
+      { born: sceneT, center: [at.x, h, at.z], seed: 47, count: 16, speed: 2.5 * cell, life: 0.9, size: 0.12 * cell, color: SHOT_COLOR },
     );
     rollOsc.kick(CRASH_SHAKE_ROLL);
     pitchOsc.kick(CRASH_SHAKE_PITCH);
   }
 
-  // Projektil-Ereignis (aus shotsStep): Verpuffen an der Wand oder Feind-Abschuss.
+  // Projektil-Ereignis (aus shotsStep): Verpuffen an der Wand, Feind-Abschuss
+  // oder die Spinner-Faelle -- Funken am gekuerzten Spike ('spike'), gruene
+  // Explosion beim Abschuss ('spinner'), Abprallen am geschuetzten Koerper
+  // an der Wand ('shield').
   function spawnShotEvent(ev) {
     const h = EYE_RATIO * cell;
-    if (ev.type === 'wall') {
+    const hs = SPINNER.height * cell; // Spinner leben unterhalb der Augenhoehe
+    if (ev.type === 'wall' || ev.type === 'shield') {
       game.audio?.play(poofPatch());
-      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 1, count: 8, speed: 1.2 * cell, life: 0.35, size: 0.07 * cell, color: SHOT_COLOR });
+      bursts.push({ born: sceneT, center: [ev.x, ev.type === 'shield' ? hs : h, ev.z], seed: bursts.length + 1, count: 8, speed: 1.2 * cell, life: 0.35, size: 0.07 * cell, color: SHOT_COLOR });
+    } else if (ev.type === 'spike') {
+      game.audio?.play(clinkPatch());
+      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 3, count: 6, speed: 1.4 * cell, life: 0.3, size: 0.06 * cell, color: SPINNER_COLOR });
+    } else if (ev.type === 'spinner') {
+      game.audio?.play(boomPatch());
+      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: SPINNER_COLOR });
     } else {
       game.audio?.play(boomPatch());
       bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: ENEMY_COLOR });
@@ -261,6 +284,18 @@ export function createPlaying(game) {
         game.enemies = null;
       }
       enemies = game.enemies ?? [];
+      // Spinner: gleiche Lebensdauer-Regeln wie die Rauten (Resume behaelt
+      // den Zustand samt Abschuessen, frischer Anlauf wuerfelt neu).
+      if (cfg?.spinners) {
+        if (!game.resume || !game.spinners) {
+          game.spinners = createSpinners(maze, cfg.spinners, {
+            unit, cell, rng: createRng((maze.seed ^ 0x9e3779b9) >>> 0),
+          });
+        }
+      } else {
+        game.spinners = null;
+      }
+      spinners = game.spinners ?? [];
       shotsState = createShotsState();
       bursts = [];
       crash = false;
@@ -345,7 +380,22 @@ export function createPlaying(game) {
         enemiesStep(enemies, dt);
         const hit = enemyHit(enemies, px, pz, (RADIUS_RATIO + ENEMY.hitRadius) * cell);
         if (hit && !reached) {
-          startCrash(hit);
+          startCrash(hit, { kill: hit });
+          return;
+        }
+      }
+
+      // Spinner: Spike waechst, Vorlauf/Rueckzug pendelt; Koerper-Beruehrung
+      // ODER Aufspiessen am Spike = Game Over (beim Aufspiessen ueberlebt der
+      // Spinner -- nur die Koerper-Kollision reisst ihn mit).
+      if (spinners.length) {
+        spinnersStep(spinners, dt, cell);
+        const hit = spinnerPlayerHit(spinners, px, pz, RADIUS_RATIO * cell, cell);
+        if (hit && !reached) {
+          startCrash(hit, {
+            kill: hit.impale ? null : hit.spinner,
+            color: SPINNER_COLOR, height: SPINNER.height * cell,
+          });
           return;
         }
       }
@@ -359,6 +409,7 @@ export function createPlaying(game) {
         }
         const events = shotsStep(maze, shotsState, dt, {
           unit, cell, enemies, enemyRadius: ENEMY.shotRadius * cell,
+          hitTest: spinners.length ? (x, z) => spinnerShotHit(spinners, x, z, cell) : null,
         });
         for (const ev of events) spawnShotEvent(ev);
       }
@@ -468,6 +519,20 @@ export function createPlaying(game) {
         }
         renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
           intensity: 0.95, dim: ENEMY_OCC_DIM, color: ENEMY_COLOR, glow: ENEMY_GLOW,
+        });
+      }
+
+      // Spinner: gruene rotierende Spiralen samt Spike, gleiche Hidden-Line-
+      // Behandlung wie die Rauten (verdeckt schimmern sie durch die Wand --
+      // man ahnt den Spike hinter der Ecke).
+      const aliveSpinners = spinners.filter((s) => s.alive);
+      if (aliveSpinners.length) {
+        const segs = [];
+        for (const s of aliveSpinners) {
+          segs.push(...spinnerSegments(s, sceneT, { cell }));
+        }
+        renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
+          intensity: 0.95, dim: ENEMY_OCC_DIM, color: SPINNER_COLOR, glow: ENEMY_GLOW,
         });
       }
 

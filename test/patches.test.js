@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, fallPatch, risePatch, gnawPatch, engineParams,
-  shotPatch, poofPatch, boomPatch, crashPatch, tickPatch, dockPatch,
+  shotPatch, poofPatch, boomPatch, crashPatch, tickPatch, dockPatch, clinkPatch,
 } from '../src/sound/patches.js';
 
 const EPS = 1e-9;
@@ -56,6 +56,7 @@ test('bump/sizzle/fanfare erfuellen die Patch-Invarianten', () => {
   checkPatch(poofPatch(), 'poof');
   checkPatch(boomPatch(), 'boom');
   checkPatch(crashPatch(), 'crash');
+  checkPatch(clinkPatch(), 'clink');
   for (const p of [0, 0.5, 1]) checkPatch(tickPatch(p), `tick(${p})`);
   for (const dur of [1.0, 1.6]) {
     checkPatch(dockPatch(dur, false), `dock(${dur})`);

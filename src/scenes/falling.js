@@ -9,6 +9,8 @@ import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
 import { cellCenter, startFacingYaw } from '../world/mazeWorld.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
+import { spinnerMarkers } from '../world/spinners.js';
+import { PHOSPHOR_GREEN } from '../render/colors.js';
 import { fallPatch } from '../sound/patches.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, unitSize, faceWalls, faceFootprints, renderFaceWalls,
@@ -68,7 +70,10 @@ export function createFalling(game) {
       // Feind-Kreuze mit (nur dann sind die Feinde schon die aktuellen --
       // ein frischer Anlauf stellt sie erst in Playing auf).
       drawMapOverlay(renderer, maze, face, camera, game.resume ? game.trail : null, 1 - e);
-      if (game.resume) drawEnemyMarkers(renderer, game.enemies, face, camera, cell, 1 - e);
+      if (game.resume) {
+        drawEnemyMarkers(renderer, game.enemies, face, camera, cell, 1 - e);
+        drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, 1 - e, PHOSPHOR_GREEN);
+      }
     },
   };
 }

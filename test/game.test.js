@@ -89,6 +89,28 @@ test('Farb-Thema Level 6: Orbit gruen, Andocken blendet, ab MazeGen blau', () =>
   assert.equal(r.color, TEMPEST_BLUE);
 });
 
+test('Level 16: Spinner entstehen beim Spielstart und werden gerendert', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+  g.level = 16;
+
+  g.handleKey('S');
+  advance(g, r, 1.8);  // Andocken -> MazeGen
+  advance(g, r, 6.0);  // Wachstum (n=35 dauert laenger) -> Reinfallen
+  advance(g, r, 2.0);  // Schwenk -> Spielablauf
+  assert.equal(g.stateKey, State.PLAYING);
+  assert.ok(Array.isArray(g.spinners) && g.spinners.length > 0, 'Spinner erzeugt');
+  assert.ok(g.spinners.every((s) => s.alive), 'alle Spinner leben am Start');
+  assert.equal(g.enemies, null, 'Level 16 hat keine Rauten');
+
+  // Ein paar Sekunden Spiel mit Dauerfeuer: nichts wirft, es wird gezeichnet.
+  g.keys.add(' ');
+  const before = r.calls;
+  advance(g, r, 2.0);
+  g.keys.delete(' ');
+  assert.ok(r.calls > before, 'Spielablauf zeichnet weiter');
+});
+
 test('voller Zyklus Start -> (Andocken) -> MazeGen -> Playing -> Start', () => {
   const g = new Game();
   const r = fakeRenderer();
@@ -150,7 +172,7 @@ test('Zustands-Zyklus direkt via dispatch (ohne Andocken)', () => {
   assert.equal(g.stateKey, State.STARTSCREEN);
 });
 
-test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..15', () => {
+test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..20', () => {
   const g = new Game();
   assert.equal(g.level, 1);
 
@@ -161,10 +183,10 @@ test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..15', () => {
   g.handleKey('ArrowUp');
   assert.equal(g.level, 3);
 
-  for (let i = 0; i < 20; i++) g.handleKey('ArrowUp'); // oben begrenzt
-  assert.equal(g.level, 15);
+  for (let i = 0; i < 25; i++) g.handleKey('ArrowUp'); // oben begrenzt
+  assert.equal(g.level, 20);
   g.handleKey('ArrowLeft');
-  assert.equal(g.level, 14);
+  assert.equal(g.level, 19);
 });
 
 test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry', () => {

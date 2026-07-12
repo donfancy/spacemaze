@@ -31,6 +31,7 @@ export class Game {
     this.undock = false;     // X auf der Karte: Startscreen beginnt mit dem Abdock-Flug
     this.reachedGoal = false; // Ziel erreicht? (steuert Q/X-Angebot auf der Karte)
     this.enemies = null;      // Feinde des Levels (ab 11), von Playing verwaltet -- bleiben ueber Karte/Resume erhalten
+    this.spinners = null;     // Spiral-Spinner (ab 16), gleiche Lebensdauer-Regeln wie enemies
     this.gameOver = false;    // Feindberuehrung: Karte zeigt GAME OVER, Q startet den Level neu
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.

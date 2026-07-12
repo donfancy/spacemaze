@@ -9,6 +9,8 @@ import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
+import { spinnerMarkers } from '../world/spinners.js';
+import { PHOSPHOR_GREEN } from '../render/colors.js';
 import { risePatch } from '../sound/patches.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
@@ -64,6 +66,7 @@ export function createRising(game) {
       renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight });
       drawMapOverlay(renderer, maze, face, camera, game.trail, e); // Rahmen + S/G + Weg blenden ein
       drawEnemyMarkers(renderer, game.enemies, face, camera, cell, e); // rote Kreuze blenden mit ein
+      drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, e, PHOSPHOR_GREEN); // gruene dito
     },
   };
 }

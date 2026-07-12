@@ -145,13 +145,14 @@ export function drawCompassLabels(renderer, maze, face, camera, intensity) {
 
 const TRAIL_DIM = 0.5; // Weglinie zu 50% gedimmt (gegen Rahmen/Waende absetzen)
 
-// Feind-Marker fuer die Kartensicht: kleine rote Kreuze an den Positionen der
-// LEBENDEN Rauten (abgeschossene verschwinden auch von der Karte). Genutzt von
+// Feind-Marker fuer die Kartensicht: kleine Kreuze an den Positionen der
+// LEBENDEN Feinde (abgeschossene verschwinden auch von der Karte). Genutzt von
 // der Karte selbst und den Schwenks (dort mit ein-/ausblendender Intensitaet).
+// `color` erlaubt andere Feindarten (Spinner-Gruen); Standard ist Rauten-Rot.
 const ENEMY_MARK_COLOR = '#ff3b30';   // Feind-Rot wie in der Ego-Ansicht
 const ENEMY_MARK_RATIO = 0.22;        // Kreuz-Halbarm (Anteil der Gangbreite)
 
-export function drawEnemyMarkers(renderer, enemies, face, camera, cell, intensity) {
+export function drawEnemyMarkers(renderer, enemies, face, camera, cell, intensity, color = ENEMY_MARK_COLOR) {
   if (!enemies || intensity <= 0.01) return;
   const r = ENEMY_MARK_RATIO * cell;
   const segments = [];
@@ -163,7 +164,7 @@ export function drawEnemyMarkers(renderer, enemies, face, camera, cell, intensit
     );
   }
   if (segments.length) {
-    renderer.renderScene({ segments, intensity }, camera, { color: ENEMY_MARK_COLOR });
+    renderer.renderScene({ segments, intensity }, camera, { color });
   }
 }
 

@@ -11,6 +11,10 @@
 //   `shoot`            Space feuert Projektile (world/shots.js, Tempest-Regel)
 //   `enemies`          { count, patrol }: Anzahl roter Rauten (world/enemies.js)
 //                      und Anteil davon, der im Gang patrouilliert (0..1)
+// Ab Level 16 (wieder blau, neue Feinde):
+//   `spinners`         { count }: gruene Spiral-Spinner an den End-Waenden
+//                      langer Gangstuecke (world/spinners.js); ihr Spike
+//                      sperrt den Gang und will per Dauerfeuer gekuerzt werden
 
 import { PHOSPHOR_GREEN, TEMPEST_BLUE } from '../render/colors.js';
 
@@ -33,6 +37,19 @@ export const LEVELS = [
   { n: 31, metric: THIN, drive: true, straight: 0.6, shoot: true, enemies: { count: 10, patrol: 0.4 } }, // Level 13
   { n: 33, metric: THIN, drive: true, straight: 0.6, shoot: true, enemies: { count: 12, patrol: 0.7 } }, // Level 14
   { n: 35, metric: THIN, drive: true, straight: 0.6, shoot: true, enemies: { count: 14, patrol: 1 } },   // Level 15
+  // Level 16-20: wieder Tempest-blau, Groesse moderat (35-39), dafuer mehr
+  // lange Geraden (straight steigt) -- die Buehne fuer die Spinner. Level 16
+  // fuehrt sie solo ein, ab 17 kommen die Rauten zurueck (Mix, steigend).
+  { n: 35, metric: THIN, drive: true, straight: 0.7, shoot: true, color: TEMPEST_BLUE,
+    spinners: { count: 5 } },                                                                            // Level 16
+  { n: 35, metric: THIN, drive: true, straight: 0.7, shoot: true, color: TEMPEST_BLUE,
+    spinners: { count: 5 }, enemies: { count: 6, patrol: 0.5 } },                                        // Level 17
+  { n: 37, metric: THIN, drive: true, straight: 0.75, shoot: true, color: TEMPEST_BLUE,
+    spinners: { count: 6 }, enemies: { count: 8, patrol: 0.7 } },                                        // Level 18
+  { n: 37, metric: THIN, drive: true, straight: 0.75, shoot: true, color: TEMPEST_BLUE,
+    spinners: { count: 7 }, enemies: { count: 10, patrol: 1 } },                                         // Level 19
+  { n: 39, metric: THIN, drive: true, straight: 0.8, shoot: true, color: TEMPEST_BLUE,
+    spinners: { count: 8 }, enemies: { count: 12, patrol: 1 } },                                         // Level 20
 ];
 
 export const MIN_LEVEL = 1;

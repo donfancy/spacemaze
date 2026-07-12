@@ -198,6 +198,22 @@ export function poofPatch() {
   };
 }
 
+// Spike-Treffer (Spinner, ab Level 16): kurzer metallischer "Clink", deutlich
+// hoeher als das Verpuffen -- so tickt das Dauerfeuer-Kuerzen hoerbar mit.
+export function clinkPatch() {
+  return {
+    duration: 0.09,
+    voices: [
+      { type: 'osc', shape: 'square',
+        freq: [[0, 1500], [0.08, 950]],
+        gain: [[0, 0], [0.004, 0.1], [0.09, 0]] },
+      { type: 'noise',
+        filter: { type: 'highpass', freq: [[0, 3500]] },
+        gain: [[0, 0], [0.003, 0.05], [0.04, 0]] },
+    ],
+  };
+}
+
 // Feind-Abschuss: mittlerer Krach -- Rauschexplosion mit gezackter Huellkurve
 // (wie das Brutzeln, aber breiter), harter Rechteck-Schlag, dumpfer Koerper.
 export function boomPatch() {
