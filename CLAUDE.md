@@ -116,7 +116,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   (`world/enemies.js`: ~Hälfte auf dem Lösungsweg mit Schutzzone um S/G, Rest
   zufällig; `patrol`-Anteil pendelt im Gang; Rauten als Segmente durch die
   normale Hidden-Line-Pipeline via `renderFaceOverlay` mit `color`, verdeckt
-  0.25 statt 0.1 — man ahnt sie hinterm Eck). Berührung = Crash: Explosion
+  0.175 statt 0.1 — man ahnt sie hinterm Eck; 12.7.2026 von 0.25 abgetönt). Berührung = Crash: Explosion
   (`world/burst.js`, deterministische Splitter), `crashPatch`, nach 1.3 s
   schneller Rückschwenk (0.8 s) zur Karte mit GAME OVER (pulsiert in der
   FARBE rot↔weiß bei voller Deckkraft — Helligkeits-Pulsieren wirkte über

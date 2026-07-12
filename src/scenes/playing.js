@@ -108,7 +108,8 @@ const ENEMY_COLOR = '#ff3b30';   // Feind-Rot (Rauten, Abschuss-Splitter)
 const SPINNER_COLOR = PHOSPHOR_GREEN; // Spinner-Gruen (Spiralen, ab Level 16 auf Blau)
 const SHOT_COLOR = '#ffffff';    // Projektile und Verpuffen
 const ENEMY_GLOW = 12;           // Rauten gluehen etwas staerker (Gefahr)
-const ENEMY_OCC_DIM = 0.25;      // verdeckte Rauten schimmern durch die Wand
+const ENEMY_OCC_DIM = 0.175;     // verdeckte Rauten schimmern durch die Wand
+                                 // (dezenter als frueher 0.25; Waende: 0.1)
 const CRASH_TIME = 1.3;          // s: Explosion austoben lassen, dann zur Karte
 const CRASH_SHAKE_ROLL = 3.0;    // rad/s Roll-Impuls des Crashs
 const CRASH_SHAKE_PITCH = 1.8;   // rad/s Nick-Impuls des Crashs
