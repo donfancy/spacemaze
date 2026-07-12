@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 276 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 281 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -198,6 +198,13 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   worldToScreen als Zentrum); rising startet nach Game Over voll zerscherbt
   und klingt mit (1−e)² ab — beim Raus-Wooshen sortiert sich das Bild,
   die Karte kommt sauber an.
+- ZIEL-FEUERWERK (12.7.2026): am Ziel spriessen zusätzlich zum weißen
+  Aufblitzen ~70 senkrechte Strahlen (`world/fireworks.js`, pur) gestaffelt
+  in einer Scheibe (2.2 Zellen) um die Zielmitte; jeder schaltet von
+  unsichtbar HART (Arcade-Palette, kein Blenden) durch Rot→Gelb→Grün→Blau→
+  Magenta→Cyan nach Weiß und verlischt. Höhen endlich (max 8 Zellen — die
+  Spitzen funkeln sichtbar), deterministisch aus maze.seed, OHNE Verdeckung,
+  gebatcht pro Farbe×Helligkeits-Stufe (shadowBlur-Regel wie Ziel-Strahlen).
 - Nächste mögliche Themen: echter "Trench Run", Politur; Score/HUD.
   Aufgeschobene (Performance-)Ideen mit Messwerten: siehe IDEAS.md.
 - Performance-Basics sind drin: kollineare Wandzüge werden zusammengefasst

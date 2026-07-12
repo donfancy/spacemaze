@@ -38,6 +38,7 @@ import {
 import {
   goalZone, inGoalZone, goalMarkerSegments, goalBeamFeet, beamFlicker, beamOcclusionCut,
 } from '../world/goal.js';
+import { fireworkBeams } from '../world/fireworks.js';
 import { collisionWave, waveSegments } from '../world/waves.js';
 import { recordTrailPoint } from '../world/trail.js';
 import { compassLayout } from '../render/compass.js';
@@ -69,6 +70,9 @@ const BEAM_WANDER_RATE = 0.7;    // Wander-Stuetzstellen pro Sekunde
 const GOAL_MARKER_INT = 0.9;     // Intensitaet des Boden-Quadrats
 const GOAL_OCC_DIM = 0.2;        // verdeckt: doppelt so hell wie Wandkanten (DIM 0.1)
 const GOAL_FLASH_TIME = 1.0;     // s: weisses Aufstrahlen + Erloeschen am Ziel
+const FIREWORK_SPREAD = 2.2;     // Feuerwerk-Radius um die Zielmitte (Gangbreiten)
+const FIREWORK_HEIGHT = 8;       // maximale Feuerwerk-Strahlhoehe (Gangbreiten --
+                                 // endlich, damit die Spitzen sichtbar funkeln)
 
 // Stroke-Batching: jeder drawPolylines/renderScene-Aufruf ist ein eigener
 // Canvas-Stroke MIT Glow (shadowBlur -- der teuerste Zeichenpfad). Statt pro
@@ -492,6 +496,34 @@ export function createPlaying(game) {
           }
           for (const [qf, segments] of dimBuckets) {
             renderer.renderScene({ segments, intensity: GOAL_OCC_DIM * BEAM_MAX_INT * qf }, camera, { near: goalNear });
+          }
+        }
+      }
+
+      // Ziel-FEUERWERK (world/fireworks.js): waehrend die Ziel-Strahlen weiss
+      // verloeschen, spriessen rund ums Ziel viele senkrechte Strahlen aus
+      // dem Boden -- jeder schaltet von unsichtbar durch die klassischen
+      // Arcade-Farben nach Weiss und verschwindet. Keine Verdeckung (es
+      // strahlt UEBER die Waende) und pro Farbe + Helligkeits-Stufe EIN
+      // Stroke (shadowBlur-Batching wie bei den Ziel-Strahlen).
+      if (reached) {
+        const beams = fireworkBeams(sceneT - reachedAt, {
+          seed: maze.seed,
+          center: [(goalRect.x0 + goalRect.x1) / 2, (goalRect.z0 + goalRect.z1) / 2],
+          spread: FIREWORK_SPREAD * cell,
+          height: FIREWORK_HEIGHT * cell,
+        });
+        if (beams.length) {
+          const buckets = new Map();
+          for (const b of beams) {
+            const q = Math.ceil(b.intensity * FLICKER_STEPS) / FLICKER_STEPS;
+            bucketAdd(buckets, b.color + '|' + q,
+              faceSegments([[[b.x, 0, b.z], [b.x, b.top, b.z]]], face));
+          }
+          for (const [key, segments] of buckets) {
+            const [color, q] = key.split('|');
+            renderer.renderScene({ segments, intensity: Number(q) }, camera,
+              { near: goalNear, color, glow: FLASH_GLOW });
           }
         }
       }
