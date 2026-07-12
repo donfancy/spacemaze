@@ -250,8 +250,21 @@ export function boomPatch() {
 
 // Game-Over-Crash: DIE grosse Explosion -- lauter und laenger als der Feind-
 // Abschuss, mit tiefem, lange austrudelndem Bass-Koerper und nachzackenden
-// Trummer-Wellen im Rauschen.
+// Truemmer-Wellen im Rauschen. Dazu (12.7.2026, passend zum zerberstenden
+// Bild) das splitternde KLIRREN, das den Crash klar vom Abschuss-Boom
+// unterscheidet: ein hochresonantes Scherben-Band, das von ganz oben
+// herabfaellt, und gestaffelte Glas-Pings, die immer tiefer und leiser
+// nachklingeln -- die Scherben regnen aus.
 export function crashPatch() {
+  // Glas-Pings: kurze Dreieck-Chirps, jeder spaeter, tiefer und leiser als
+  // der vorige; jeder einzelne kippt zusaetzlich leicht nach unten.
+  const pings = [
+    [0.06, 5200], [0.16, 4300], [0.3, 3400], [0.48, 2600], [0.72, 1900], [0.98, 1300],
+  ].map(([at, hz], i) => ({
+    type: 'osc', shape: 'triangle',
+    freq: [[at, hz], [at + 0.16, hz * 0.82]],
+    gain: [[at, 0], [at + 0.008, 0.14 * (1 - i * 0.12)], [at + 0.16, 0]],
+  }));
   return {
     duration: 1.3,
     voices: [
@@ -265,6 +278,13 @@ export function crashPatch() {
       { type: 'osc', shape: 'sine',
         freq: [[0, 65], [1.0, 28]],
         gain: [[0, 0], [0.02, 0.5], [1.2, 0]] },
+      // Scherben-Klirren: hoch-resonantes Rauschband (hoher Q = es klingelt
+      // statt zu rauschen) faellt von ganz oben herab, glitzernd gezackt.
+      { type: 'noise',
+        filter: { type: 'bandpass', freq: [[0, 6500], [1.1, 900]], q: 9 },
+        gain: [[0, 0], [0.015, 0.3], [0.08, 0.1], [0.14, 0.24], [0.22, 0.08],
+               [0.32, 0.18], [0.45, 0.06], [0.6, 0.12], [0.8, 0.04], [1.1, 0]] },
+      ...pings,
     ],
   };
 }

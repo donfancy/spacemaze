@@ -112,6 +112,26 @@ test('Schuss kurz und leise, Verpuffen weich, Crash kracht am laengsten und laut
     const body = p.voices.find((v) => v.type === 'osc' && v.shape === 'sine');
     assert.ok(body.freq[body.freq.length - 1][1] < 50, `${name}: Bass faellt in den Keller`);
   }
+
+  // Das Klirren (passend zum zerberstenden Bild) unterscheidet den Crash
+  // vom Abschuss-Boom: resonantes Scherben-Band faellt von ganz oben herab.
+  const klirr = crash.voices.find((v) => v.type === 'noise' && v.filter?.type === 'bandpass');
+  assert.ok(klirr, 'crash hat ein Scherben-Band');
+  assert.ok(klirr.filter.q >= 5, 'hoch-resonant: es klingelt statt zu rauschen');
+  assert.ok(klirr.filter.freq[0][1] > 3000, 'startet glasig hoch');
+  assert.ok(klirr.filter.freq[klirr.filter.freq.length - 1][1] < klirr.filter.freq[0][1] / 3,
+    'faellt deutlich herab');
+  assert.ok(!boom.voices.some((v) => v.type === 'noise' && v.filter?.type === 'bandpass'),
+    'der Abschuss-Boom klirrt NICHT (klare Differenzierung)');
+  // Glas-Pings: gestaffelt, jeder spaetere beginnt tiefer und leiser.
+  const pings = crash.voices.filter((v) => v.type === 'osc' && v.shape === 'triangle');
+  assert.ok(pings.length >= 4, 'mehrere Glas-Pings');
+  for (let i = 1; i < pings.length; i++) {
+    assert.ok(pings[i].gain[0][0] > pings[i - 1].gain[0][0], 'Pings zeitlich gestaffelt');
+    assert.ok(pings[i].freq[0][1] < pings[i - 1].freq[0][1], 'Pings fallen in der Tonhoehe');
+    assert.ok(peakGain({ voices: [pings[i]] }) < peakGain({ voices: [pings[i - 1]] }),
+      'Pings werden leiser (die Scherben regnen aus)');
+  }
 });
 
 test('fall faellt, rise steigt, beide schwellen zur Mitte an', () => {
