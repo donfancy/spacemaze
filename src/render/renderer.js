@@ -5,8 +5,7 @@
 import { worldToView } from '../math/camera.js';
 import { project, clipNear } from './projection.js';
 import { layoutText } from './vectorText.js';
-
-const PHOSPHOR = '#4dff7a';
+import { PHOSPHOR_GREEN } from './colors.js';
 
 export class Renderer {
   constructor(canvas) {
@@ -15,7 +14,7 @@ export class Renderer {
     this.width = 0;
     this.height = 0;
     this.dpr = 1;
-    this.color = PHOSPHOR;
+    this.color = PHOSPHOR_GREEN; // Theme-Farbe; game.render setzt sie pro Level (core/levels.js)
     this.glow = 8;       // shadowBlur in CSS-Pixeln
     this.near = 0.1;
   }

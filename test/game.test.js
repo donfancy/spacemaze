@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../src/core/game.js';
 import { State, GameEvent } from '../src/core/states.js';
+import { PHOSPHOR_GREEN, TEMPEST_BLUE } from '../src/render/colors.js';
 
 // Renderer-Attrappe: bietet alle vom Spiel genutzten Methoden als No-Op an.
 function fakeRenderer() {
@@ -18,7 +19,7 @@ function fakeRenderer() {
     fillBlack() {},
     drawText() { this.calls++; },
     drawPolylines() { this.calls++; },
-    renderScene() { this.calls++; },
+    renderScene(scene, camera, opts) { this.calls++; this.lastSceneColor = opts?.color; },
     worldToScreen() { return { x: 400, y: 300 }; },
     pushSway() {},
     popSway() {},
@@ -62,6 +63,30 @@ test('S leitet die Andock-Sequenz ein; erst danach Uebergang zur Labyrinth-Erzeu
   // Nach dem Andocken folgt der Uebergang zur Labyrinth-Erzeugung.
   advance(g, r, 2.6);
   assert.equal(g.stateKey, State.MAZE_GEN);
+});
+
+test('Farb-Thema Level 6: Orbit gruen, Andocken blendet, ab MazeGen blau', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+  g.level = 6;
+
+  // Im Orbit bleibt alles gruen (Wuerfel ohne explizite Farbe -> Grundfarbe).
+  advance(g, r, 0.1);
+  assert.equal(r.color, PHOSPHOR_GREEN);
+  assert.equal(r.lastSceneColor, undefined);
+
+  // Mitten im Andocken (~1,6s): der Wuerfel blendet Richtung Blau --
+  // weder noch gruen noch schon blau.
+  g.handleKey('S');
+  advance(g, r, 0.8);
+  assert.ok(r.lastSceneColor, 'Andocken zeichnet mit expliziter Blend-Farbe');
+  assert.notEqual(r.lastSceneColor, PHOSPHOR_GREEN);
+  assert.notEqual(r.lastSceneColor, TEMPEST_BLUE);
+
+  // Nach dem Andocken uebernimmt MazeGen -- Grundfarbe jetzt Tempest-blau.
+  advance(g, r, 1.2);
+  assert.equal(g.stateKey, State.MAZE_GEN);
+  assert.equal(r.color, TEMPEST_BLUE);
 });
 
 test('voller Zyklus Start -> (Andocken) -> MazeGen -> Playing -> Start', () => {

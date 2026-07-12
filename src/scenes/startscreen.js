@@ -13,7 +13,8 @@
 // Nach Abschluss des Andockens uebernimmt MazeGen nahtlos dieselbe Flaeche.
 
 import { GameEvent } from '../core/states.js';
-import { stepLevel, MIN_LEVEL, MAX_LEVEL } from '../core/levels.js';
+import { stepLevel, levelColor, MIN_LEVEL, MAX_LEVEL } from '../core/levels.js';
+import { PHOSPHOR_GREEN, mixColors } from '../render/colors.js';
 import { tickPatch, dockPatch } from '../sound/patches.js';
 import { createCamera } from '../math/camera.js';
 import { normalize } from '../math/vec3.js';
@@ -52,10 +53,12 @@ export function createStartscreen(game) {
     camera.pitch = pose.pitch;
   }
 
-  function drawCube(renderer, hiddenDim) {
+  // `color` optional: beim An-/Abdocken die Blend-Farbe Richtung Level-Thema,
+  // sonst die Renderer-Grundfarbe (gruen).
+  function drawCube(renderer, hiddenDim, color) {
     const { visible, hidden } = classifyEdges(cube, camera.position);
-    renderer.renderScene({ segments: hidden, intensity: hiddenDim }, camera);
-    renderer.renderScene({ segments: visible, intensity: 1.0 }, camera);
+    renderer.renderScene({ segments: hidden, intensity: hiddenDim }, camera, { color });
+    renderer.renderScene({ segments: visible, intensity: 1.0 }, camera, { color });
   }
 
   return {
@@ -103,10 +106,11 @@ export function createStartscreen(game) {
 
     render(renderer) {
       if (phase === 'undocking') {
-        // Symmetrisch zum Andocken: gleiche Flugkurve, verdeckte Kanten faden ein.
+        // Symmetrisch zum Andocken: gleiche Flugkurve, verdeckte Kanten faden
+        // ein, und die Level-Farbe blendet zurueck nach Gruen.
         const p = Math.min(undockT / UNDOCK_DURATION, 1);
         applyPose(dockPose(p, undockStart, undockTarget));
-        drawCube(renderer, HIDDEN_DIM * p);
+        drawCube(renderer, HIDDEN_DIM * p, mixColors(levelColor(game.level), PHOSPHOR_GREEN, p));
       } else if (phase === 'orbiting') {
         applyPose(orbitCamera(t, ORBIT_OPTS));
         drawCube(renderer, HIDDEN_DIM);
@@ -133,9 +137,11 @@ export function createStartscreen(game) {
           });
         }
       } else {
+        // Andocken: waehrend des Reinschwebens blendet der Wuerfel von Gruen
+        // zur Level-Farbe -- am Ende uebernimmt MazeGen nahtlos in ihr.
         const p = Math.min(dockT / DOCK_DURATION, 1);
         applyPose(dockPose(p, dockStart, dockTarget));
-        drawCube(renderer, HIDDEN_DIM * (1 - p));
+        drawCube(renderer, HIDDEN_DIM * (1 - p), mixColors(PHOSPHOR_GREEN, levelColor(game.level), p));
       }
     },
 

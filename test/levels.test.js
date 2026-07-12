@@ -2,7 +2,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LEVELS, MIN_LEVEL, MAX_LEVEL, levelConfig, stepLevel } from '../src/core/levels.js';
+import { LEVELS, MIN_LEVEL, MAX_LEVEL, levelConfig, levelColor, stepLevel } from '../src/core/levels.js';
+import { PHOSPHOR_GREEN, TEMPEST_BLUE } from '../src/render/colors.js';
 
 test('Level 1 bis 15: Maze-Groesse waechst je Level um ein Rastermass', () => {
   assert.equal(MIN_LEVEL, 1);
@@ -46,6 +47,18 @@ test('Kampf-Levels ab 11: Geraden-Bias, Schiessen, wachsende Feind-Staffelung', 
     prevPatrol = cfg.enemies.patrol;
   }
   assert.equal(levelConfig(15).enemies.patrol, 1, 'Level 15: alle Rauten patrouillieren');
+});
+
+test('Farb-Thema: Level 6-10 Tempest-blau, alle anderen Phosphor-gruen', () => {
+  for (const level of [1, 2, 3, 4, 5, 11, 12, 13, 14, 15]) {
+    assert.equal(levelColor(level), PHOSPHOR_GREEN, `Level ${level} ist gruen`);
+  }
+  for (let level = 6; level <= 10; level++) {
+    assert.equal(levelColor(level), TEMPEST_BLUE, `Level ${level} ist blau`);
+  }
+  // Ausserhalb des Bereichs faellt die Farbe auf die Grundfarbe zurueck.
+  assert.equal(levelColor(0), PHOSPHOR_GREEN);
+  assert.equal(levelColor(undefined), PHOSPHOR_GREEN);
 });
 
 test('levelConfig liefert null ausserhalb des gueltigen Bereichs', () => {

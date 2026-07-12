@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 250 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 256 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -136,7 +136,17 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Level-Wahl tickt (Tonhöhe steigt mit dem Level, an den Rändern still,
   `tickPatch`), An-/Abdock-Flug hat einen sehr dezenten Schwebe-Whoosh
   (`dockPatch`, deutlich leiser als fall/rise, Gleitton rauf/runter).
-- Nächste mögliche Themen: mehr Farben in den hohen Levels, echter
+- FARB-THEMA pro Level (12.7.2026): `render/colors.js` (reine Palette + `mixColors`,
+  headless testbar) hält `PHOSPHOR_GREEN` (#4dff7a) und `TEMPEST_BLUE` (#4d7aff);
+  Level 6–10 haben `color: TEMPEST_BLUE` in levels.js (`levelColor(level)` mit
+  Grün-Fallback). `game.render()` setzt `renderer.color` zentral pro Frame —
+  alle Szenen, Marker und Beschriftungen erben die Farbe automatisch; explizite
+  Farben (Feind-Rot, Schuss-/Blitz-Weiß, GAME-OVER-Puls) bleiben unberührt.
+  Startscreen bleibt grün; beim Andocken blendet der Würfel per `mixColors`
+  von Grün zur Level-Farbe (MazeGen übernimmt nahtlos), beim Abdocken
+  symmetrisch zurück. Level 11–15 bleiben grün; ab 16 wieder blau geplant
+  (mit neuen Feinden).
+- Nächste mögliche Themen: Level 16+ (blau, neue Feinde), echter
   "Trench Run", Politur; Score/HUD.
   Aufgeschobene (Performance-)Ideen mit Messwerten: siehe IDEAS.md.
 - Performance-Basics sind drin: kollineare Wandzüge werden zusammengefasst

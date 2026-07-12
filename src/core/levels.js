@@ -4,11 +4,15 @@
 // (Waende so breit wie Gaenge), mit wall=1/corridor=5 schmale Waende.
 // `drive` (optional) schaltet die Fahr-Dynamik ein (world/drive.js): auto-
 // matischer Vortrieb, nur lenken, Abprall mit Wellen und Kamera-Schwingung.
+// `color` (optional) ist die Linienfarbe des Levels (Waende, Marker, Text);
+// ohne Angabe Phosphor-Gruen. Level 6-10 sind Tempest-blau.
 // Ab Level 11 (Kampf-Levels):
 //   `straight` (0..1)  Geradeaus-Bias des Generators (laengere Gangstuecke)
 //   `shoot`            Space feuert Projektile (world/shots.js, Tempest-Regel)
 //   `enemies`          { count, patrol }: Anzahl roter Rauten (world/enemies.js)
 //                      und Anteil davon, der im Gang patrouilliert (0..1)
+
+import { PHOSPHOR_GREEN, TEMPEST_BLUE } from '../render/colors.js';
 
 const THIN = { wall: 1, corridor: 5 }; // schmale Waende (ab Level 6)
 
@@ -18,11 +22,11 @@ export const LEVELS = [
   { n: 13 },  // Level 3
   { n: 15 },  // Level 4
   { n: 17 },  // Level 5
-  { n: 17, metric: THIN, drive: true }, // Level 6: schmale Waende, Fahrt
-  { n: 19, metric: THIN, drive: true }, // Level 7
-  { n: 21, metric: THIN, drive: true }, // Level 8
-  { n: 23, metric: THIN, drive: true }, // Level 9
-  { n: 25, metric: THIN, drive: true }, // Level 10
+  { n: 17, metric: THIN, drive: true, color: TEMPEST_BLUE }, // Level 6: schmale Waende, Fahrt
+  { n: 19, metric: THIN, drive: true, color: TEMPEST_BLUE }, // Level 7
+  { n: 21, metric: THIN, drive: true, color: TEMPEST_BLUE }, // Level 8
+  { n: 23, metric: THIN, drive: true, color: TEMPEST_BLUE }, // Level 9
+  { n: 25, metric: THIN, drive: true, color: TEMPEST_BLUE }, // Level 10
   // Level 11+: groesser, laengere Geraden, rote Rauten-Feinde + Schiessen.
   { n: 27, metric: THIN, drive: true, straight: 0.6, shoot: true, enemies: { count: 6, patrol: 0 } },    // Level 11
   { n: 29, metric: THIN, drive: true, straight: 0.6, shoot: true, enemies: { count: 8, patrol: 0 } },    // Level 12
@@ -39,6 +43,11 @@ export function levelConfig(level) {
   return Number.isInteger(level) && level >= MIN_LEVEL && level <= MAX_LEVEL
     ? LEVELS[level - 1]
     : null;
+}
+
+// Linienfarbe eines Levels; ausserhalb des Bereichs/ohne Angabe Phosphor-Gruen.
+export function levelColor(level) {
+  return levelConfig(level)?.color ?? PHOSPHOR_GREEN;
 }
 
 // Auswahl schrittweise aendern, an den Raendern begrenzt (kein Umlauf).

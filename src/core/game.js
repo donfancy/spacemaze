@@ -5,6 +5,8 @@
 // states.js und ist dort getestet. Hier kommt das Timing/Animation dazu.
 
 import { State, GameEvent, nextState } from './states.js';
+import { levelColor } from './levels.js';
+import { PHOSPHOR_GREEN } from '../render/colors.js';
 import { createStartscreen } from '../scenes/startscreen.js';
 import { createMazeGen } from '../scenes/mazegen.js';
 import { createFalling } from '../scenes/falling.js';
@@ -100,6 +102,12 @@ export class Game {
   }
 
   render(renderer) {
+    // Theme-Farbe des Levels fuer alles ohne explizite Farbe (Kanten, Marker,
+    // Beschriftung). Der Startscreen bleibt gruen und blendet beim An-/Abdocken
+    // selbst zwischen Gruen und der Level-Farbe (explizite color-Option).
+    renderer.color = this.stateKey === State.STARTSCREEN
+      ? PHOSPHOR_GREEN
+      : levelColor(this.level);
     this.current.render?.(renderer);
 
     if (this.transition.active) {
