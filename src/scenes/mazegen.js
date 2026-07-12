@@ -14,14 +14,17 @@ import {
 } from '../world/cubeFaces.js';
 import { randomSeed } from '../util/rng.js';
 import { levelConfig } from '../core/levels.js';
+import { spinnerMarkers } from '../world/spinners.js';
+import { PHOSPHOR_GREEN } from '../render/colors.js';
 import { gnawPatch } from '../sound/patches.js';
-import { drawCompassLabels, drawFaceMarker } from './mazeView.js';
+import { cellSize, drawCompassLabels, drawFaceMarker, drawEnemyMarkers } from './mazeView.js';
 
 const CUBE_SIZE = 2.4;
 
 const MARKER_TIME = 0.7;  // Sekunden: S/G blenden ein
 const GROW_TIME = 2.6;    // Sekunden: Labyrinth waechst
 const HOLD_TIME = 1.0;    // Sekunden: fertiges Labyrinth steht
+const FOE_TIME = 0.5;     // Sekunden: Feind-Kreuze blenden nach dem Wachsen ein
 
 function clamp01(x) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
@@ -53,7 +56,7 @@ export function createMazeGen(game) {
       game.resume = false; // frisches Labyrinth: keine Fortsetzung, Ziel offen
       game.reachedGoal = false;
       game.gameOver = false;
-      game.enemies = null; // Feinde gehoeren zum Labyrinth -> Playing erzeugt neue
+      game.spawnFoes(maze); // Feinde dieses Labyrinths -- die Start-Karte zeigt sie schon
       face = game.dockFace ?? SIDE_FACES[0]; // Fallback, falls ohne Andocken erreicht
       border = gridBorderOnFace(maze.n, CUBE_SIZE, face);
       applyDock();
@@ -94,6 +97,15 @@ export function createMazeGen(game) {
         drawFaceMarker(renderer, maze.goal, 'G', face, maze, camera, markerFade);
       }
       drawCompassLabels(renderer, maze, face, camera, markerFade);
+
+      // 4) Feind-Kreuze blenden ein, sobald das Labyrinth fertig gewachsen
+      // ist -- die Start-Karte verraet schon, wo Gefahr wartet.
+      const foeFade = clamp01((t - MARKER_TIME - GROW_TIME) / FOE_TIME);
+      if (foeFade > 0) {
+        const cell = cellSize(maze);
+        drawEnemyMarkers(renderer, game.enemies, face, camera, cell, foeFade);
+        drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, foeFade, PHOSPHOR_GREEN);
+      }
     },
   };
 }

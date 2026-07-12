@@ -42,6 +42,10 @@ export function createFalling(game) {
       face = game.dockFace ?? SIDE_FACES[0];
       cell = cellSize(maze);
       footprints = faceFootprints(maze, face);
+      // Frischer Anlauf (auch Retry nach Game Over): Feinde neu wuerfeln --
+      // deterministisch aus dem Seed, die Kreuze unten stimmen also schon
+      // mit dem kommenden Durchlauf ueberein. Bei Fortsetzung bleiben sie.
+      if (!game.resume) game.spawnFoes(maze);
       startPose = mapPose(face, camera.fov); // Kartensicht
       if (game.resume && game.playerState) {
         const ps = game.playerState; // Fortsetzung: zurueck zur Spielerlage
@@ -66,14 +70,12 @@ export function createFalling(game) {
 
       const walls = faceWalls(maze, face, WALL_RATIO * cell * e); // Waende wachsen auf
       renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight });
-      // Rahmen + S/G verblassen; bei Fortsetzung verblassen auch Weg und
-      // Feind-Kreuze mit (nur dann sind die Feinde schon die aktuellen --
-      // ein frischer Anlauf stellt sie erst in Playing auf).
+      // Rahmen, S/G und Feind-Kreuze verblassen; der Weg nur bei Fortsetzung
+      // (frischer Anlauf hat noch keinen). Die Feinde sind immer aktuell:
+      // enter() wuerfelt sie bei frischem Anlauf neu, Resume behaelt sie.
       drawMapOverlay(renderer, maze, face, camera, game.resume ? game.trail : null, 1 - e);
-      if (game.resume) {
-        drawEnemyMarkers(renderer, game.enemies, face, camera, cell, 1 - e);
-        drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, 1 - e, PHOSPHOR_GREEN);
-      }
+      drawEnemyMarkers(renderer, game.enemies, face, camera, cell, 1 - e);
+      drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, 1 - e, PHOSPHOR_GREEN);
     },
   };
 }

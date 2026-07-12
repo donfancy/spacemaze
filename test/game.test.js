@@ -96,6 +96,9 @@ test('Level 16: Spinner entstehen beim Spielstart und werden gerendert', () => {
 
   g.handleKey('S');
   advance(g, r, 1.8);  // Andocken -> MazeGen
+  assert.equal(g.stateKey, State.MAZE_GEN);
+  assert.ok(Array.isArray(g.spinners) && g.spinners.length > 0,
+    'Spinner existieren schon auf der Start-Karte (MazeGen wuerfelt bei der Geburt)');
   advance(g, r, 6.0);  // Wachstum (n=35 dauert laenger) -> Reinfallen
   advance(g, r, 2.0);  // Schwenk -> Spielablauf
   assert.equal(g.stateKey, State.PLAYING);

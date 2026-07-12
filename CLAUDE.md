@@ -129,12 +129,17 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   verpuffen an Wänden (Substeps gegen Tunneln durch 1-Einheit-Wände!),
   Zielrichtung `aimYaw = yaw + steer*deflect` — das Fadenkreuz nutzt die
   GERAMPTE Lenkgröße und schlägt dadurch weich weiter aus als die Flugbahn.
-  Feinde leben auf `game.enemies` (Resume behält Abschüsse, Retry/neues Maze
-  würfelt neu, deterministisch aus maze.seed). Space braucht preventDefault
-  (main.js). Feind-Farbe #ff3b30, Schüsse weiß. Auf der Karte (und in den
-  Schwenks) erscheinen lebende Rauten als kleine rote Kreuze
-  (`drawEnemyMarkers` in mazeView; beim Reinfallen nur bei `resume` — bei
-  frischem Anlauf wären es noch die alten Feinde). Startscreen-Sounds:
+  Feinde leben auf `game.enemies`/`game.spinners`: `game.spawnFoes(maze)`
+  würfelt beide deterministisch aus maze.seed — MazeGen ruft es bei der
+  Geburt der Karte (die START-KARTE zeigt die Feind-Kreuze nach dem
+  Wachsen, `FOE_TIME`-Einblendung), Falling bei jedem frischen Anlauf
+  (Retry nach Game Over), Playing nur als Fallback für Direkteinstieg;
+  Resume behält Abschüsse. Space braucht preventDefault
+  (main.js). Feind-Farbe #ff3b30, Schüsse weiß. Auf Karte, Start-Karte
+  und in BEIDEN Schwenks erscheinen lebende Rauten als kleine rote Kreuze
+  und Spinner als grüne (`drawEnemyMarkers` in mazeView — dank spawnFoes
+  sind sie auch beim frischen Reinfallen schon die aktuellen).
+  Startscreen-Sounds:
   Level-Wahl tickt (Tonhöhe steigt mit dem Level, an den Rändern still,
   `tickPatch`), An-/Abdock-Flug hat einen sehr dezenten Schwebe-Whoosh
   (`dockPatch`, deutlich leiser als fall/rise, Gleitton rauf/runter).

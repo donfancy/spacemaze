@@ -5,8 +5,12 @@
 // states.js und ist dort getestet. Hier kommt das Timing/Animation dazu.
 
 import { State, GameEvent, nextState } from './states.js';
-import { levelColor } from './levels.js';
+import { levelColor, levelConfig } from './levels.js';
 import { PHOSPHOR_GREEN } from '../render/colors.js';
+import { createEnemies } from '../world/enemies.js';
+import { createSpinners } from '../world/spinners.js';
+import { createRng } from '../util/rng.js';
+import { unitSize, cellSize } from '../scenes/mazeView.js';
 import { createStartscreen } from '../scenes/startscreen.js';
 import { createMazeGen } from '../scenes/mazegen.js';
 import { createFalling } from '../scenes/falling.js';
@@ -77,6 +81,24 @@ export class Game {
   handleKey(key) {
     if (this.transition.active) return;
     this.current.onKey?.(key);
+  }
+
+  // Feinde des Levels fuer dieses Labyrinth (neu) wuerfeln -- deterministisch
+  // aus dem Maze-Seed, ein Retry landet also bei denselben Positionen.
+  // Aufrufer: MazeGen bei der Geburt der Karte (so zeigen Start-Karte und
+  // Reinfall-Schwenk die Feind-Kreuze schon vor dem Spiel), Falling bei
+  // jedem frischen Anlauf (Retry nach Game Over) und Playing als Fallback
+  // fuer den Direkteinstieg (Tests).
+  spawnFoes(maze) {
+    const cfg = levelConfig(this.level);
+    const unit = unitSize(maze);
+    const cell = cellSize(maze);
+    this.enemies = cfg?.enemies ? createEnemies(maze, cfg.enemies, {
+      unit, cell, rng: createRng((maze.seed ^ 0x5bd1e995) >>> 0),
+    }) : null;
+    this.spinners = cfg?.spinners ? createSpinners(maze, cfg.spinners, {
+      unit, cell, rng: createRng((maze.seed ^ 0x9e3779b9) >>> 0),
+    }) : null;
   }
 
   update(dt) {

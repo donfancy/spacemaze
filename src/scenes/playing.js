@@ -23,13 +23,12 @@ import { generateMaze } from '../world/maze.js';
 import { cellCenter, startFacingYaw, wallFootprints } from '../world/mazeWorld.js';
 import { DRIVE, createDriveState, driveStep } from '../world/drive.js';
 import { WALK, createWalkState, walkStep } from '../world/walk.js';
-import { ENEMY, createEnemies, enemiesStep, enemyHit, enemySegments } from '../world/enemies.js';
+import { ENEMY, enemiesStep, enemyHit, enemySegments } from '../world/enemies.js';
 import {
-  SPINNER, createSpinners, spinnersStep, spinnerShotHit, spinnerPlayerHit, spinnerSegments,
+  SPINNER, spinnersStep, spinnerShotHit, spinnerPlayerHit, spinnerSegments,
 } from '../world/spinners.js';
 import { createShotsState, aimYaw, fireShot, shotsStep, shotSegments } from '../world/shots.js';
 import { burstSegments } from '../world/burst.js';
-import { createRng } from '../util/rng.js';
 import { PHOSPHOR_GREEN } from '../render/colors.js';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams,
@@ -271,31 +270,18 @@ export function createPlaying(game) {
       rollOsc.reset();
       pitchOsc.reset();
 
-      // Feinde: gehoeren zum Labyrinth-Durchlauf (game.enemies) -- bei
-      // Fortsetzung von der Karte bleiben sie (samt Abschuessen) erhalten,
-      // ein frischer Anlauf (auch Retry nach Game Over) wuerfelt sie neu.
-      // Deterministisch aus dem Maze-Seed -> headless reproduzierbar.
-      if (cfg?.enemies) {
-        if (!game.resume || !game.enemies) {
-          game.enemies = createEnemies(maze, cfg.enemies, {
-            unit, cell, rng: createRng((maze.seed ^ 0x5bd1e995) >>> 0),
-          });
-        }
-      } else {
-        game.enemies = null;
+      // Feinde gehoeren zum Labyrinth-Durchlauf: MazeGen wuerfelt sie bei der
+      // Geburt der Karte (die Start-Karte zeigt die Kreuze), Falling bei
+      // jedem frischen Anlauf neu (Retry nach Game Over) -- deterministisch
+      // aus dem Maze-Seed. Bei Fortsetzung von der Karte bleiben sie samt
+      // Abschuessen erhalten. Hier nur der Fallback fuer den Direkteinstieg
+      // (Tests ohne MazeGen/Falling) und das Aufraeumen fremder Level-Reste.
+      if ((cfg?.enemies || cfg?.spinners) && !game.enemies && !game.spinners) {
+        game.spawnFoes(maze);
       }
+      if (!cfg?.enemies) game.enemies = null;
+      if (!cfg?.spinners) game.spinners = null;
       enemies = game.enemies ?? [];
-      // Spinner: gleiche Lebensdauer-Regeln wie die Rauten (Resume behaelt
-      // den Zustand samt Abschuessen, frischer Anlauf wuerfelt neu).
-      if (cfg?.spinners) {
-        if (!game.resume || !game.spinners) {
-          game.spinners = createSpinners(maze, cfg.spinners, {
-            unit, cell, rng: createRng((maze.seed ^ 0x9e3779b9) >>> 0),
-          });
-        }
-      } else {
-        game.spinners = null;
-      }
       spinners = game.spinners ?? [];
       shotsState = createShotsState();
       bursts = [];
