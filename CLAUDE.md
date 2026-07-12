@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 269 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 271 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -150,13 +150,22 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - SPINNER-LEVELS 16–20 (12.7.2026, umgesetzt): `world/spinners.js` (pur).
   GRÜNE oktagonale Spiralen (auf blauem Level-Thema) an den End-Wänden
   langer gerader Gangstücke (`straightRuns`, min. 3 Kammern; Weg-Gänge
-  bevorzugt, Schutzzone um S/G wie bei den Rauten, Ende per rng, 1 pro
-  Gang). Sie drehen sich (Oktagon-Raster, Ecken springen) und "erzeugen"
-  dabei einen Spike entlang der Gangmitte (Mittellinie + Bohrer-Wendel,
-  Höhe 0.35 Zellen — unter der Augenhöhe 0.5, damit er frontal sichtbar
-  bleibt). Der Spike SPERRT den ganzen Gang (`blockRadius` 0.5) — Berührung
-  = Aufspießen = Crash (Spinner überlebt!), nur Dauerfeuer hilft: jeder
-  Treffer kürzt um `shorten` (0.35 Zellen), `clinkPatch` tickt dazu.
+  bevorzugt, Schutzzone um S/G wie bei den Rauten, 1 pro Gang). Sie drehen
+  sich (Oktagon-Raster, Ecken springen) und "erzeugen" dabei einen Spike
+  entlang der Gangmitte (Mittellinie + Bohrer-Wendel, Höhe 0.35 Zellen —
+  unter der Augenhöhe 0.5, damit er frontal sichtbar bleibt). Der Spike ist
+  eine EINBAHN-SPERRE (12.7.2026 entschärft — Boris' Ecken-Todesfalle:
+  hinter der Spitze in den Gang eingebogen und in Spike-Richtung gezwungen,
+  war der rundum tödliche Spike unentrinnbar): tödlich ist NUR das Kreuzen
+  der SPITZE von vorn (über die ganze Gangbreite `blockRadius` 0.5, kein
+  seitliches Vorbeimogeln; auch die vorrückende Spitze spießt auf —
+  Kreuzungs-Check via `prev`-Spielerlage + `prevTip` aus spinnersStep, das
+  Kürzen passiert NACH dem Spieler-Check und die zurückspringende Spitze
+  tötet nie). Schaft und Überfahren von hinten sind harmlos. Frontal hilft
+  nur Dauerfeuer: jeder Treffer kürzt um `shorten` (0.35 Zellen),
+  `clinkPatch` tickt dazu. Ausrichtung: auf Weg-Gängen sitzt der Spinner
+  VORAUS in Laufrichtung (Pflicht-Begegnung immer frontal), bei bloßer
+  Weg-Querung fern der Kreuzung, abseits per rng.
   Zyklus: Spike wächst beim Drehen (grow 0.3), ab `spikeRetreat` (2.0)
   zieht sich der Spinner zur Wand zurück (dort geschützt, Schüsse prallen
   ab = 'shield'), unter `spikeAdvance` (0.7) läuft er wieder vor — NUR beim
@@ -169,9 +178,9 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   im Substep (Ereignis → Schuss stirbt). Auf Karte/Schwenks: grüne Kreuze
   (`spinnerMarkers` + Farb-Param an `drawEnemyMarkers`). `game.spinners`
   mit denselben Resume/Retry-Regeln wie `game.enemies`; `startCrash` ist
-  jetzt generisch (at, {kill, color, height}). Emergentes Detail: Spikes
-  können Quer-Kreuzungen im eigenen Gang überspannen — dort muss man sie
-  ggf. quer kürzen oder den Spinner zerstören, um die End-Kammer zu passieren.
+  jetzt generisch (at, {kill, color, height}). Quer-Kreuzungen über dem
+  Schaft sind seit der Einbahn-Entschärfung passierbar — gefährlich ist
+  eine Kreuzung nur, wenn gerade die SPITZE dort ankommt.
 - Nächste mögliche Themen: echter "Trench Run", Politur; Score/HUD.
   Aufgeschobene (Performance-)Ideen mit Messwerten: siehe IDEAS.md.
 - Performance-Basics sind drin: kollineare Wandzüge werden zusammengefasst

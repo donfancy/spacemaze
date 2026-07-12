@@ -146,30 +146,108 @@ test('Schuss-Treffer: Spike faengt ab und wird gekuerzt; Koerper nur beim Vorlau
   assert.equal(spinnerShotHit(spinners, bx, bz, cell), null);
 });
 
-test('Spieler-Kollision: Spike sperrt den GANZEN Gang, daneben/dahinter ist frei', () => {
+test('Aufspiessen nur von VORN: Kreuzen der Spitze toetet, Schaft und Ueberholen sind sicher', () => {
   const cell = 5;
   const radius = 0.25 * cell;
   const { spinners } = makeSpinner();
   const s = spinners[0];
   s.offset = 2;
-  s.spike = 8;
-  const mid = s.wall + s.dir * (s.offset + 4); // mitten in der Spike-Spanne
+  s.spike = 8; // Spitze bei t = 10 (Abstand von der Wand)
+  const at = (t, dq = 0) => {
+    const along = s.wall + s.dir * t;
+    return s.axis === 'x' ? { px: along, pz: s.cross + dq } : { px: s.cross + dq, pz: along };
+  };
+  const hitFrom = (tFrom, tTo, dq = 0) => {
+    const b = at(tTo, dq);
+    return spinnerPlayerHit(spinners, b.px, b.pz, radius, cell, at(tFrom, dq));
+  };
 
-  // Gangmitte: aufgespiesst (Spinner ueberlebt das -- impale).
-  const hitMid = spinnerPlayerHit(spinners, mid, s.cross, radius, cell);
-  assert.ok(hitMid && hitMid.impale, 'Gangmitte: aufgespiesst');
-  // Hart an der Gangwand (q knapp unter halber Gangbreite): trotzdem tot.
-  const hitEdge = spinnerPlayerHit(spinners, mid, s.cross + 0.49 * cell, radius, cell);
-  assert.ok(hitEdge && hitEdge.impale, 'kein seitliches Vorbeimogeln');
-  // Parallelgang (eine Gang+Wand-Breite entfernt): sicher.
-  assert.equal(spinnerPlayerHit(spinners, mid, s.cross + 1.2 * cell, radius, cell), null);
-  // Vor der Spitze (mit Sicherheitsabstand): noch sicher.
-  const before = s.wall + s.dir * (s.offset + s.spike + radius + 0.5);
-  assert.equal(spinnerPlayerHit(spinners, before, s.cross, radius, cell), null);
-  // Koerper-Beruehrung: Crash ohne impale (der Spinner geht mit drauf).
+  // Frontal: die Vorderkante kreuzt die Spitze -> aufgespiesst (impale).
+  const front = hitFrom(12, 10.5);
+  assert.ok(front && front.impale, 'frontal aufgespiesst');
+  // Auch hart an der Gangwand: kein seitliches Vorbeimogeln.
+  const edge = hitFrom(12, 10.5, 0.49 * cell);
+  assert.ok(edge && edge.impale, 'kein seitliches Vorbeimogeln');
+  // Parallelgang: sicher.
+  assert.equal(hitFrom(12, 10.5, 1.2 * cell), null);
+  // Vor der Spitze bleiben (ohne Kreuzen): sicher.
+  assert.equal(hitFrom(13, 11.5), null);
+  // HINTER der Spitze auf dem Schaft (die alte Todesfalle): sicher.
+  const shaft = at(6);
+  assert.equal(spinnerPlayerHit(spinners, shaft.px, shaft.pz, radius, cell), null);
+  // Ecken-Einstieg von der Seite hinter die Spitze: sicher.
+  assert.equal(hitFrom(6, 6, 0), null);
+  const enter = spinnerPlayerHit(spinners, shaft.px, shaft.pz, radius, cell, at(6, 1.2 * cell));
+  assert.equal(enter, null, 'seitlich auf den Schaft einbiegen ist sicher');
+  // Ueberholen von hinten (MIT der Spike-Richtung ueber die Spitze): sicher.
+  assert.equal(hitFrom(9, 11.6), null, 'Einbahn-Sperre: von hinten passierbar');
+
+  // Die Spitze waechst/laeuft in den Spieler hinein -> aufgespiesst
+  // (Kreuzung durch die Spinner-Bewegung, via prevTip aus spinnersStep).
+  const still = at(11.3); // Vorderkante knapp VOR der Spitze
+  assert.equal(spinnerPlayerHit(spinners, still.px, still.pz, radius, cell), null, 'noch knapp davor');
+  spinnersStep(spinners, 0.1, cell); // Spitze rueckt vor (Wachstum + Vorlauf)
+  const grown = spinnerPlayerHit(spinners, still.px, still.pz, radius, cell);
+  assert.ok(grown && grown.impale, 'die vorrueckende Spitze spiesst auf');
+
+  // Koerper-Beruehrung bleibt rundum toedlich (ohne impale).
   const [bx, bz] = spinnerPos(s);
   const hitBody = spinnerPlayerHit(spinners, bx + radius, bz, radius, cell);
   assert.ok(hitBody && !hitBody.impale);
+});
+
+// Hand-Maze mit Weg-RICHTUNG: S haengt an einem Zweig am niedrigen Ende des
+// langen Gangs, G an einem am hohen -- der Weg laeuft den Gang AUFWAERTS.
+// Zweige mit 4 Kammern, damit die S/G-Schutzzonen (je 3) nicht bis auf den
+// langen Gang reichen.
+function directedMaze() {
+  const n = 17;
+  const grid = Array.from({ length: n }, () => Array(n).fill(WALL));
+  for (let y = 1; y <= 7; y++) grid[y][1] = OPEN;   // Zweig zu S
+  for (let x = 1; x <= 15; x++) grid[7][x] = OPEN;  // langer Gang
+  for (let y = 7; y <= 13; y++) grid[y][15] = OPEN; // Zweig zu G
+  return { n, grid, start: [1, 1], goal: [15, 13], seed: 9, metric: createMetric(THIN) };
+}
+
+test('Auf dem Loesungsweg sitzt der Spinner VORAUS in Laufrichtung -- unabhaengig vom rng', () => {
+  for (const seed of [1, 2, 77]) {
+    const spinners = createSpinners(directedMaze(), { count: 1 }, { unit: 1, cell: 5, rng: createRng(seed) });
+    assert.equal(spinners.length, 1);
+    const s = spinners[0];
+    assert.equal(s.axis, 'x');
+    // Der Weg laeuft den Gang in +x: der Spinner sitzt am HOHEN Ende und
+    // blickt dem ankommenden Spieler entgegen (frontale Begegnung).
+    assert.equal(s.dir, -1, `Seed ${seed}: blickt dem Spieler entgegen`);
+    assert.equal(s.wall, 48, `Seed ${seed}: Wandflaeche hinter Kammer x=15`);
+  }
+});
+
+test('ENTSCHAERFTE ECKEN-FALLE: hinter der Spitze eingestiegen entkommt man in Spike-Richtung', () => {
+  const { spinners } = makeSpinner();
+  const s = spinners[0];
+  const cell = 5;
+  const radius = 0.25 * cell;
+  const dt = 1 / 60;
+  // Spinner lange gewaehren lassen: Spike am Deckel, zurueckgezogen an der Wand.
+  for (let t = 0; t < 60; t += dt) spinnersStep(spinners, dt, cell);
+
+  // Einstieg nahe der Ecke HINTER der Spitze, dann volle Fahrt in Spike-
+  // Richtung davon (Boris' Todesfalle) -- OHNE einen einzigen Schuss muss
+  // man ueber den Schaft und die Spitze hinweg entkommen (Einbahn-Sperre).
+  let along = s.wall + s.dir * 4.0; // knapp ausserhalb des Koerper-Radius
+  const out = s.wall + s.dir * (s.runLen - 0.5 * cell); // fernes Gang-Ende
+  let hit = null;
+  let t = 0;
+  for (; t < 20 && s.dir * (out - along) > 0 && !hit; t += dt) {
+    const prev = along;
+    along += s.dir * DRIVE.cruise * cell * dt;
+    spinnersStep(spinners, dt, cell);
+    const [px, pz] = s.axis === 'x' ? [along, s.cross] : [s.cross, along];
+    const [ppx, ppz] = s.axis === 'x' ? [prev, s.cross] : [s.cross, prev];
+    hit = spinnerPlayerHit(spinners, px, pz, radius, cell, { px: ppx, pz: ppz });
+  }
+  assert.equal(hit, null, 'nicht aufgespiesst');
+  assert.ok(s.dir * (out - along) <= 0, `aus dem Gang entkommen (t=${t.toFixed(2)}s)`);
 });
 
 test('DURCHKOMMENS-GARANTIE: Dauerfeuer bei Reisegeschwindigkeit ueberwindet den vollen Spike', () => {
@@ -201,6 +279,7 @@ test('DURCHKOMMENS-GARANTIE: Dauerfeuer bei Reisegeschwindigkeit ueberwindet den
   let impaled = false;
   let t = 0;
   for (; t < 30 && s.dir * (goalAlong - along) < 0; t += dt) {
+    const prev = pose();                       // Lage vor dem Schritt (Kreuzungs-Check)
     along -= s.dir * DRIVE.cruise * cell * dt; // volle Fahrt Richtung Spinner
     fireShot(shotsState, pose(), 0);           // Dauerfeuer (fireShot begrenzt die Rate)
     shotsStep(maze, shotsState, dt, {
@@ -208,7 +287,7 @@ test('DURCHKOMMENS-GARANTIE: Dauerfeuer bei Reisegeschwindigkeit ueberwindet den
     });
     spinnersStep(spinners, dt, cell);
     const p = pose();
-    if (spinnerPlayerHit(spinners, p.px, p.pz, radius, cell)) { impaled = true; break; }
+    if (spinnerPlayerHit(spinners, p.px, p.pz, radius, cell, prev)) { impaled = true; break; }
   }
   assert.ok(!impaled, `nicht aufgespiesst (bei t=${t.toFixed(2)}s)`);
   assert.ok(s.dir * (goalAlong - along) >= 0, 'letzte Kammer vor der Wand erreicht');
@@ -226,10 +305,12 @@ test('OHNE Feuern wird der Spieler aufgespiesst (der Spike ist eine echte Sperre
   let along = s.wall + s.dir * (s.runLen - 0.5 * cell);
   let impaled = false;
   for (let t = 0; t < 30; t += dt) {
+    const prev = along;
     along -= s.dir * DRIVE.cruise * cell * dt;
     spinnersStep(spinners, dt, cell);
     const [px, pz] = s.axis === 'x' ? [along, s.cross] : [s.cross, along];
-    if (spinnerPlayerHit(spinners, px, pz, radius, cell)) { impaled = true; break; }
+    const [ppx, ppz] = s.axis === 'x' ? [prev, s.cross] : [s.cross, prev];
+    if (spinnerPlayerHit(spinners, px, pz, radius, cell, { px: ppx, pz: ppz })) { impaled = true; break; }
   }
   assert.ok(impaled);
 });

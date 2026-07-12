@@ -12,8 +12,9 @@
 // Fadenkreuz mit Lenk-Ausschlag); Feindberuehrung = krachende Explosion und
 // Game Over -> Karte (Q dort: Level-Neustart).
 // Ab Level 16 (`spinners`): gruene Spiral-Spinner an den End-Waenden langer
-// Gaenge (world/spinners.js) -- ihr Spike sperrt den Gang und will per
-// Dauerfeuer gekuerzt werden; Aufspiessen oder Koerper-Beruehrung = Crash.
+// Gaenge (world/spinners.js) -- ihr Spike ist eine Einbahn-Sperre: frontal
+// sperrt die Spitze den Gang und will per Dauerfeuer gekuerzt werden
+// (Kreuzen von vorn oder Koerper-Beruehrung = Crash), von hinten harmlos.
 
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
@@ -345,6 +346,7 @@ export function createPlaying(game) {
       const left = keys.has('ArrowLeft') || keys.has('A');
       const right = keys.has('ArrowRight') || keys.has('D');
       const turn = (left ? 1 : 0) - (right ? 1 : 0);
+      const prevX = px, prevZ = pz; // Lage VOR dem Schritt (Spike-Kreuzungs-Check)
 
       if (drive) {
         updateDrive(turn, dt);
@@ -386,11 +388,12 @@ export function createPlaying(game) {
       }
 
       // Spinner: Spike waechst, Vorlauf/Rueckzug pendelt; Koerper-Beruehrung
-      // ODER Aufspiessen am Spike = Game Over (beim Aufspiessen ueberlebt der
-      // Spinner -- nur die Koerper-Kollision reisst ihn mit).
+      // ODER frontales Kreuzen der Spitze = Game Over (beim Aufspiessen
+      // ueberlebt der Spinner -- nur die Koerper-Kollision reisst ihn mit).
       if (spinners.length) {
         spinnersStep(spinners, dt, cell);
-        const hit = spinnerPlayerHit(spinners, px, pz, RADIUS_RATIO * cell, cell);
+        const hit = spinnerPlayerHit(spinners, px, pz, RADIUS_RATIO * cell, cell,
+          { px: prevX, pz: prevZ });
         if (hit && !reached) {
           startCrash(hit, {
             kill: hit.impale ? null : hit.spinner,
