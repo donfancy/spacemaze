@@ -185,7 +185,11 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   mit denselben Resume/Retry-Regeln wie `game.enemies`; `startCrash` ist
   jetzt generisch (at, {kill, color, height}). Quer-Kreuzungen über dem
   Schaft sind seit der Einbahn-Entschärfung passierbar — gefährlich ist
-  eine Kreuzung nur, wenn gerade die SPITZE dort ankommt.
+  eine Kreuzung nur, wenn gerade die SPITZE dort ankommt. WÄNDE SCHÜTZEN
+  (12.7.2026 gefixt): `spinnerPlayerHit`/`spinnerShotHit` ignorieren alles
+  hinter der Spinner-Wand (t<0 in Gang-Koordinaten) — der zurückgezogene
+  Körper sitzt AUF der Wandfläche und tötete sonst durch die 1 Einheit
+  dünne End-Wand den Spieler, der im Nachbargang dagegen fuhr.
 - CRASH-ZERBERSTEN (12.7.2026): beim Spieler-Crash zerbirst das GANZE Bild —
   `render/shatter.js` (pur) zerlegt alle projizierten Linien in Splitter
   (max. `chunk` px), die radial vom Einschlag wegfliegen und um die eigene

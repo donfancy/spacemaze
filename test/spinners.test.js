@@ -196,6 +196,37 @@ test('Aufspiessen nur von VORN: Kreuzen der Spitze toetet, Schaft und Ueberholen
   assert.ok(hitBody && !hitBody.impale);
 });
 
+test('Waende schuetzen: Spinner an der Wand toetet NICHT durch die Wand (Boris\' Bug)', () => {
+  const cell = 5;
+  const radius = 0.25 * cell;
+  const { spinners } = makeSpinner();
+  const s = spinners[0];
+  s.offset = 0; // zurueckgezogen: Koerper sitzt AUF der Wandflaeche
+  s.spike = 8;
+  s.mode = 'retreat';
+  const at = (t, dq = 0) => {
+    const along = s.wall + s.dir * t;
+    return s.axis === 'x' ? { px: along, pz: s.cross + dq } : { px: s.cross + dq, pz: along };
+  };
+
+  // Spieler drueckt von der ANDEREN Seite gegen die End-Wand: Abstand zum
+  // Koerper = Wanddicke (1 Einheit) + Spielerradius -- das ist NAEHER als
+  // radius + hitRadius, ohne Wand-Schranke waere er tot.
+  const behind = at(-(1 + radius));
+  assert.ok(1 + radius < radius + SPINNER.hitRadius * cell, 'Testlage liegt im alten Todesradius');
+  assert.equal(spinnerPlayerHit(spinners, behind.px, behind.pz, radius, cell), null,
+    'hinter der Wand ist man sicher');
+
+  // Von vorn (im Gang des Spinners) bleibt der Koerper toedlich.
+  const front = at(radius + SPINNER.hitRadius * cell - 0.1);
+  const hit = spinnerPlayerHit(spinners, front.px, front.pz, radius, cell);
+  assert.ok(hit && !hit.impale, 'frontal beruehrt toetet weiterhin');
+
+  // Auch Schuesse aus dem Gang hinter der Wand prallen nicht "durch".
+  const shot = at(-1.05);
+  assert.equal(spinnerShotHit(spinners, shot.px, shot.pz, cell), null);
+});
+
 // Hand-Maze mit Weg-RICHTUNG: S haengt an einem Zweig am niedrigen Ende des
 // langen Gangs, G an einem am hohen -- der Weg laeuft den Gang AUFWAERTS.
 // Zweige mit 4 Kammern, damit die S/G-Schutzzonen (je 3) nicht bis auf den

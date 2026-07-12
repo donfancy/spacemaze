@@ -210,6 +210,7 @@ export function spinnerShotHit(spinners, x, z, cell) {
   for (const s of spinners) {
     if (!s.alive) continue;
     const [t, q] = runCoords(s, x, z);
+    if (t < 0) continue; // hinter der Spinner-Wand: die Wand schuetzt
     if (s.spike > 0 && q < SPINNER.spikeHitRadius * cell
       && t >= s.offset && t <= s.offset + s.spike) {
       const [tx, tz] = spinnerTip(s); // Funken an der (alten) Spitze
@@ -243,12 +244,17 @@ export function spinnerPlayerHit(spinners, px, pz, radius, cell, prev) {
   const ppz = prev?.pz ?? pz;
   for (const s of spinners) {
     if (!s.alive) continue;
+    const [t, q] = runCoords(s, px, pz);
+    // Die Wand schuetzt: der zurueckgezogene Koerper sitzt AUF der Wand-
+    // flaeche, und die End-Wand ist duenner als sein Trefferradius -- ohne
+    // diese Schranke toetet er den Spieler im Gang DAHINTER durch die Wand.
+    // Im eigenen Gang haelt der Kollisionsradius den Spieler stets bei t > 0.
+    if (t < 0) continue;
     const [bx, bz] = spinnerPos(s);
     if (Math.hypot(px - bx, pz - bz) < radius + SPINNER.hitRadius * cell) {
       return { x: bx, z: bz, spinner: s, impale: false };
     }
     if (s.spike <= 0) continue;
-    const [t, q] = runCoords(s, px, pz);
     if (q >= SPINNER.blockRadius * cell) continue;
     const tip = s.offset + s.spike;
     const [tPrev] = runCoords(s, ppx, ppz);
