@@ -30,6 +30,7 @@ import {
 import { createShotsState, aimYaw, fireShot, shotsStep, shotSegments } from '../world/shots.js';
 import { burstSegments } from '../world/burst.js';
 import { PHOSPHOR_GREEN } from '../render/colors.js';
+import { SHATTER } from '../render/shatter.js';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams,
   shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch,
@@ -107,6 +108,7 @@ const ENEMY_OCC_DIM = 0.25;      // verdeckte Rauten schimmern durch die Wand
 const CRASH_TIME = 1.3;          // s: Explosion austoben lassen, dann zur Karte
 const CRASH_SHAKE_ROLL = 3.0;    // rad/s Roll-Impuls des Crashs
 const CRASH_SHAKE_PITCH = 1.8;   // rad/s Nick-Impuls des Crashs
+const CRASH_FLASH = 0.18;        // s: weisser Einschlag-Blitz blendet aus
 const CROSSHAIR_DIST = 2.5;      // Fadenkreuz-Ankerpunkt (Gangbreiten voraus)
 const CROSSHAIR_SIZE = 0.12;     // Fadenkreuz-Radius (Gangbreiten, projiziert)
 
@@ -150,6 +152,7 @@ export function createPlaying(game) {
   let bursts = [];        // aktive Splitter-Explosionen (Verpuffen/Abschuss/Crash)
   let crash = false;      // Feindberuehrung: Explosion laeuft, dann Game Over
   let crashT = 0;
+  let crashPos = null;    // Einschlag {x,z} -- Zentrum des Bild-Zerberstens
 
   // Feindberuehrung: krachende Explosion an `at` {x,z}, dann schleudert es den
   // Spieler hinaus in die Kartenansicht (update() dispatcht nach CRASH_TIME).
@@ -159,6 +162,7 @@ export function createPlaying(game) {
   function startCrash(at, opts = {}) {
     crash = true;
     crashT = 0;
+    crashPos = { x: at.x, z: at.z };
     game.gameOver = true; // Karte zeigt GAME OVER, Q startet den Level neu
     if (opts.kill) opts.kill.alive = false;
     game.audio?.engine(null);
@@ -419,6 +423,24 @@ export function createPlaying(game) {
     },
 
     render(renderer) {
+      // Spieler-Crash: das GANZE Bild zerbirst -- alle Linien fliegen als
+      // Scherben vom Einschlag weg (render/shatter.js), waehrend Explosion
+      // und Kamera-Schuetteln laufen; der schnelle Rueckschwenk setzt die
+      // Scherben wieder zusammen (rising.js). Push ganz oben: auch HUD,
+      // Kompass und Texte bersten mit. Bildraum-Effekt wie der Sway -- die
+      // 3D-Kamera bleibt horizontal.
+      if (crash) {
+        const p = Math.min(1, crashT / CRASH_TIME);
+        const world = faceLocalToWorld(crashPos.x, EYE_RATIO * cell, crashPos.z, face, CUBE_SIZE);
+        const c = renderer.worldToScreen(world, camera); // Kamera-Basis steht vom Vorframe
+        renderer.pushShatter({
+          amount: 1 - (1 - p) * (1 - p), // harter Stoss, dann treibendes Auseinanderfliegen
+          cx: c ? c.x : renderer.width / 2,
+          cy: c ? c.y : renderer.height / 2,
+          scale: SHATTER.scale * Math.min(renderer.width, renderer.height),
+        });
+      }
+
       // Kurvenneigung + mechanische Schwingungen NICHT in die 3D-Kamera (das
       // braeche die azimutale Hidden-Line-Annahme), sondern als Bildraum-
       // Schwenk ueber die komplette 3D-Sicht (Waende + Wellen, ohne HUD).
@@ -597,6 +619,13 @@ export function createPlaying(game) {
           x: w / 2, y: h / 2, size: Math.min(52, h * 0.08),
           align: 'center', baseline: 'middle',
         });
+      }
+
+      if (crash) {
+        renderer.popShatter();
+        // Einschlag-Blitz OBENDRAUF (selbst ungescherbt): blitzt weiss auf
+        // und gibt den Blick auf das zerberstende Bild frei.
+        renderer.flash(0.9 * (1 - Math.min(1, crashT / CRASH_FLASH)));
       }
     },
 

@@ -6,6 +6,7 @@ import { worldToView } from '../math/camera.js';
 import { project, clipNear } from './projection.js';
 import { layoutText } from './vectorText.js';
 import { PHOSPHOR_GREEN } from './colors.js';
+import { shatterPolylines } from './shatter.js';
 
 export class Renderer {
   constructor(canvas) {
@@ -17,6 +18,7 @@ export class Renderer {
     this.color = PHOSPHOR_GREEN; // Theme-Farbe; game.render setzt sie pro Level (core/levels.js)
     this.glow = 8;       // shadowBlur in CSS-Pixeln
     this.near = 0.1;
+    this.shatterParams = null; // aktives Bildraum-Zerbersten (render/shatter.js)
   }
 
   // Setzt Canvas-Aufloesung passend zu CSS-Groesse und Pixeldichte (scharfe Linien).
@@ -57,6 +59,30 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  // Bildraum-Zerbersten (render/shatter.js): bis popShatter fliegen ALLE
+  // gezeichneten Linien als Scherben auseinander -- fuer den Spieler-Crash.
+  // Wie der Sway ein reiner Bildraum-Effekt: die 3D-Kamera (und damit die
+  // Hidden-Line-Annahme) bleibt unangetastet. Immer mit popShatter paaren.
+  pushShatter(params) {
+    this.shatterParams = params;
+  }
+
+  popShatter() {
+    this.shatterParams = null;
+  }
+
+  // Vollflaechiger Farbblitz (z.B. weisses Aufblitzen beim Spieler-Crash).
+  flash(alpha, color = '#ffffff') {
+    if (alpha <= 0) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, this.width, this.height);
+    ctx.restore();
+  }
+
   // Schwarzes Overlay mit gegebener Deckkraft -- fuer Fade-Uebergaenge.
   fillBlack(alpha) {
     if (alpha <= 0) return;
@@ -71,6 +97,7 @@ export class Renderer {
 
   // Zeichnet eine Liste von Polylinien (Bildschirm-Pixelkoordinaten) in einem Zug.
   drawPolylines(polylines, opts = {}) {
+    if (this.shatterParams) polylines = shatterPolylines(polylines, this.shatterParams);
     const ctx = this.ctx;
     const color = opts.color ?? this.color;
     ctx.save();

@@ -23,6 +23,9 @@ function fakeRenderer() {
     worldToScreen() { return { x: 400, y: 300 }; },
     pushSway() {},
     popSway() {},
+    pushShatter() { this.shatters = (this.shatters ?? 0) + 1; },
+    popShatter() {},
+    flash() {},
   };
 }
 
@@ -222,10 +225,14 @@ test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry',
   assert.equal(g.gameOver, true, 'Crash setzt Game Over');
   assert.equal(victim.alive, false, 'die getroffene Raute zerplatzt');
   assert.equal(g.stateKey, State.PLAYING, 'die Explosion tobt noch');
+  assert.ok((r.shatters ?? 0) > 0, 'das Bild zerbirst waehrend des Crashs');
 
+  const shattersBeforeRise = r.shatters;
   advance(g, r, 1.4); // Crash ausgetobt -> hinausgeschleudert
   assert.equal(g.stateKey, State.RISING);
-  advance(g, r, 1.0); // schneller Crash-Schwenk (0.8s statt 1.7s)
+  advance(g, r, 0.2);
+  assert.ok(r.shatters > shattersBeforeRise, 'der Rueckschwenk sortiert die Scherben (zerbirst abklingend)');
+  advance(g, r, 0.8); // schneller Crash-Schwenk (0.8s statt 1.7s)
   assert.equal(g.stateKey, State.MAP);
   assert.equal(g.gameOver, true, 'Karte zeigt GAME OVER');
 

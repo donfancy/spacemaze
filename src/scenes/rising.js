@@ -11,6 +11,7 @@ import { generateMaze } from '../world/maze.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
 import { spinnerMarkers } from '../world/spinners.js';
 import { PHOSPHOR_GREEN } from '../render/colors.js';
+import { SHATTER } from '../render/shatter.js';
 import { risePatch } from '../sound/patches.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
@@ -62,11 +63,27 @@ export function createRising(game) {
       const fn = pose.forward[0] * face.normal[0] + pose.forward[1] * face.normal[1] + pose.forward[2] * face.normal[2];
       const occWeight = 1 - Math.abs(fn);
 
+      // Nach dem Crash beginnt der Schwenk voll ZERSCHERBT (nahtlos zum
+      // Zerbersten in playing) -- waehrend es hinausschleudert, klingt das
+      // Chaos quadratisch ab und die Linien sortieren sich wieder ein:
+      // die Karte kommt sauber an.
+      const shatter = game.gameOver ? (1 - e) * (1 - e) : 0;
+      if (shatter > 0.001) {
+        renderer.pushShatter({
+          amount: shatter,
+          cx: renderer.width / 2,
+          cy: renderer.height / 2,
+          scale: SHATTER.scale * Math.min(renderer.width, renderer.height),
+        });
+      }
+
       const walls = faceWalls(maze, face, WALL_RATIO * cell * (1 - e)); // Waende schrumpfen
       renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight });
       drawMapOverlay(renderer, maze, face, camera, game.trail, e); // Rahmen + S/G + Weg blenden ein
       drawEnemyMarkers(renderer, game.enemies, face, camera, cell, e); // rote Kreuze blenden mit ein
       drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, e, PHOSPHOR_GREEN); // gruene dito
+
+      if (shatter > 0.001) renderer.popShatter();
     },
   };
 }

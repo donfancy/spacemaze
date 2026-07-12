@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 271 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 276 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -186,6 +186,18 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   jetzt generisch (at, {kill, color, height}). Quer-Kreuzungen über dem
   Schaft sind seit der Einbahn-Entschärfung passierbar — gefährlich ist
   eine Kreuzung nur, wenn gerade die SPITZE dort ankommt.
+- CRASH-ZERBERSTEN (12.7.2026): beim Spieler-Crash zerbirst das GANZE Bild —
+  `render/shatter.js` (pur) zerlegt alle projizierten Linien in Splitter
+  (max. `chunk` px), die radial vom Einschlag wegfliegen und um die eigene
+  Mitte taumeln; Zufall aus räumlichem Hash der QUANTISIERTEN Original-Lage
+  (deterministisch, über Frames stabil → feste Flugbahnen, kein Flackern).
+  Bildraum-Effekt wie der Sway (Kamera bleibt horizontal!): Renderer hat
+  `pushShatter/popShatter` (wirkt in drawPolylines auf ALLES inkl. HUD/Text)
+  und `flash(alpha, color)` für den weißen Einschlag-Blitz (CRASH_FLASH).
+  playing rampt `amount` mit 1−(1−p)² hoch (Einschlag am Bildschirm via
+  worldToScreen als Zentrum); rising startet nach Game Over voll zerscherbt
+  und klingt mit (1−e)² ab — beim Raus-Wooshen sortiert sich das Bild,
+  die Karte kommt sauber an.
 - Nächste mögliche Themen: echter "Trench Run", Politur; Score/HUD.
   Aufgeschobene (Performance-)Ideen mit Messwerten: siehe IDEAS.md.
 - Performance-Basics sind drin: kollineare Wandzüge werden zusammengefasst
