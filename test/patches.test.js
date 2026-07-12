@@ -161,7 +161,17 @@ test('bump ist dumpf, sizzle brutzelt elektrisch', () => {
   // "Gezackte" Huellkurve: der Pegel steigt zwischendurch wieder an (Knistern).
   const vals = noise.gain.map(([, val]) => val);
   assert.ok(vals.some((val, i) => i > 1 && val > vals[i - 1]), 'Pegel zackt (steigt zwischendurch)');
+  assert.ok(vals.filter((val, i) => i > 1 && val > vals[i - 1]).length >= 4,
+    'viele schnelle Zacken (Funkenspruehen, kein einzelner Knall)');
   assert.ok(peakGain(sizzle) > peakGain(bump), 'sizzle kracht lauter als bump');
+  // KEIN Explosions-Bauch (Boris: klang wie Schuss/Explosion): jeder
+  // Oszillator ist per Hochpass vom Keller befreit oder bleibt selbst oben.
+  for (const v of sizzle.voices) {
+    if (v.type !== 'osc') continue;
+    const minHz = Math.min(...v.freq.map(([, hz]) => hz));
+    assert.ok(v.filter?.type === 'highpass' || minHz >= 300,
+      'sizzle schlaegt nicht dumpf (Hochpass oder hohe Lage)');
+  }
 });
 
 test('Aufprallwucht skaliert die Lautstaerke monoton', () => {

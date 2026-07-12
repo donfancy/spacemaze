@@ -34,25 +34,40 @@ export function bumpPatch(impact = 1) {
   };
 }
 
-// Elektrisches "Brutzeln" (Fahr-Modus, Level 6-10): Rauschen mit GEZACKTER
-// Huellkurve (das Knistern der Entladung) durch einen fallenden Bandpass,
-// darunter ein harter Rechteck-Krach und der dumpfe Aufprall-Koerper.
+// Elektrisches "Brutzeln" (Fahr-Modus, Level 6-10): eine Funken-Entladung,
+// KEIN Schlag (12.7.2026 elektrischer gemacht -- der alte dumpfe Rechteck/
+// Sinus-Bauch klang wie Schuss/Explosion, sagt Boris). Drei Schichten:
+// helles Funken-KNISTERN (hoher, fallender Bandpass, schnelle unregel-
+// maessige Zacken = Funkenspruehen), darunter der LICHTBOGEN -- ein Saege-
+// zahn-Surren mit zitternder Tonhoehe, per Hochpass von jedem Bauch
+// befreit ("bzzzt") -- und nur noch ein winziger Kontakt-Tick am Anfang.
 export function sizzlePatch(impact = 1) {
   const a = 0.4 + 0.6 * clamp01(impact);
-  const dur = 0.45 + 0.25 * clamp01(impact);
+  const dur = 0.4 + 0.25 * clamp01(impact);
   return {
     duration: dur,
     voices: [
+      // Funkenspruehen: spitzes Knistern, tief einbrechende Zacken.
       { type: 'noise',
-        filter: { type: 'bandpass', freq: [[0, 2600], [dur, 350]], q: 1.2 },
-        gain: [[0, 0], [0.01, 0.55 * a], [0.06, 0.22 * a], [0.1, 0.45 * a],
-               [0.16, 0.18 * a], [0.22, 0.32 * a], [0.3, 0.12 * a], [dur, 0]] },
+        filter: { type: 'bandpass', freq: [[0, 5200], [dur, 1600]], q: 1.8 },
+        gain: [[0, 0], [0.006, 0.55 * a], [0.02, 0.08 * a], [0.045, 0.42 * a],
+               [0.07, 0.06 * a], [0.1, 0.36 * a], [0.13, 0.05 * a],
+               [0.17, 0.28 * a], [0.21, 0.04 * a], [0.26, 0.2 * a],
+               [0.31, 0.03 * a], [0.36, 0.12 * a], [dur, 0]] },
+      // Lichtbogen: Saegezahn-Surren, Tonhoehe zittert und sackt beim
+      // Ausklingen ab; der Hochpass laesst nur die Obertoene durch.
+      { type: 'osc', shape: 'sawtooth',
+        freq: [[0, 165], [0.05, 95], [0.09, 180], [0.14, 75], [0.2, 140],
+               [0.28, 60], [dur, 45]],
+        filter: { type: 'highpass', freq: [[0, 420]] },
+        gain: [[0, 0], [0.01, 0.3 * a], [0.05, 0.1 * a], [0.08, 0.26 * a],
+               [0.12, 0.08 * a], [0.16, 0.2 * a], [0.24, 0.05 * a],
+               [0.3, 0.12 * a], [dur, 0]] },
+      // Kontakt-Tick: kurzer heller Schnapper -- man spuert die Beruehrung,
+      // ohne dass es knallt.
       { type: 'osc', shape: 'square',
-        freq: [[0, 220], [0.2, 40]],
-        gain: [[0, 0], [0.008, 0.3 * a], [0.25, 0]] },
-      { type: 'osc', shape: 'sine',
-        freq: [[0, 110], [0.2, 50]],
-        gain: [[0, 0], [0.015, 0.35 * a], [0.3, 0]] },
+        freq: [[0, 1400], [0.05, 320]],
+        gain: [[0, 0], [0.005, 0.16 * a], [0.06, 0]] },
     ],
   };
 }
