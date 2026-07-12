@@ -272,3 +272,20 @@ test('Fahrt haelt das Spieler-Quadrat in offenen Zellen (deterministische Zufall
       `Schritt ${i}: Quadrat schneidet eine Wand`);
   }
 });
+
+test('Umschauen im Stand: bei Tempo 0 (targetSpeed 0) dreht die Lenkung, nichts bewegt sich', () => {
+  // Darauf ruht das Umschauen am Ziel (playing.updateDrive bei reached):
+  // vel/push auf 0, driveStep laeuft weiter -- nur der Blick dreht.
+  const m = corridorMaze();
+  const state = createDriveState();
+  let pose = { px: 3.5, pz: 9.5, yaw: 0 };
+  for (let i = 0; i < 60; i++) {
+    const r = driveStep(m, state, pose, 1, 1 / 60, { ...OPTS, targetSpeed: 0 });
+    assert.equal(r.collision, null);
+    pose = { px: r.px, pz: r.pz, yaw: r.yaw };
+  }
+  assert.equal(pose.px, 3.5, 'steht seitlich');
+  assert.equal(pose.pz, 9.5, 'steht laengs');
+  assert.equal(state.vel, 0, 'faehrt nicht an');
+  assert.ok(pose.yaw > 1, 'der Blick hat sich nach 1s deutlich gedreht');
+});

@@ -210,16 +210,23 @@ export function createPlaying(game) {
 
   // Fahr-Modus: ein Simulationsschritt (Vortrieb, Lenken, Abprall + Effekte).
   function updateDrive(turn, dt) {
-    if (!reached) {
-      const res = driveStep(maze, driveState, { px, pz, yaw }, turn, dt, {
-        unit, cell, radius: RADIUS_RATIO * cell,
-        targetSpeed: braking ? 0 : undefined, // Q: erst ausrollen ...
-      });
-      px = res.px;
-      pz = res.pz;
-      yaw = res.yaw;
-      if (res.collision) spawnCollision(res.collision);
+    // Am Ziel haelt der Wagen sofort (Tempo und Feder-Impuls hart auf 0),
+    // aber driveStep laeuft weiter: bei Tempo 0 bewegt er nichts und
+    // kollidiert nicht, doch die Lenk-Rampe dreht den Blick -- man kann
+    // sich am Ziel noch umschauen, wie in der Tank-Steuerung (Level 1-5).
+    if (reached) {
+      driveState.vel = 0;
+      driveState.push.x = 0;
+      driveState.push.z = 0;
     }
+    const res = driveStep(maze, driveState, { px, pz, yaw }, turn, dt, {
+      unit, cell, radius: RADIUS_RATIO * cell,
+      targetSpeed: braking || reached ? 0 : undefined, // Q: erst ausrollen ...
+    });
+    px = res.px;
+    pz = res.pz;
+    yaw = res.yaw;
+    if (res.collision) spawnCollision(res.collision);
     // Abheben, sobald ausgerollt (oder man waehrend des Ausrollens das Ziel
     // erreicht hat -- dann steht man ohnehin) plus ein kurzer Beat Stillstand.
     // Auch der Feder-Impuls muss abgeklungen sein, sonst rutscht man beim

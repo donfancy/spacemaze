@@ -68,7 +68,9 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   `rampToward`): Lenkrate fährt von 0 hoch (`steerRamp`), Tempo mit konstanter
   Beschleunigung (`accel` — gilt auch fürs Losfahren nach dem Reinfallen), Q
   bremst erst (`brake` + kurzer Halt `BRAKE_HOLD`, abgehoben wird erst, wenn
-  auch der Feder-Impuls abgeklungen ist), dann Abheben. `world/waves.js`: Kollisionswellen starten als weißes Blitz-Kreuz am
+  auch der Feder-Impuls abgeklungen ist), dann Abheben. Am ZIEL steht der
+  Wagen sofort (vel/push hart 0), aber `driveStep` läuft weiter: die Lenkung
+  dreht den Blick — Umschauen wie in der Tank-Steuerung (12.7.2026). `world/waves.js`: Kollisionswellen starten als weißes Blitz-Kreuz am
   Sichtlinien-Auftreffpunkt, Arme wachsen mit, an die zusammenhängende Kontur-
   Fläche geklippt. FALLE (10.7.2026 gefixt): `collisionInfo` braucht die Lage
   ZUM ZEITPUNKT der Blockade (x wird vor z bewegt — blockiert x, zieht z im
