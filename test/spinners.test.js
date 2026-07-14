@@ -15,6 +15,8 @@ import { DRIVE } from '../src/world/drive.js';
 import {
   SPINNER, straightRuns, createSpinners, spinnersStep, spinnerShotHit,
   spinnerPlayerHit, spinnerPos, spinnerTip, spinnerSegments, spinnerMarkers,
+  spinnerFire, spinnerShotsStep, spinnerShotPlayerHit, spinnerShotIntercept,
+  spinnerShotPos, spinnerShotSegments,
 } from '../src/world/spinners.js';
 
 const THIN = { wall: 1, corridor: 5 };
@@ -373,6 +375,259 @@ test('spinnerSegments: Spirale quer zum Gang auf Spike-Hoehe, Spike bis zur Spit
       assert.ok(Math.abs(along - (s.wall + s.dir * s.offset)) < 1e-9, 'alles in der Spiralebene');
     }
   }
+});
+
+// --- Spinner-Schuesse (ab Level 21, config.shoot) -------------------------
+
+function makeShootingSpinner(seed = 7) {
+  const maze = corridorMaze();
+  const spinners = createSpinners(maze, { count: 3, shoot: true }, { unit: 1, cell: 5, rng: createRng(seed) });
+  return { maze, spinners };
+}
+
+// rng-Stub: "feuert" bei jedem n-ten Aufruf (liefert 0, sonst 0.99) --
+// deterministisch und unabhaengig von SPINNER.fireRate.
+function fireEvery(n) {
+  let calls = 0;
+  return () => (++calls % n === 0 ? 0 : 0.99);
+}
+
+// Spieler-Lage im Gang des Spinners: Abstand t von dessen Wand, quer dq,
+// Blick AUF den Spinner (das Duell -- nur dann feuert er).
+function duelPose(s, t, dq = 0) {
+  const along = s.wall + s.dir * t;
+  const yaw = s.axis === 'x' ? s.dir * Math.PI / 2 : (s.dir === 1 ? 0 : Math.PI);
+  return s.axis === 'x'
+    ? { px: along, pz: s.cross + dq, yaw }
+    : { px: s.cross + dq, pz: along, yaw };
+}
+
+test('createSpinners uebernimmt das shoot-Flag aus der Level-Config', () => {
+  assert.equal(makeSpinner().spinners[0].shoot, false);
+  assert.equal(makeShootingSpinner().spinners[0].shoot, true);
+});
+
+test('spinnerFire: nur im Duell (Spieler im Gang, Blick auf den Spinner) -- Stellung egal', () => {
+  const cell = 5;
+  const { spinners } = makeShootingSpinner();
+  const s = spinners[0];
+  s.offset = 2;
+  s.spike = 6;
+  const shots = [];
+  const duel = duelPose(s, 20);
+
+  // rng() = 0 < fireRate*dt: feuert; der Schuss sitzt an der Spike-Spitze.
+  const fired = spinnerFire(spinners, shots, 1 / 60, () => 0, duel, cell);
+  assert.equal(fired.length, 1);
+  assert.equal(shots.length, 1);
+  assert.equal(shots[0].t, s.offset + s.spike);
+  assert.deepEqual(spinnerShotPos(shots[0]), spinnerTip(s));
+  assert.equal(shots[0].axis, s.axis);
+  assert.equal(shots[0].dir, s.dir);
+
+  // Auch ZURUECKGEZOGEN an der Wand feuert er weiter (Boris 14.7.2026:
+  // an den Vorlauf gekoppelt schossen alle nur am Level-Anfang).
+  s.mode = 'retreat';
+  s.offset = 0;
+  assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0, duel, cell).length, 1);
+
+  // rng() = 0.99 >= fireRate*dt: still.
+  assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0.99, duel, cell).length, 0);
+  // Spieler im Parallelgang, hinter der End-Wand oder jenseits der Spanne: still.
+  assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0, duelPose(s, 20, 1.2 * cell), cell).length, 0);
+  assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0, duelPose(s, -2), cell).length, 0);
+  assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0, duelPose(s, s.runLen + 3), cell).length, 0);
+  // Spieler schaut WEG (Flucht): kein Schuss in den Ruecken.
+  assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0,
+    { ...duel, yaw: duel.yaw + Math.PI }, cell).length, 0);
+  // Tot oder ohne shoot-Flag: still.
+  s.alive = false;
+  assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0, duel, cell).length, 0);
+  s.alive = true;
+  s.shoot = false;
+  assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0, duel, cell).length, 0);
+});
+
+test('spinnerShotsStep: Flug mit shotSpeed die Gangmitte entlang, am fernen Ende Wand-Verpuffen', () => {
+  const cell = 5;
+  const { spinners } = makeShootingSpinner();
+  const s = spinners[0];
+  s.offset = 1;
+  s.spike = 2;
+  const shots = [];
+  spinnerFire(spinners, shots, 1 / 60, () => 0, duelPose(s, 20), cell);
+  const sh = shots[0];
+
+  const t0 = sh.t;
+  const events = spinnerShotsStep(shots, 0.1, cell);
+  assert.equal(events.length, 0);
+  assert.ok(Math.abs(sh.t - (t0 + SPINNER.shotSpeed * cell * 0.1)) < 1e-9, 'Flugtempo stimmt');
+  assert.equal(sh.prevT, t0, 'prevT merkt die Lage vor dem Schritt');
+
+  // Bis ans ferne Gang-Ende fliegen lassen: ein 'wall'-Ereignis, Liste leer.
+  let wall = null;
+  for (let t = 0; t < 10 && !wall; t += 1 / 60) {
+    const evs = spinnerShotsStep(shots, 1 / 60, cell);
+    if (evs.length) wall = evs[0];
+  }
+  assert.ok(wall, 'verpufft am Gang-Ende');
+  assert.equal(wall.type, 'wall');
+  assert.equal(shots.length, 0);
+  // Verpuffen AN der fernen Wand (runLen von der Spinner-Wand entfernt).
+  const along = s.axis === 'x' ? wall.x : wall.z;
+  assert.ok(Math.abs((along - s.wall) * s.dir - s.runLen) < 1e-9);
+});
+
+test('spinnerShotPlayerHit: Kreuzen toetet ueber die GANZE Gangbreite, Parallelgang und Wand-Ruecken sicher', () => {
+  const cell = 5;
+  const radius = 0.25 * cell;
+  const { spinners } = makeShootingSpinner();
+  const s = spinners[0];
+  const shots = [];
+  s.offset = 1;
+  s.spike = 4;
+  spinnerFire(spinners, shots, 1 / 60, () => 0, duelPose(s, 20), cell); // Schuss bei t = 5
+  const sh = shots[0];
+
+  const at = (t, dq = 0) => {
+    const along = s.wall + s.dir * t;
+    return s.axis === 'x' ? { px: along, pz: s.cross + dq } : { px: s.cross + dq, pz: along };
+  };
+  const hitFrom = (tFrom, tTo, dq = 0) => {
+    const b = at(tTo, dq);
+    return spinnerShotPlayerHit(shots, b.px, b.pz, radius, cell, at(tFrom, dq));
+  };
+
+  // Frontal auf den Schuss zu: Vorderkante kreuzt -> tot; auch am Gangrand.
+  assert.ok(hitFrom(8, 6), 'frontal getroffen');
+  assert.ok(hitFrom(8, 6, 0.49 * cell), 'kein seitliches Vorbeimogeln');
+  // Parallelgang: sicher.
+  assert.equal(hitFrom(8, 6, 1.2 * cell), null);
+  // Deutlich vor dem Schuss bleiben: sicher.
+  assert.equal(hitFrom(9, 8.5), null);
+  // Hinter der Spinner-Wand (Nachbargang): sicher.
+  assert.equal(hitFrom(-2, -2), null);
+
+  // Der Schuss fliegt in den stehenden Spieler hinein (prevT-Kreuzung).
+  const still = at(sh.t + radius + 0.6);
+  assert.equal(spinnerShotPlayerHit(shots, still.px, still.pz, radius, cell), null, 'noch davor');
+  spinnerShotsStep(shots, 0.1, cell); // fliegt 1.1 Einheiten weiter
+  assert.ok(spinnerShotPlayerHit(shots, still.px, still.pz, radius, cell), 'der Schuss holt ihn ein');
+});
+
+test('spinnerShotIntercept: eigenes Projektil faengt den Schuss ab (zap), sonst null', () => {
+  const cell = 5;
+  const { spinners } = makeShootingSpinner();
+  const shots = [];
+  spinners[0].offset = 1;
+  spinners[0].spike = 4;
+  spinnerFire(spinners, shots, 1 / 60, () => 0, duelPose(spinners[0], 20), cell);
+  const [sx, sz] = spinnerShotPos(shots[0]);
+
+  // Zu weit weg: nichts passiert.
+  assert.equal(spinnerShotIntercept(shots, sx + SPINNER.intercept * cell + 0.1, sz, cell), null);
+  assert.equal(shots.length, 1);
+  // In Reichweite: der Spinner-Schuss stirbt, 'zap' an seiner Position.
+  const ev = spinnerShotIntercept(shots, sx + 0.5, sz, cell);
+  assert.equal(ev.type, 'zap');
+  assert.equal(ev.x, sx);
+  assert.equal(ev.z, sz);
+  assert.equal(shots.length, 0);
+});
+
+test('spinnerShotSegments: Funken-Stern QUER zum Gang an der Schuss-Position', () => {
+  const cell = 5;
+  const { spinners } = makeShootingSpinner();
+  const shots = [];
+  spinners[0].offset = 1;
+  spinners[0].spike = 4;
+  spinnerFire(spinners, shots, 1 / 60, () => 0, duelPose(spinners[0], 20), cell);
+  const sh = shots[0];
+  const [sx, sz] = spinnerShotPos(sh);
+  const segs = spinnerShotSegments(sh, 0.3, { cell });
+  assert.ok(segs.length >= 5);
+  for (const [a, b] of segs) {
+    for (const p of [a, b]) {
+      const along = sh.axis === 'x' ? p[0] : p[2];
+      assert.ok(Math.abs(along - (sh.axis === 'x' ? sx : sz)) < 1e-9, 'alles in der Querschnitts-Ebene');
+      assert.ok(Math.abs(p[1] - SPINNER.height * cell) <= SPINNER.shotSize * cell + 1e-9, 'auf Spike-Hoehe');
+    }
+  }
+});
+
+test('DURCHKOMMENS-GARANTIE gilt auch gegen FEUERNDE Spinner: Dauerfeuer faengt die Schuesse ab', () => {
+  const { maze, spinners } = makeShootingSpinner();
+  const s = spinners[0];
+  const cell = 5;
+  const unit = 1;
+  const radius = 0.25 * cell;
+  const dt = 1 / 60;
+
+  for (let t = 0; t < 60; t += dt) spinnersStep(spinners, dt, cell);
+  assert.equal(s.spike, s.cap);
+
+  const far = s.wall + s.dir * (s.runLen - 0.5 * cell);
+  const goalAlong = s.wall + s.dir * 1.2 * cell;
+  let along = far;
+  const yaw = s.axis === 'x'
+    ? (s.dir === -1 ? -Math.PI / 2 : Math.PI / 2)
+    : (s.dir === -1 ? Math.PI : 0);
+  const pose = () => (s.axis === 'x'
+    ? { px: along, pz: s.cross, yaw }
+    : { px: s.cross, pz: along, yaw });
+
+  // Der Spinner feuert im Vorlauf ZUVERLAESSIG alle ~0.75 s (jeder 45. rng-
+  // Aufruf bei 60 fps) -- deutlich oefter als real (fireRate 0.3/s), als
+  // Stress-Test: das Dauerfeuer muss die Schuesse trotzdem alle abfangen.
+  const foeRng = fireEvery(45);
+  const foeShots = [];
+  const shotsState = createShotsState();
+  let dead = null;
+  let t = 0;
+  for (; t < 30 && s.dir * (goalAlong - along) < 0; t += dt) {
+    const prev = pose();
+    along -= s.dir * DRIVE.cruise * cell * dt;
+    spinnersStep(spinners, dt, cell);
+    spinnerFire(spinners, foeShots, dt, foeRng, pose(), cell);
+    spinnerShotsStep(foeShots, dt, cell);
+    fireShot(shotsState, pose(), 0);
+    shotsStep(maze, shotsState, dt, {
+      unit, cell,
+      hitTest: (x, z) => spinnerShotIntercept(foeShots, x, z, cell)
+        ?? spinnerShotHit(spinners, x, z, cell),
+    });
+    const p = pose();
+    dead = spinnerPlayerHit(spinners, p.px, p.pz, radius, cell, prev)
+      ?? spinnerShotPlayerHit(foeShots, p.px, p.pz, radius, cell, prev);
+    if (dead) break;
+  }
+  assert.equal(dead, null, `weder aufgespiesst noch abgeschossen (t=${t.toFixed(2)}s)`);
+  assert.ok(s.dir * (goalAlong - along) >= 0, 'letzte Kammer vor der Wand erreicht');
+});
+
+test('OHNE eigenes Feuer toetet der Spinner-Schuss den Spieler im Gang', () => {
+  const cell = 5;
+  const radius = 0.25 * cell;
+  const dt = 1 / 60;
+  const { spinners } = makeShootingSpinner();
+  const s = spinners[0];
+
+  // Spieler steht weit hinten im Gang (ausserhalb der Spike-Reichweite)
+  // und blickt dem Spinner entgegen -- das Duell, in dem er feuern darf.
+  const standT = s.runLen - 0.8 * cell;
+  const stand = duelPose(s, standT);
+  assert.ok(standT > (SPINNER.maxOffset + SPINNER.spikeCap) * cell, 'ausser Spike-Reichweite');
+
+  const foeRng = fireEvery(45);
+  const foeShots = [];
+  let dead = null;
+  for (let t = 0; t < 30 && !dead; t += dt) {
+    spinnersStep(spinners, dt, cell);
+    spinnerFire(spinners, foeShots, dt, foeRng, stand, cell);
+    spinnerShotsStep(foeShots, dt, cell);
+    dead = spinnerShotPlayerHit(foeShots, stand.px, stand.pz, radius, cell);
+  }
+  assert.ok(dead, 'der sirrende Schuss erreicht und toetet den stehenden Spieler');
 });
 
 test('spinnerMarkers: nur lebende Spinner, an der Koerper-Position', () => {

@@ -13,9 +13,10 @@ import {
   SIDE_FACES, faceDockPose, mapSegmentsToFace, gridBorderOnFace,
 } from '../world/cubeFaces.js';
 import { randomSeed } from '../util/rng.js';
-import { levelConfig } from '../core/levels.js';
+import { levelConfig, spinnerColor } from '../core/levels.js';
 import { spinnerMarkers } from '../world/spinners.js';
-import { PHOSPHOR_GREEN } from '../render/colors.js';
+import { flipperMarkers } from '../world/flippers.js';
+import { NEON_MAGENTA } from '../render/colors.js';
 import { gnawPatch } from '../sound/patches.js';
 import { cellSize, drawCompassLabels, drawFaceMarker, drawEnemyMarkers } from './mazeView.js';
 
@@ -104,7 +105,8 @@ export function createMazeGen(game) {
       if (foeFade > 0) {
         const cell = cellSize(maze);
         drawEnemyMarkers(renderer, game.enemies, face, camera, cell, foeFade);
-        drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, foeFade, PHOSPHOR_GREEN);
+        drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, foeFade, spinnerColor(game.level));
+        drawEnemyMarkers(renderer, flipperMarkers(game.flippers), face, camera, cell, foeFade, NEON_MAGENTA);
       }
     },
   };

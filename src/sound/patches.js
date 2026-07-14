@@ -229,6 +229,32 @@ export function clinkPatch() {
   };
 }
 
+// Spinner-Schuss (ab Level 21): ein SIRREN -- schneller Saegezahn-Triller,
+// dessen Tonhoehe eng und flott auf und ab flattert (wie ein gereiztes
+// Insekt), dazu ein duenner Hochpass-Schleier. Bewusst kurz und nicht laut:
+// er kuendigt den heranfliegenden Schuss an, mehr nicht.
+export function whirrPatch() {
+  const dur = 0.4;
+  // Enges, schnelles Flattern um einen steigenden Grundton.
+  const freq = [];
+  for (let i = 0; i <= 12; i++) {
+    const t = (i / 12) * dur;
+    freq.push([t, 620 + 90 * (i / 12) + (i % 2 === 0 ? 70 : -70)]);
+  }
+  return {
+    duration: dur,
+    voices: [
+      { type: 'osc', shape: 'sawtooth',
+        freq,
+        filter: { type: 'highpass', freq: [[0, 500]] },
+        gain: [[0, 0], [0.02, 0.11], [0.3, 0.08], [dur, 0]] },
+      { type: 'noise',
+        filter: { type: 'bandpass', freq: [[0, 3800], [dur, 2600]], q: 3 },
+        gain: [[0, 0], [0.03, 0.04], [dur, 0]] },
+    ],
+  };
+}
+
 // Feind-Abschuss: mittlerer Krach -- Rauschexplosion mit gezackter Huellkurve
 // (wie das Brutzeln, aber breiter), harter Rechteck-Schlag, dumpfer Koerper.
 export function boomPatch() {

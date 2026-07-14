@@ -10,7 +10,9 @@ import { generateMaze } from '../world/maze.js';
 import { cellCenter, startFacingYaw } from '../world/mazeWorld.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
 import { spinnerMarkers } from '../world/spinners.js';
-import { PHOSPHOR_GREEN } from '../render/colors.js';
+import { flipperMarkers } from '../world/flippers.js';
+import { NEON_MAGENTA } from '../render/colors.js';
+import { spinnerColor } from '../core/levels.js';
 import { fallPatch } from '../sound/patches.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, unitSize, faceWalls, faceFootprints, renderFaceWalls,
@@ -75,7 +77,8 @@ export function createFalling(game) {
       // enter() wuerfelt sie bei frischem Anlauf neu, Resume behaelt sie.
       drawMapOverlay(renderer, maze, face, camera, game.resume ? game.trail : null, 1 - e);
       drawEnemyMarkers(renderer, game.enemies, face, camera, cell, 1 - e);
-      drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, 1 - e, PHOSPHOR_GREEN);
+      drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, 1 - e, spinnerColor(game.level));
+      drawEnemyMarkers(renderer, flipperMarkers(game.flippers), face, camera, cell, 1 - e, NEON_MAGENTA);
     },
   };
 }

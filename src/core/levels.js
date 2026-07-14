@@ -15,8 +15,18 @@
 //   `spinners`         { count }: gruene Spiral-Spinner an den End-Waenden
 //                      langer Gangstuecke (world/spinners.js); ihr Spike
 //                      sperrt den Gang und will per Dauerfeuer gekuerzt werden
+// Ab Level 21 (wieder gruen, Feind-Trio):
+//   `spinners.shoot`   Spinner feuern beim Vorlaufen sirrende Schuesse
+//                      (abfangbar per Dauerfeuer)
+//   `spinners.color`   Linienfarbe der Spinner (gelb -- auf gruenen Waenden
+//                      waere das Spinner-Gruen unsichtbar); spinnerColor()
+//   `flippers`         { count }: magenta X-Flipper in langen Gaengen
+//                      (world/flippers.js); ihre Querschnitts-Ebene ist
+//                      toedlich, abschiessbar nur in Links-/Rechts-Stellung.
+//                      Tanker (rote Rauten), die aus >= 3 Feldern abgeschossen
+//                      werden, hinterlassen ein Flipper-PAAR.
 
-import { PHOSPHOR_GREEN, TEMPEST_BLUE } from '../render/colors.js';
+import { PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_YELLOW } from '../render/colors.js';
 
 const THIN = { wall: 1, corridor: 5 }; // schmale Waende (ab Level 6)
 
@@ -50,6 +60,24 @@ export const LEVELS = [
     spinners: { count: 7 }, enemies: { count: 10, patrol: 1 } },                                         // Level 19
   { n: 39, metric: THIN, drive: true, straight: 0.8, shoot: true, color: TEMPEST_BLUE,
     spinners: { count: 8 }, enemies: { count: 12, patrol: 1 } },                                         // Level 20
+  // Level 21-25: wieder Phosphor-GRUEN, die Labyrinthe wachsen weiter
+  // (41-45), straight bleibt 0.8. Neu: magenta FLIPPER (Level 21 fuehrt sie
+  // solo ein, mit Tankern als Paar-Quelle), ab 22 kehren die Spinner zurueck
+  // -- jetzt GELB (auf Gruen) und FEUERND (shoot). Bis 25 steigt das Trio.
+  { n: 41, metric: THIN, drive: true, straight: 0.8, shoot: true,
+    flippers: { count: 5 }, enemies: { count: 10, patrol: 1 } },                                         // Level 21
+  { n: 43, metric: THIN, drive: true, straight: 0.8, shoot: true,
+    flippers: { count: 5 }, enemies: { count: 10, patrol: 1 },
+    spinners: { count: 5, shoot: true, color: ARCADE_YELLOW } },                                         // Level 22
+  { n: 43, metric: THIN, drive: true, straight: 0.8, shoot: true,
+    flippers: { count: 6 }, enemies: { count: 12, patrol: 1 },
+    spinners: { count: 6, shoot: true, color: ARCADE_YELLOW } },                                         // Level 23
+  { n: 45, metric: THIN, drive: true, straight: 0.8, shoot: true,
+    flippers: { count: 7 }, enemies: { count: 13, patrol: 1 },
+    spinners: { count: 7, shoot: true, color: ARCADE_YELLOW } },                                         // Level 24
+  { n: 45, metric: THIN, drive: true, straight: 0.8, shoot: true,
+    flippers: { count: 8 }, enemies: { count: 14, patrol: 1 },
+    spinners: { count: 8, shoot: true, color: ARCADE_YELLOW } },                                         // Level 25
 ];
 
 export const MIN_LEVEL = 1;
@@ -65,6 +93,12 @@ export function levelConfig(level) {
 // Linienfarbe eines Levels; ausserhalb des Bereichs/ohne Angabe Phosphor-Gruen.
 export function levelColor(level) {
   return levelConfig(level)?.color ?? PHOSPHOR_GREEN;
+}
+
+// Spinner-Farbe eines Levels: Level 16-20 Spinner-Gruen (auf Blau), ab 21
+// gelb (spinners.color) -- auch die Karten-Kreuze folgen dieser Farbe.
+export function spinnerColor(level) {
+  return levelConfig(level)?.spinners?.color ?? PHOSPHOR_GREEN;
 }
 
 // Auswahl schrittweise aendern, an den Raendern begrenzt (kein Umlauf).

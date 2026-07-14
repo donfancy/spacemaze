@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, fallPatch, risePatch, gnawPatch, engineParams,
-  shotPatch, poofPatch, boomPatch, crashPatch, tickPatch, dockPatch, clinkPatch,
+  shotPatch, poofPatch, boomPatch, crashPatch, tickPatch, dockPatch, clinkPatch, whirrPatch,
 } from '../src/sound/patches.js';
 
 const EPS = 1e-9;
@@ -57,6 +57,7 @@ test('bump/sizzle/fanfare erfuellen die Patch-Invarianten', () => {
   checkPatch(boomPatch(), 'boom');
   checkPatch(crashPatch(), 'crash');
   checkPatch(clinkPatch(), 'clink');
+  checkPatch(whirrPatch(), 'whirr');
   for (const p of [0, 0.5, 1]) checkPatch(tickPatch(p), `tick(${p})`);
   for (const dur of [1.0, 1.6]) {
     checkPatch(dockPatch(dur, false), `dock(${dur})`);
@@ -95,6 +96,17 @@ test('Schuss kurz und leise, Verpuffen weich, Crash kracht am laengsten und laut
   assert.ok(poof.voices.every((v) => v.type === 'noise'), 'Verpuffen ist reines Rauschen');
   assert.equal(poof.voices[0].filter.type, 'lowpass', 'weich, kein Zischen');
   assert.ok(peakGain(poof) <= 0.2, 'Verpuffen bleibt leise');
+
+  // Sirren des Spinner-Schusses: dezent (Ankuendigung, kein Alarm) und mit
+  // flatterndem Gleitton -- die Frequenz wechselt staendig die Richtung.
+  const whirr = whirrPatch();
+  assert.ok(peakGain(whirr) <= 0.15, 'Sirren bleibt dezent');
+  const wf = whirr.voices.find((v) => v.type === 'osc').freq.map(([, hz]) => hz);
+  let flips = 0;
+  for (let i = 2; i < wf.length; i++) {
+    if ((wf[i] - wf[i - 1]) * (wf[i - 1] - wf[i - 2]) < 0) flips++;
+  }
+  assert.ok(flips >= 6, 'Tonhoehe flattert (viele Richtungswechsel)');
 
   const boom = boomPatch();
   const crash = crashPatch();

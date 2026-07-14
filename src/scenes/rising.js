@@ -10,7 +10,9 @@ import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
 import { spinnerMarkers } from '../world/spinners.js';
-import { PHOSPHOR_GREEN } from '../render/colors.js';
+import { flipperMarkers } from '../world/flippers.js';
+import { NEON_MAGENTA } from '../render/colors.js';
+import { spinnerColor } from '../core/levels.js';
 import { SHATTER } from '../render/shatter.js';
 import { risePatch } from '../sound/patches.js';
 import {
@@ -81,7 +83,8 @@ export function createRising(game) {
       renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight });
       drawMapOverlay(renderer, maze, face, camera, game.trail, e); // Rahmen + S/G + Weg blenden ein
       drawEnemyMarkers(renderer, game.enemies, face, camera, cell, e); // rote Kreuze blenden mit ein
-      drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, e, PHOSPHOR_GREEN); // gruene dito
+      drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, e, spinnerColor(game.level)); // Spinner dito
+      drawEnemyMarkers(renderer, flipperMarkers(game.flippers), face, camera, cell, e, NEON_MAGENTA); // Flipper dito
 
       if (shatter > 0.001) renderer.popShatter();
     },

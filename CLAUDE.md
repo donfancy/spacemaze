@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 281 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 310 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -46,12 +46,14 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   `game.resume`); X (oder 5 min) → Karte blendet aus (Rahmen bleibt), dann
   Abdock-Flug zurück in den Orbit (`game.undock`, Startscreen-Phase `undocking`,
   `orbitTimeFacing`) — symmetrisch zum Andocken.
-- Levels 1–20 in `src/core/levels.js` (reine Daten): n = 9/11/13/15/17 (Blockwelt,
+- Levels 1–25 in `src/core/levels.js` (reine Daten): n = 9/11/13/15/17 (Blockwelt,
   Tank-Steuerung), 17/19/21/23/25 (Level 6–10: schmale Wände + Fahrt),
   27/29/31/33/35 (Level 11–15: Kampf — `straight` 0.6 = Geradeaus-Bias des
-  Generators, `shoot`, `enemies {count, patrol}`) und 35/35/37/37/39
+  Generators, `shoot`, `enemies {count, patrol}`), 35/35/37/37/39
   (Level 16–20: Spinner — Größe eingefroren, dafür `straight` 0.7→0.8 für
-  lange Gänge; 16 nur Spinner, ab 17 Mix mit Rauten, `spinners {count}`);
+  lange Gänge; 16 nur Spinner, ab 17 Mix mit Rauten, `spinners {count}`)
+  und 41/43/43/45/45 (Level 21–25: wieder wachsend, `straight` 0.8 — Flipper,
+  feuernde gelbe Spinner, s.u.);
   `game.level` hält die Auswahl, MazeGen liest daraus. Ab Level 6 SCHMALE WÄNDE:
   gleiche Maze-Topologie, aber `world/metric.js` streckt die Achsen ungleich
   (gerade Zellen = Wände 1 Einheit, ungerade = Gänge 5). Grid↔Welt geht überall
@@ -153,7 +155,9 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Farben (Feind-Rot, Schuss-/Blitz-Weiß, GAME-OVER-Puls) bleiben unberührt.
   Startscreen bleibt grün; beim Andocken blendet der Würfel per `mixColors`
   von Grün zur Level-Farbe (MazeGen übernimmt nahtlos), beim Abdocken
-  symmetrisch zurück. Level 11–15 bleiben grün; 16–20 wieder blau.
+  symmetrisch zurück. Level 11–15 bleiben grün; 16–20 wieder blau; 21–25
+  wieder grün. Feind-Farben in colors.js: ARCADE_YELLOW (Spinner ab 21),
+  NEON_MAGENTA (Flipper).
 - SPINNER-LEVELS 16–20 (12.7.2026, umgesetzt): `world/spinners.js` (pur).
   GRÜNE oktagonale Spiralen (auf blauem Level-Thema) an den End-Wänden
   langer gerader Gangstücke (`straightRuns`, min. 3 Kammern; Weg-Gänge
@@ -204,6 +208,63 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   worldToScreen als Zentrum); rising startet nach Game Over voll zerscherbt
   und klingt mit (1−e)² ab — beim Raus-Wooshen sortiert sich das Bild,
   die Karte kommt sauber an.
+- FLIPPER-LEVELS 21–25 (14.7.2026, umgesetzt): wieder GRÜN (kein `color`-Feld),
+  Rauten heißen offiziell TANKER. Spinner dort GELB (`spinners.color` =
+  ARCADE_YELLOW aus colors.js, `spinnerColor(level)` in levels.js — auch die
+  Karten-Kreuze folgen ihr) und FEUERND (`spinners.shoot`): NUR IM DUELL —
+  steht der Spieler im Gang des Spinners UND hat ihn vor sich (Blick-
+  Halbebene; wer flieht, kriegt nichts in den Rücken) — löst sich mit
+  `fireRate` 0.3/s ein sirrender Schuss von der Spike-Spitze, unabhängig
+  von Vorlauf/Rückzug (14.7.2026 geändert: an den Vorlauf gekoppelt schossen
+  alle nur am Level-Anfang, danach nie mehr, sagt Boris)
+  (`spinnerFire`/`spinnerShotsStep`/... in spinners.js, `whirrPatch`), fliegt
+  mit 2.2 Gangbreiten/s die Gangmitte entlang, tödlich über die GANZE
+  Gangbreite (Kreuzungs-Check wie die Spike-Spitze, Wand schützt bei t<0) —
+  NICHT ausweichbar, aber ABFANGBAR: eigene Schüsse zerstören ihn
+  (`spinnerShotIntercept`, 'zap', ERSTER in der hitTest-Kette von playing).
+  Gerendert als gezackter Stern quer zum Gang in FLIRRENDEN Farben
+  (FIREWORK_COLORS, harte Wechsel mit 12 Hz). Durchkommens-Garantie-Test
+  simuliert das Duell MIT feuerndem Spinner (Stress: 4-fache Feuerrate).
+  FLIPPER (`world/flippers.js`, pur): magenta (NEON_MAGENTA) gestreckte
+  X-Konturen (Boris' Skizze: 2 sich kreuzende Diagonalen mit gekerbten
+  Spitzen) im GANG-QUERSCHNITT, lange Seite zwischen zwei Gangkanten (unten/
+  rechts/oben/links, Drehung um die Gang-Längsachse, X-Mitte (0.5−lift) von
+  der Gangmitte). Sie wandern den Gang entlang (0.85 Gangbreiten/s — schneller
+  als Tanker-Patrouille 0.6, fliehbar bei cruise 1.5) und FLIPPEN um 90°:
+  Seiten rasten LANGE ein (holdSide 2.2s ± 0.8), oben/unten nur kurz
+  (holdShort 0.3s, klappt in derselben Drehrichtung durch; Flip-Zufall als
+  LCG auf f.rnd, deterministisch). Ihre QUERSCHNITTS-EBENE ist in JEDER
+  Stellung tödlich (Berühren/Kreuzen, prev+prevAlong beidseitig bewegt; quer
+  nur der eigene Gang) — vorbei kommt nur, wer sie abschießt, und das geht
+  NUR in Links-/Rechts-Stellung (X kreuzt dort die Augen-/Schusshöhe nahe
+  der Wand — mit dem Fadenkreuz-Lenkausschlag zur Seite zielen; hitTest via
+  `flipperShotHit`). Platzierung wie Spinner (lange Gänge, Weg zuerst,
+  S/G-Schutzzone), Spinner-Gänge bleiben frei (`avoid` in spawnFoes —
+  Spinner werden ZUERST gewürfelt). PAAR-REGEL: Tanker-Abschuss aus ≥ 3
+  Feldern (`pairFields` × (wall+corridor)×unit) spawnt `spawnFlipperPair` an
+  dessen Stelle: einer links, einer rechts, versetzt (pairGap), beide rücken
+  auf den Spieler zu, danach normale Flipper. `game.flippers` mit denselben
+  Resume/Retry-Regeln; Karten-/Schwenk-Kreuze magenta. Level 21 führt
+  Flipper solo ein (+ Tanker als Paar-Quelle), ab 22 Spinner-Mix, bis 25
+  steigt das Trio.
+- STERNENHIMMEL (14.7.2026): ab Level 4 (1–3 sind "legacy 1974", sagt Boris)
+  funkeln in der Ego-Ansicht 250 weltfeste Sterne in der Level-Farbe am
+  Himmel — beim Drehen zieht der Himmel vorbei, Drehungen werden spürbar.
+  `world/stars.js` (pur): `createStars` deterministisch aus maze.seed
+  (Flächen-Gleichverteilung auf der Halbkugel, el = asin(u));
+  `skylineElevation` — sichtbar ist ein Stern nur OBERHALB der Wand-
+  Silhouette seiner Richtung, sonst schiene er durch die Wände. FALLE
+  (14.7.2026 gefixt): die Silhouette MUSS als exakter Grid-DDA laufen
+  (Zellkante zu Zellkante über die Metrik, Reichweite 6 Gangbreiten) — ein
+  abtastender Raycast (0.5er-Schritte) traf die Wandfläche systematisch zu
+  spät und übersprang schräg gestreifte 1-Einheit-Wände: 95 % der
+  Silhouetten zu niedrig, Sterne schienen durch die Wand (Boris sah es
+  sofort). Der DDA ist exakt (Test: 0/20000 zu niedrig) und mit 0.03 ms
+  pro 250-Sterne-Frame sogar billiger. Gezeichnet in playing.js als
+  Bildschirm-Kreuzchen (worldToScreen eines Punkts 60 Gangbreiten weit —
+  quasi unendlich, kein Parallax-Zittern), nach Funkel-Stufe gebatcht
+  (`starTwinkle`, ein Stroke pro Stufe), INNERHALB des Sway (Kurvenneigung
+  kippt den Himmel mit — Kamera bleibt horizontal!).
 - ZIEL-FEUERWERK (12.7.2026): am Ziel spriessen zusätzlich zum weißen
   Aufblitzen ~70 senkrechte Strahlen (`world/fireworks.js`, pur) gestaffelt
   in einer Scheibe (2.2 Zellen) um die Zielmitte; jeder schaltet von

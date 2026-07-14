@@ -5,6 +5,8 @@
 
 export const PHOSPHOR_GREEN = '#4dff7a'; // klassischer Vektor-Phosphor
 export const TEMPEST_BLUE = '#4d7aff';   // Tempest-Blau (Level 6-10)
+export const ARCADE_YELLOW = '#ffe14d';  // Spinner/Spikes auf Gruen (Level 21-25)
+export const NEON_MAGENTA = '#ff4dea';   // Flipper (ab Level 21)
 
 // '#rrggbb' -> [r, g, b] (0..255).
 export function parseHex(hex) {

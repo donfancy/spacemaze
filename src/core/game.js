@@ -9,6 +9,7 @@ import { levelColor, levelConfig } from './levels.js';
 import { PHOSPHOR_GREEN } from '../render/colors.js';
 import { createEnemies } from '../world/enemies.js';
 import { createSpinners } from '../world/spinners.js';
+import { createFlippers } from '../world/flippers.js';
 import { createRng } from '../util/rng.js';
 import { unitSize, cellSize } from '../scenes/mazeView.js';
 import { createStartscreen } from '../scenes/startscreen.js';
@@ -34,8 +35,9 @@ export class Game {
     this.resume = false;     // Q auf der Karte: naechstes Reinfallen kehrt zur Spielerlage zurueck
     this.undock = false;     // X auf der Karte: Startscreen beginnt mit dem Abdock-Flug
     this.reachedGoal = false; // Ziel erreicht? (steuert Q/X-Angebot auf der Karte)
-    this.enemies = null;      // Feinde des Levels (ab 11), von Playing verwaltet -- bleiben ueber Karte/Resume erhalten
+    this.enemies = null;      // Tanker (rote Rauten, ab 11), von Playing verwaltet -- bleiben ueber Karte/Resume erhalten
     this.spinners = null;     // Spiral-Spinner (ab 16), gleiche Lebensdauer-Regeln wie enemies
+    this.flippers = null;     // X-Flipper (ab 21), gleiche Lebensdauer-Regeln wie enemies
     this.gameOver = false;    // Feindberuehrung: Karte zeigt GAME OVER, Q startet den Level neu
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.
@@ -98,6 +100,11 @@ export class Game {
     }) : null;
     this.spinners = cfg?.spinners ? createSpinners(maze, cfg.spinners, {
       unit, cell, rng: createRng((maze.seed ^ 0x9e3779b9) >>> 0),
+    }) : null;
+    // Flipper NACH den Spinnern: deren Gangstuecke bleiben flipperfrei.
+    this.flippers = cfg?.flippers ? createFlippers(maze, cfg.flippers, {
+      unit, cell, rng: createRng((maze.seed ^ 0x85ebca6b) >>> 0),
+      avoid: this.spinners ?? [],
     }) : null;
   }
 

@@ -117,6 +117,32 @@ test('Level 16: Spinner entstehen beim Spielstart und werden gerendert', () => {
   assert.ok(r.calls > before, 'Spielablauf zeichnet weiter');
 });
 
+test('Level 22: gruenes Thema, Flipper + feuernde gelbe Spinner + Tanker entstehen', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+  g.level = 22;
+
+  g.handleKey('S');
+  advance(g, r, 1.8);  // Andocken -> MazeGen
+  assert.equal(g.stateKey, State.MAZE_GEN);
+  assert.ok(Array.isArray(g.flippers) && g.flippers.length > 0,
+    'Flipper existieren schon auf der Start-Karte');
+  // Wachstum (n=43) + Reinfallen abwarten -- grosszuegig vorspulen.
+  for (let t = 0; t < 30 && g.stateKey !== State.PLAYING; t += 0.5) advance(g, r, 0.5);
+  assert.equal(g.stateKey, State.PLAYING);
+  assert.equal(r.color, PHOSPHOR_GREEN, 'Level 22 ist wieder gruen');
+  assert.ok(g.flippers.length > 0 && g.flippers.every((f) => f.alive), 'Flipper leben');
+  assert.ok(g.spinners.length > 0 && g.spinners.every((s) => s.shoot), 'Spinner mit shoot-Flag');
+  assert.ok(g.enemies.length > 0, 'Tanker als Paar-Quelle dabei');
+
+  // Ein paar Sekunden Spiel mit Dauerfeuer: nichts wirft, es wird gezeichnet.
+  g.keys.add(' ');
+  const before = r.calls;
+  advance(g, r, 2.0);
+  g.keys.delete(' ');
+  assert.ok(r.calls > before, 'Spielablauf zeichnet weiter');
+});
+
 test('voller Zyklus Start -> (Andocken) -> MazeGen -> Playing -> Start', () => {
   const g = new Game();
   const r = fakeRenderer();
@@ -178,7 +204,7 @@ test('Zustands-Zyklus direkt via dispatch (ohne Andocken)', () => {
   assert.equal(g.stateKey, State.STARTSCREEN);
 });
 
-test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..20', () => {
+test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..25', () => {
   const g = new Game();
   assert.equal(g.level, 1);
 
@@ -189,10 +215,10 @@ test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..20', () => {
   g.handleKey('ArrowUp');
   assert.equal(g.level, 3);
 
-  for (let i = 0; i < 25; i++) g.handleKey('ArrowUp'); // oben begrenzt
-  assert.equal(g.level, 20);
+  for (let i = 0; i < 30; i++) g.handleKey('ArrowUp'); // oben begrenzt
+  assert.equal(g.level, 25);
   g.handleKey('ArrowLeft');
-  assert.equal(g.level, 19);
+  assert.equal(g.level, 24);
 });
 
 test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry', () => {

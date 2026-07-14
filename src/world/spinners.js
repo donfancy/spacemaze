@@ -21,6 +21,13 @@
 // wieder vor. Die Durchkommens-Garantie haengt an den Konstanten: Kuerz-Rate
 // bei Dauerfeuer (SHOTS.rate * shorten) minus Wachstum (grow) muss etwa die
 // Reisegeschwindigkeit (DRIVE.cruise) erreichen -- abgesichert per Test.
+//
+// Ab Level 21 (config.shoot) SCHIESSEN Spinner im Duell: steht der Spieler
+// im Gang des Spinners und hat ihn vor sich, loest sich gelegentlich ein
+// sirrender Schuss von der Spike-Spitze (s. SPINNER.fireRate und die
+// spinnerShot*-Funktionen unten) -- abfangbar per eigenem Feuer, sonst
+// toedlich ueber die ganze Gangbreite. Die Durchkommens-Garantie gilt
+// weiter: der Test simuliert das Duell MIT feuerndem Spinner.
 
 import { OPEN, isChamber, findPath } from './maze.js';
 import { cellCenter } from './mazeWorld.js';
@@ -51,6 +58,18 @@ export const SPINNER = {
   spikeCap: 2.4,     // absolute Maximallaenge des Spikes (Gangbreiten)
   capMargin: 1.0,    // der Spike laesst mindestens so viel vom Gangstueck frei
   exclude: 3,        // so viele Weg-Kammern um S und G bleiben spinnerfrei
+  // Spinner-SCHUSS (ab Level 21, Level-Feld spinners.shoot): steht der
+  // Spieler im GANG des Spinners und hat ihn VOR sich, loest sich
+  // gelegentlich ein sirrender Schuss von der Spike-Spitze und fliegt die
+  // Gangmitte entlang -- unabhaengig von Vorlauf/Rueckzug (14.7.2026: an
+  // den Vorlauf gekoppelt schossen alle nur am Level-Anfang, sagt Boris).
+  // Toedlich ueber die ganze Gangbreite (blockRadius, wie die Spitze), aber
+  // ABFANGBAR: eigene Projektile zerstoeren ihn (wer im Duell feuert, ist
+  // sicher).
+  fireRate: 0.3,     // mittlere Schuesse/s im Duell ("gelegentlich")
+  shotSpeed: 2.2,    // Flugtempo des Spinner-Schusses (Gangbreiten/s)
+  shotSize: 0.14,    // Funken-Halbgroesse des Schusses (Gangbreiten)
+  intercept: 0.3,    // Abfang-Radius eigener Projektile gegen den Schuss (Gangbreiten)
 };
 
 function isOpen(maze, x, y) {
@@ -147,6 +166,7 @@ export function createSpinners(maze, config, opts) {
       wall: highEnd ? highWall : lowWall, // Welt-Koordinate der Wandflaeche
       cross,                              // Gangmitte quer (Welt)
       runLen,
+      shoot: !!config.shoot,              // ab Level 21: feuert beim Vorlaufen
       // Spike-Deckel: nie den ganzen Gang -- am Einstieg bleibt Luft.
       cap: Math.min(SPINNER.spikeCap * cell,
         runLen - (SPINNER.maxOffset + SPINNER.capMargin) * cell),
@@ -275,6 +295,132 @@ export function spinnerMarkers(spinners) {
     const [x, z] = spinnerPos(s);
     return { x, z, alive: true };
   });
+}
+
+// --- Spinner-Schuesse (ab Level 21, config.shoot) -------------------------
+// Ein Schuss lebt in Gang-Koordinaten seines Spinners: t = Abstand von der
+// Spinner-Wand entlang dir (waechst beim Flug), cross/axis/runLen kopiert.
+
+// Welt-Position (x,z) eines Spinner-Schusses.
+export function spinnerShotPos(shot) {
+  const along = shot.wall + shot.dir * shot.t;
+  return shot.axis === 'x' ? [along, shot.cross] : [shot.cross, along];
+}
+
+// Feuern: ein Spinner mit shoot-Flag loest mit fireRate (Wahrscheinlichkeit
+// pro Sekunde) einen Schuss von der Spike-Spitze -- aber NUR, wenn der
+// Spieler in SEINEM Gang steht und ihn vor sich hat (Blick-Halbebene):
+// das Duell, nicht die Ferne. Vorlauf/Rueckzug sind egal -- er sirrt auch
+// von der Wand aus. `player` = { px, pz, yaw }. Neue Schuesse werden an
+// `shots` angehaengt und (fuer Sound/Effekte) zurueckgegeben. rng haelt
+// es deterministisch testbar.
+export function spinnerFire(spinners, shots, dt, rng, player, cell) {
+  const fired = [];
+  const fx = -Math.sin(player.yaw); // Blickrichtung (Konvention wie forward)
+  const fz = -Math.cos(player.yaw);
+  for (const s of spinners) {
+    if (!s.alive || !s.shoot) continue;
+    // Spieler im Gang des Spinners? (quer in der Gangbreite, laengs in der
+    // Spanne; t < 0 waere der Nachbargang hinter der End-Wand)
+    const along = s.axis === 'x' ? player.px : player.pz;
+    const crossP = s.axis === 'x' ? player.pz : player.px;
+    if (Math.abs(crossP - s.cross) >= 0.5 * cell) continue;
+    const tp = (along - s.wall) * s.dir;
+    if (tp < 0 || tp > s.runLen) continue;
+    // ... und der Spinner liegt VOR dem Spieler (wer wegschaut/flieht,
+    // wird nicht in den Ruecken geschossen).
+    const [bx, bz] = spinnerPos(s);
+    if (fx * (bx - player.px) + fz * (bz - player.pz) <= 0) continue;
+    if (rng() >= SPINNER.fireRate * dt) continue;
+    const t = s.offset + s.spike;
+    const shot = {
+      axis: s.axis, dir: s.dir, wall: s.wall, cross: s.cross, runLen: s.runLen,
+      t, prevT: t, phase: rng() * 2 * Math.PI,
+    };
+    shots.push(shot);
+    fired.push(shot);
+  }
+  return fired;
+}
+
+// Ein Simulationsschritt: Schuesse fliegen die Gangmitte entlang; am fernen
+// Gang-Ende verpuffen sie an der Wand (Ereignis wie bei eigenen Schuessen).
+// Kompaktiert `shots` in place, liefert die Ereignisse.
+export function spinnerShotsStep(shots, dt, cell) {
+  const events = [];
+  let w = 0;
+  for (const sh of shots) {
+    sh.prevT = sh.t;
+    sh.t += SPINNER.shotSpeed * cell * dt;
+    if (sh.t >= sh.runLen) {
+      const [x, z] = spinnerShotPos({ ...sh, t: sh.runLen });
+      events.push({ type: 'wall', x, z });
+    } else {
+      shots[w++] = sh;
+    }
+  }
+  shots.length = w;
+  return events;
+}
+
+// Spieler-Kollision: wie die Spike-Spitze wirkt der Schuss quer ueber die
+// GANZE Gangbreite (blockRadius) -- ausweichen geht nicht, nur abfangen.
+// Kreuzen ueber prev/prevT (beide bewegen sich), die Wand schuetzt (t<0).
+// Liefert { x, z, shot } oder null.
+export function spinnerShotPlayerHit(shots, px, pz, radius, cell, prev) {
+  const ppx = prev?.px ?? px;
+  const ppz = prev?.pz ?? pz;
+  for (const sh of shots) {
+    const along = sh.axis === 'x' ? px : pz;
+    const crossP = sh.axis === 'x' ? pz : px;
+    if (Math.abs(crossP - sh.cross) >= SPINNER.blockRadius * cell) continue;
+    const t = (along - sh.wall) * sh.dir;
+    if (t < 0) continue; // Nachbargang hinter der Spinner-Wand
+    const tPrev = ((sh.axis === 'x' ? ppx : ppz) - sh.wall) * sh.dir;
+    const gNow = (t - radius) - sh.t;
+    const gPrev = (tPrev - radius) - (sh.prevT ?? sh.t);
+    if (gPrev > 0 && gNow <= 0) {
+      const [x, z] = spinnerShotPos(sh);
+      return { x, z, shot: sh };
+    }
+  }
+  return null;
+}
+
+// Abfangen: ein eigenes Projektil bei (x,z) zerstoert den ersten Spinner-
+// Schuss in Reichweite -- beide verpuffen ('zap'-Ereignis) -- oder null.
+export function spinnerShotIntercept(shots, x, z, cell) {
+  for (let i = 0; i < shots.length; i++) {
+    const [sx, sz] = spinnerShotPos(shots[i]);
+    if (Math.hypot(x - sx, z - sz) < SPINNER.intercept * cell) {
+      shots.splice(i, 1);
+      return { type: 'zap', x: sx, z: sz };
+    }
+  }
+  return null;
+}
+
+// Geometrie eines Spinner-Schusses: gezackter Funken-Stern QUER zum Gang
+// (er fliegt auf den Spieler zu), sirrend schnell rotierend -- die
+// flirrenden FARBEN wechselt der Aufrufer pro Frame (Arcade-Palette).
+export function spinnerShotSegments(shot, time, opts) {
+  const { cell } = opts;
+  const [x, z] = spinnerShotPos(shot);
+  const h = SPINNER.height * cell;
+  const r = SPINNER.shotSize * cell;
+  const a0 = 14 * time + (shot.phase ?? 0);
+  const pt = (u, v) => (shot.axis === 'x' ? [x, h + v, shot.cross + u] : [shot.cross + u, h + v, z]);
+  const segs = [];
+  let prev = null;
+  const K = 6;
+  for (let k = 0; k <= K; k++) {
+    const a = a0 + (k / K) * 2 * Math.PI;
+    const rr = k % 2 === 0 ? r : 0.4 * r; // Zacken innen/aussen
+    const p = pt(rr * Math.cos(a), rr * Math.sin(a));
+    if (prev) segs.push([prev, p]);
+    prev = p;
+  }
+  return segs;
 }
 
 // Geometrie eines Spinners als Liniensegmente (lokale Flaechen-Welt), fuer

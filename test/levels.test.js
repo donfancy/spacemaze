@@ -2,14 +2,17 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LEVELS, MIN_LEVEL, MAX_LEVEL, levelConfig, levelColor, stepLevel } from '../src/core/levels.js';
-import { PHOSPHOR_GREEN, TEMPEST_BLUE } from '../src/render/colors.js';
+import {
+  LEVELS, MIN_LEVEL, MAX_LEVEL, levelConfig, levelColor, spinnerColor, stepLevel,
+} from '../src/core/levels.js';
+import { PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_YELLOW } from '../src/render/colors.js';
 
-test('Maze-Groessen: 1-15 wachsend, 16-20 moderat (Boris: Geraden statt Groesse)', () => {
+test('Maze-Groessen: 1-15 wachsend, 16-20 moderat, 21-25 wieder wachsend', () => {
   assert.equal(MIN_LEVEL, 1);
-  assert.equal(MAX_LEVEL, 20);
+  assert.equal(MAX_LEVEL, 25);
   assert.deepEqual(LEVELS.map((l) => l.n),
-    [9, 11, 13, 15, 17, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 35, 35, 37, 37, 39]);
+    [9, 11, 13, 15, 17, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 35, 35, 37, 37, 39,
+      41, 43, 43, 45, 45]);
   for (let level = 1; level <= 5; level++) {
     assert.equal(levelConfig(level).n, 7 + 2 * level);
   }
@@ -71,8 +74,32 @@ test('Spinner-Levels 16-20: 16 fuehrt solo ein, ab 17 Mix; Geraden-Bias steigt',
   }
 });
 
+test('Flipper-Levels 21-25: wieder gruen, Flipper ueberall, Spinner ab 22 gelb und feuernd', () => {
+  for (let level = 1; level <= 20; level++) {
+    assert.equal(levelConfig(level).flippers, undefined, `Level ${level} ohne Flipper`);
+    assert.equal(levelConfig(level).spinners?.shoot, undefined, `Level ${level}: Spinner feuern nicht`);
+  }
+  assert.equal(levelConfig(21).spinners, undefined, 'Level 21: Flipper solo einfuehren');
+  let prevFlippers = 0;
+  let prevSpinners = 0;
+  let prevEnemies = 0;
+  for (let level = 21; level <= 25; level++) {
+    const cfg = levelConfig(level);
+    assert.equal(cfg.shoot, true, `Level ${level}: Schiessen aktiv`);
+    assert.ok(cfg.flippers.count >= prevFlippers, `Level ${level}: Flipper-Anzahl sinkt nie`);
+    assert.ok(cfg.enemies.count >= prevEnemies, `Level ${level}: Tanker als Paar-Quelle dabei`);
+    if (level >= 22) {
+      assert.ok(cfg.spinners.count >= prevSpinners, `Level ${level}: Spinner-Anzahl sinkt nie`);
+      assert.equal(cfg.spinners.shoot, true, `Level ${level}: Spinner feuern`);
+      prevSpinners = cfg.spinners.count;
+    }
+    prevFlippers = cfg.flippers.count;
+    prevEnemies = cfg.enemies.count;
+  }
+});
+
 test('Farb-Thema: Level 6-10 und 16-20 Tempest-blau, alle anderen Phosphor-gruen', () => {
-  for (const level of [1, 2, 3, 4, 5, 11, 12, 13, 14, 15]) {
+  for (const level of [1, 2, 3, 4, 5, 11, 12, 13, 14, 15, 21, 22, 23, 24, 25]) {
     assert.equal(levelColor(level), PHOSPHOR_GREEN, `Level ${level} ist gruen`);
   }
   for (const level of [6, 7, 8, 9, 10, 16, 17, 18, 19, 20]) {
@@ -81,6 +108,16 @@ test('Farb-Thema: Level 6-10 und 16-20 Tempest-blau, alle anderen Phosphor-gruen
   // Ausserhalb des Bereichs faellt die Farbe auf die Grundfarbe zurueck.
   assert.equal(levelColor(0), PHOSPHOR_GREEN);
   assert.equal(levelColor(undefined), PHOSPHOR_GREEN);
+});
+
+test('Spinner-Farbe: 16-20 Phosphor-gruen (auf Blau), 21-25 gelb (auf Gruen)', () => {
+  for (const level of [16, 17, 18, 19, 20]) {
+    assert.equal(spinnerColor(level), PHOSPHOR_GREEN, `Level ${level}: Spinner gruen`);
+  }
+  for (const level of [22, 23, 24, 25]) {
+    assert.equal(spinnerColor(level), ARCADE_YELLOW, `Level ${level}: Spinner gelb`);
+  }
+  assert.equal(spinnerColor(undefined), PHOSPHOR_GREEN);
 });
 
 test('levelConfig liefert null ausserhalb des gueltigen Bereichs', () => {

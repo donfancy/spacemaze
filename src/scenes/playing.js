@@ -15,6 +15,11 @@
 // Gaenge (world/spinners.js) -- ihr Spike ist eine Einbahn-Sperre: frontal
 // sperrt die Spitze den Gang und will per Dauerfeuer gekuerzt werden
 // (Kreuzen von vorn oder Koerper-Beruehrung = Crash), von hinten harmlos.
+// Ab Level 21: Spinner GELB (auf gruenen Waenden) und feuernd
+// (`spinners.shoot` -- sirrende Schuesse in flirrenden Farben, abfangbar per
+// Dauerfeuer), dazu magenta X-FLIPPER (`flippers`, world/flippers.js): ihre
+// Querschnitts-Ebene toetet, abschiessbar nur in Links-/Rechts-Stellung;
+// ein Tanker-Abschuss aus >= 3 Feldern spawnt ein Flipper-Paar.
 
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
@@ -26,25 +31,32 @@ import { WALK, createWalkState, walkStep } from '../world/walk.js';
 import { ENEMY, enemiesStep, enemyHit, enemySegments } from '../world/enemies.js';
 import {
   SPINNER, spinnersStep, spinnerShotHit, spinnerPlayerHit, spinnerSegments,
+  spinnerFire, spinnerShotsStep, spinnerShotPlayerHit, spinnerShotIntercept, spinnerShotSegments,
 } from '../world/spinners.js';
+import {
+  FLIPPER, flippersStep, flipperPlayerHit, flipperShotHit, flipperSegments, spawnFlipperPair,
+} from '../world/flippers.js';
 import { createShotsState, aimYaw, fireShot, shotsStep, shotSegments } from '../world/shots.js';
 import { burstSegments } from '../world/burst.js';
-import { PHOSPHOR_GREEN } from '../render/colors.js';
+import { PHOSPHOR_GREEN, NEON_MAGENTA } from '../render/colors.js';
 import { SHATTER } from '../render/shatter.js';
+import { mazeMetric } from '../world/metric.js';
+import { createRng } from '../util/rng.js';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams,
-  shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch,
+  shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch, whirrPatch,
 } from '../sound/patches.js';
 import {
   goalZone, inGoalZone, goalMarkerSegments, goalBeamFeet, beamFlicker, beamOcclusionCut,
 } from '../world/goal.js';
-import { fireworkBeams } from '../world/fireworks.js';
+import { fireworkBeams, FIREWORK_COLORS } from '../world/fireworks.js';
+import { STARS, createStars, starDirection, skylineElevation, starTwinkle } from '../world/stars.js';
 import { collisionWave, waveSegments } from '../world/waves.js';
 import { recordTrailPoint } from '../world/trail.js';
 import { compassLayout } from '../render/compass.js';
 import { swayTransform } from '../render/sway.js';
 import { SIDE_FACES, faceLocalToWorld } from '../world/cubeFaces.js';
-import { levelConfig } from '../core/levels.js';
+import { levelConfig, spinnerColor } from '../core/levels.js';
 import {
   CUBE_SIZE, WALL_RATIO, EYE_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, unitSize,
   faceWalls, faceFootprints, faceSegments, renderFaceWalls, renderFaceOverlay, egoPose,
@@ -104,9 +116,10 @@ const FLASH_GLOW = 16;        // Glow des Blitzes (Standard: 8)
 const BRAKE_HOLD = 0.2;       // s Stillstand nach dem Bremsen (Q), bevor es abhebt
 
 // Kampf-Levels (ab Level 11): Feinde, Schiessen, Game Over.
-const ENEMY_COLOR = '#ff3b30';   // Feind-Rot (Rauten, Abschuss-Splitter)
-const SPINNER_COLOR = PHOSPHOR_GREEN; // Spinner-Gruen (Spiralen, ab Level 16 auf Blau)
+const ENEMY_COLOR = '#ff3b30';   // Tanker-Rot (Rauten, Abschuss-Splitter)
+const FLIPPER_COLOR = NEON_MAGENTA; // X-Flipper (ab Level 21)
 const SHOT_COLOR = '#ffffff';    // Projektile und Verpuffen
+const FOE_SHOT_FLICKER = 12;     // Farb-Schaltrate der Spinner-Schuesse (Hz)
 const ENEMY_GLOW = 12;           // Rauten gluehen etwas staerker (Gefahr)
 const ENEMY_OCC_DIM = 0.175;     // verdeckte Rauten schimmern durch die Wand
                                  // (dezenter als frueher 0.25; Waende: 0.1)
@@ -141,6 +154,7 @@ export function createPlaying(game) {
   let drive = false;
   let driveState = null;
   let walkState = null; // Tank-Modus (Level 1-5): Rampen + Kollisions-Flanke
+  let stars = null;  // Sternenhimmel ab Level 4 (world/stars.js); null = keiner
   let bank = 0;      // aktuelle Kurvenneigung (rad)
   let waves = [];    // aktive Kollisionswellen {wave, born, strength}
   let sceneT = 0;    // Szenenzeit fuer die Wellen-Alter
@@ -151,8 +165,14 @@ export function createPlaying(game) {
 
   // Kampf-Levels (ab Level 11).
   let shoot = false;      // Level-Eigenschaft: Space feuert
-  let enemies = [];       // rote Rauten (liegen auf game.enemies, s. enter())
-  let spinners = [];      // gruene Spinner (liegen auf game.spinners, s. enter())
+  let enemies = [];       // Tanker/rote Rauten (liegen auf game.enemies, s. enter())
+  let spinners = [];      // Spinner (liegen auf game.spinners, s. enter())
+  let flippers = [];      // X-Flipper ab Level 21 (liegen auf game.flippers)
+  let foeShots = [];      // sirrende Spinner-Schuesse (ab Level 21)
+  let foeRng = null;      // deterministischer Zufall fuers Spinner-Feuern
+  let spinnerCol = PHOSPHOR_GREEN; // Spinner-Farbe des Levels (ab 21 gelb)
+  let pairSource = false; // Level hat Flipper: Tanker-Fernabschuss spawnt ein Paar
+  let fieldPitch = 0;     // Feld-Abstand (Kammer + Wand, Welt) fuer die Paar-Distanz
   let shotsState = null;  // Tempest-Schuesse (world/shots.js)
   let bursts = [];        // aktive Splitter-Explosionen (Verpuffen/Abschuss/Crash)
   let crash = false;      // Feindberuehrung: Explosion laeuft, dann Game Over
@@ -182,10 +202,11 @@ export function createPlaying(game) {
     pitchOsc.kick(CRASH_SHAKE_PITCH);
   }
 
-  // Projektil-Ereignis (aus shotsStep): Verpuffen an der Wand, Feind-Abschuss
-  // oder die Spinner-Faelle -- Funken am gekuerzten Spike ('spike'), gruene
-  // Explosion beim Abschuss ('spinner'), Abprallen am geschuetzten Koerper
-  // an der Wand ('shield').
+  // Projektil-Ereignis (aus shotsStep): Verpuffen an der Wand, Tanker-Abschuss
+  // oder die Spinner-/Flipper-Faelle -- Funken am gekuerzten Spike ('spike'),
+  // Explosion in Spinner-Farbe beim Abschuss ('spinner'), Abprallen am
+  // geschuetzten Koerper an der Wand ('shield'), abgefangener Spinner-Schuss
+  // ('zap', weisses Zerplatzen) und Flipper-Abschuss ('flipper', magenta).
   function spawnShotEvent(ev) {
     const h = EYE_RATIO * cell;
     const hs = SPINNER.height * cell; // Spinner leben unterhalb der Augenhoehe
@@ -194,10 +215,16 @@ export function createPlaying(game) {
       bursts.push({ born: sceneT, center: [ev.x, ev.type === 'shield' ? hs : h, ev.z], seed: bursts.length + 1, count: 8, speed: 1.2 * cell, life: 0.35, size: 0.07 * cell, color: SHOT_COLOR });
     } else if (ev.type === 'spike') {
       game.audio?.play(clinkPatch());
-      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 3, count: 6, speed: 1.4 * cell, life: 0.3, size: 0.06 * cell, color: SPINNER_COLOR });
+      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 3, count: 6, speed: 1.4 * cell, life: 0.3, size: 0.06 * cell, color: spinnerCol });
     } else if (ev.type === 'spinner') {
       game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: SPINNER_COLOR });
+      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: spinnerCol });
+    } else if (ev.type === 'zap') {
+      game.audio?.play(poofPatch());
+      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 7, count: 10, speed: 1.8 * cell, life: 0.4, size: 0.08 * cell, color: SHOT_COLOR });
+    } else if (ev.type === 'flipper') {
+      game.audio?.play(boomPatch());
+      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: FLIPPER_COLOR });
     } else {
       game.audio?.play(boomPatch());
       bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: ENEMY_COLOR });
@@ -292,13 +319,26 @@ export function createPlaying(game) {
       // aus dem Maze-Seed. Bei Fortsetzung von der Karte bleiben sie samt
       // Abschuessen erhalten. Hier nur der Fallback fuer den Direkteinstieg
       // (Tests ohne MazeGen/Falling) und das Aufraeumen fremder Level-Reste.
-      if ((cfg?.enemies || cfg?.spinners) && !game.enemies && !game.spinners) {
+      if ((cfg?.enemies || cfg?.spinners || cfg?.flippers)
+        && !game.enemies && !game.spinners && !game.flippers) {
         game.spawnFoes(maze);
       }
       if (!cfg?.enemies) game.enemies = null;
       if (!cfg?.spinners) game.spinners = null;
+      if (!cfg?.flippers) game.flippers = null;
+      else if (!game.flippers) game.flippers = []; // Paar-Spawns landen auf game.flippers
       enemies = game.enemies ?? [];
       spinners = game.spinners ?? [];
+      flippers = game.flippers ?? [];
+      foeShots = [];
+      foeRng = createRng((maze.seed ^ 0x27d4eb2f) >>> 0);
+      spinnerCol = spinnerColor(game.level);
+      pairSource = !!cfg?.flippers;
+      const metric = mazeMetric(maze);
+      fieldPitch = (metric.wall + metric.corridor) * unit; // 1 Feld = Kammer + Wand
+      // Sternenhimmel ab Level 4 (1-3 "legacy 1974"), deterministisch aus
+      // dem Maze-Seed -- gleiche Karte, gleicher Himmel.
+      stars = game.level >= STARS.minLevel ? createStars(maze.seed) : null;
       shotsState = createShotsState();
       bursts = [];
       crash = false;
@@ -399,8 +439,39 @@ export function createPlaying(game) {
         if (hit && !reached) {
           startCrash(hit, {
             kill: hit.impale ? null : hit.spinner,
-            color: SPINNER_COLOR, height: SPINNER.height * cell,
+            color: spinnerCol, height: SPINNER.height * cell,
           });
+          return;
+        }
+        // Ab Level 21 (spinners.shoot): steht man im Gang eines Spinners
+        // und hat ihn vor sich, loest sich gelegentlich ein sirrender
+        // Schuss von der Spike-Spitze -- das Duell, nicht die Ferne.
+        if (spinnerFire(spinners, foeShots, dt, foeRng, { px, pz, yaw }, cell).length) {
+          game.audio?.play(whirrPatch());
+        }
+      }
+
+      // Spinner-Schuesse fliegen die Gangmitte entlang: Beruehren/Kreuzen =
+      // Game Over (ausweichen geht nicht -- abfangen schon, s. hitTest unten);
+      // am fernen Gang-Ende verpuffen sie an der Wand.
+      if (foeShots.length) {
+        for (const ev of spinnerShotsStep(foeShots, dt, cell)) spawnShotEvent(ev);
+        const hit = spinnerShotPlayerHit(foeShots, px, pz, RADIUS_RATIO * cell, cell,
+          { px: prevX, pz: prevZ });
+        if (hit && !reached) {
+          startCrash(hit, { color: spinnerCol, height: SPINNER.height * cell });
+          return;
+        }
+      }
+
+      // Flipper: wandern und flippen; ihre Querschnitts-Ebene ist toedlich --
+      // Beruehren oder Kreuzen zerstoert den Spieler (der Flipper geht mit).
+      if (flippers.length) {
+        flippersStep(flippers, dt, cell);
+        const hit = flipperPlayerHit(flippers, px, pz, RADIUS_RATIO * cell, cell,
+          { px: prevX, pz: prevZ });
+        if (hit && !reached) {
+          startCrash(hit, { kill: hit.flipper, color: FLIPPER_COLOR });
           return;
         }
       }
@@ -412,11 +483,25 @@ export function createPlaying(game) {
         if (keys.has(' ') && !reached && fireShot(shotsState, { px, pz, yaw }, steer)) {
           game.audio?.play(shotPatch());
         }
+        // Treffer-Kette eigener Projektile: erst die heranfliegenden Spinner-
+        // Schuesse abfangen, dann Flipper (nur in Seiten-Stellung), dann
+        // Spike/Spinner-Koerper.
         const events = shotsStep(maze, shotsState, dt, {
           unit, cell, enemies, enemyRadius: ENEMY.shotRadius * cell,
-          hitTest: spinners.length ? (x, z) => spinnerShotHit(spinners, x, z, cell) : null,
+          hitTest: (x, z) => (foeShots.length ? spinnerShotIntercept(foeShots, x, z, cell) : null)
+            ?? (flippers.length ? flipperShotHit(flippers, x, z, cell) : null)
+            ?? (spinners.length ? spinnerShotHit(spinners, x, z, cell) : null),
         });
-        for (const ev of events) spawnShotEvent(ev);
+        for (const ev of events) {
+          spawnShotEvent(ev);
+          // Tanker aus >= 3 Feldern Entfernung abgeschossen (Level mit
+          // Flippern): an seiner Stelle entsteht ein Flipper-PAAR (links +
+          // rechts), das den Gang entlang auf den Spieler zurueckt.
+          if (ev.type === 'enemy' && pairSource
+            && Math.hypot(ev.x - px, ev.z - pz) >= FLIPPER.pairFields * fieldPitch) {
+            flippers.push(...spawnFlipperPair(maze, ev.enemy, { px, pz }, { unit, cell }));
+          }
+        }
       }
       bursts = bursts.filter((b) => sceneT - b.born < b.life);
 
@@ -461,6 +546,34 @@ export function createPlaying(game) {
       }
       const pose = egoPose(face, px, pz, yaw, cell);
       const view = renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell });
+
+      // Sternenhimmel (ab Level 4): weltfeste Sterne in der Level-Farbe --
+      // beim Drehen zieht der Himmel vorbei, das macht jede Drehung
+      // spuerbar. Sichtbar nur OBERHALB der Wand-Silhouette in der
+      // jeweiligen Richtung (skylineElevation-Raycast); als Bildschirm-
+      // Kreuzchen gezeichnet, nach Funkel-Stufe gebatcht (ein Stroke pro
+      // Stufe). Innerhalb des Sway: die Kurvenneigung kippt den Himmel mit.
+      if (stars) {
+        const starBuckets = new Map();
+        const skyOpts = { unit, cell, eye: EYE_RATIO * cell, wallHeight: WALL_RATIO * cell };
+        const R = STARS.dist * cell;
+        for (const st of stars) {
+          if (st.el <= skylineElevation(maze, px, pz, st.az, skyOpts) + STARS.margin) continue;
+          const dir = starDirection(st.az, st.el);
+          const p = renderer.worldToScreen(faceLocalToWorld(
+            px + dir[0] * R, EYE_RATIO * cell + dir[1] * R, pz + dir[2] * R, face, CUBE_SIZE), camera);
+          if (!p) continue;
+          const r = st.size;
+          const q = Math.ceil(starTwinkle(st, sceneT) * FLICKER_STEPS) / FLICKER_STEPS;
+          bucketAdd(starBuckets, q, [
+            [[p.x - r, p.y], [p.x + r, p.y]],
+            [[p.x, p.y - r], [p.x, p.y + r]],
+          ]);
+        }
+        for (const [q, segs] of starBuckets) {
+          renderer.drawPolylines(segs, { intensity: q, lineWidth: 1 });
+        }
+      }
 
       // Ziel-Leuchtfeuer. Boden-Quadrat: normale Kanten-Verdeckung, aber
       // verdeckt doppelt so hell wie Wandkanten. Near-Plane wie bei den
@@ -573,7 +686,8 @@ export function createPlaying(game) {
         });
       }
 
-      // Spinner: gruene rotierende Spiralen samt Spike, gleiche Hidden-Line-
+      // Spinner: rotierende Spiralen samt Spike in der Level-Spinner-Farbe
+      // (16-20 gruen auf Blau, ab 21 gelb auf Gruen), gleiche Hidden-Line-
       // Behandlung wie die Rauten (verdeckt schimmern sie durch die Wand --
       // man ahnt den Spike hinter der Ecke).
       const aliveSpinners = spinners.filter((s) => s.alive);
@@ -583,8 +697,32 @@ export function createPlaying(game) {
           segs.push(...spinnerSegments(s, sceneT, { cell }));
         }
         renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
-          intensity: 0.95, dim: ENEMY_OCC_DIM, color: SPINNER_COLOR, glow: ENEMY_GLOW,
+          intensity: 0.95, dim: ENEMY_OCC_DIM, color: spinnerCol, glow: ENEMY_GLOW,
         });
+      }
+
+      // Flipper: magenta X-Konturen im Gang-Querschnitt, Hidden-Line wie die
+      // anderen Feinde (verdeckt schimmern sie durch die Wand).
+      const aliveFlippers = flippers.filter((f) => f.alive);
+      if (aliveFlippers.length) {
+        const segs = [];
+        for (const f of aliveFlippers) {
+          segs.push(...flipperSegments(f, { cell }));
+        }
+        renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
+          intensity: 0.95, dim: ENEMY_OCC_DIM, color: FLIPPER_COLOR, glow: ENEMY_GLOW,
+        });
+      }
+
+      // Spinner-Schuesse: sirrende Funken-Sterne in FLIRRENDEN Farben -- die
+      // Arcade-Palette schaltet hart (1981 gab es kein Blenden). Wenige
+      // Schuesse unterwegs -> ein Stroke pro Schuss ist ok.
+      for (const s of foeShots) {
+        const color = FIREWORK_COLORS[
+          Math.floor(sceneT * FOE_SHOT_FLICKER + (s.phase ?? 0)) % FIREWORK_COLORS.length];
+        renderer.renderScene(
+          { segments: faceSegments(spinnerShotSegments(s, sceneT, { cell }), face) },
+          camera, { near: NEAR_RATIO * cell, color, glow: 10 });
       }
 
       // Projektile: weisse rotierende Sterne. Keine Verdeckung noetig -- sie

@@ -28,7 +28,7 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
 
 ## Steuerung (aktueller Stand)
 
-- Startbildschirm: `↑/↓/←/→` Level wählen (1–15), `S` startet (Andock-Flug an den Würfel)
+- Startbildschirm: `↑/↓/←/→` Level wählen (1–25), `S` startet (Andock-Flug an den Würfel)
 - Im Labyrinth (Ego-Ansicht, Tank-Steuerung, Level 1–5): `↑/W` vor, `↓/S` zurück,
   `←/A`/`→/D` drehen, `Q` Rückschwenk zur Karte (am Ziel automatisch nach 20 s);
   Anfahren, Bremsen und Drehen laufen über Beschleunigungs-Rampen
@@ -39,11 +39,15 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
   (abwärts) und Rausschweben (aufwärts), ein dezenter Tick bei der Level-Wahl
   (Tonhöhe steigt mit dem Level) und ein leiser Schwebe-Whoosh beim
   An-/Abdock-Flug; ab Level 11 Pew-Schüsse, Verpuffen, Abschuss-Boom und
-  der Game-Over-Crash)
+  der Game-Over-Crash; ab Level 16 Spike-Clink, ab 21 das Sirren der
+  Spinner-Schüsse)
 - Ab Level 6 Fahrt-Modus: automatischer Vortrieb, nur `←/→` lenken; Kurven
   neigen die Kamera, Wandkontakt federt seitlich ab (die Fahrt geht weiter,
   ohne Gegenlenken schlägt man weiter vorne wieder ein) — mit Kollisionswellen
   auf der Wand und mechanischem Kamera-Nachschwingen
+- Ab Level 4 funkelt ein **Sternenhimmel** über den Wänden (weltfeste Sterne
+  in der Level-Farbe, von der Wand-Silhouette verdeckt) — beim Drehen zieht
+  der Himmel vorbei; Level 1–3 bleiben sternlos („legacy 1974")
 - Das Ziel ist ein Boden-Quadrat (das Zielfeld, um 1/4 eingerückt — erst darin
   gilt das Ziel als erreicht), auf dessen Kante flimmernde Lichtsäulen
   entlangwandern und in den Himmel strahlen: hinter Mauern gedimmt
@@ -58,8 +62,25 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
   Rauten in Splitter zerplatzen. Ein Fadenkreuz zeigt die Zielrichtung: bei
   Geradeausflug exakt die Blickrichtung, beim Lenken schlägt es weiter aus
   als die Flugbahn. Ab Level 13 patrouilliert ein wachsender Teil der Rauten
-  seinen Gang auf und ab
-- Auf der Karte: lebende Rauten erscheinen als kleine rote Kreuze; `Q`
+  seinen Gang auf und ab. (Die Rauten heißen **Tanker**.)
+- Level 16–20 (Tempest-blau): **Spinner** — Spiralen an den End-Wänden langer
+  Gänge, deren wachsender Spike den Gang als Einbahn-Sperre versperrt; frontal
+  hilft nur Dauerfeuer (jeder Treffer kürzt die Spitze), von hinten ist der
+  Spike harmlos. Zurückgezogen an der Wand sind Spinner geschützt, nur beim
+  Vorlaufen abschießbar
+- Level 21–25 (wieder phosphor-grün, Labyrinthe wachsen auf n=45): die Spinner
+  sind **gelb** und **feuern** im Duell — steht man in ihrem Gang und hat sie
+  vor sich, sirrt gelegentlich ein Schuss in flirrenden Arcade-Farben die
+  Gangmitte entlang (ausweichen unmöglich, eigenes Dauerfeuer fängt ihn ab).
+  Neu: magenta **Flipper** — gestreckte
+  X-Silhouetten im Gang-Querschnitt, die zwischen den Gangkanten wandern und
+  um die Gang-Achse „flippen" (links/rechts rasten lange ein, oben/unten
+  klappen sie direkt durch). Ihre Querschnitts-Ebene ist tödlich; abschießbar
+  sind sie nur in Links-/Rechts-Stellung (dort kreuzt das X die Schusshöhe —
+  mit dem Lenk-Ausschlag zur Seite zielen). Wer einen Tanker aus ≥ 3 Feldern
+  Entfernung abschießt, bekommt an dessen Stelle ein anrückendes Flipper-PAAR
+- Auf der Karte: lebende Tanker erscheinen als kleine rote Kreuze, Spinner
+  in ihrer Level-Farbe, Flipper magenta; `Q`
   weiterspielen (fällt zurück an die Spielerlage, solange das
   Ziel offen ist; nach GAME OVER: Neustart des Levels vom Start), `X` beenden
   (nach 5 min automatisch) — die Karte blendet aus und die Kamera fliegt
@@ -84,6 +105,8 @@ src/
     vectorText.js  Text-Layout → Polylinien in Pixeln (rein, getestet)
     compass.js     Kompass-Rose als Liniendaten (rein, getestet)
     sway.js        Bildraum-Schwenk: Kurvenneigung/Schwingung ohne Kamera-Roll (getestet)
+    shatter.js     Bild-Zerbersten beim Crash: Linien → taumelnde Scherben (getestet)
+    colors.js      Farbpalette der Level-Themen + mixColors (getestet)
     renderer.js    EINZIGER Canvas-berührender Teil (Phosphor-Glow)
   world/
     maze.js        Labyrinth-Generator (DFS-Backtracker, seedbar, getestet)
@@ -92,8 +115,15 @@ src/
     mazeWorld.js   begehbare Welt: Wände, Kollision (Spieler-Quadrat), getestet
     drive.js       Fahr-Dynamik ab Level 6: Auto-Vortrieb, Abfedern (getestet)
     walk.js        Geh-Kinetik Level 1–5: Rampen + Kollisions-Flanke (getestet)
-    enemies.js     rote Rauten ab Level 11: Platzierung, Patrouillen, Treffer (getestet)
+    enemies.js     Tanker (rote Rauten) ab Level 11: Platzierung, Patrouillen, Treffer (getestet)
+    spinners.js    Spinner ab Level 16: Spike-Einbahn-Sperre, Vorlauf/Rückzug,
+                   ab Level 21 sirrende Schüsse (abfangbar, getestet)
+    flippers.js    Flipper ab Level 21: X im Gang-Querschnitt, Flip-Zyklus,
+                   tödliche Ebene, Paar-Spawn beim Tanker-Fernabschuss (getestet)
     shots.js       Schießen à la Tempest: max 8 unterwegs, Zielrichtung, Verpuffen (getestet)
+    fireworks.js   Ziel-Feuerwerk: Strahlen in klassischen Arcade-Farben (getestet)
+    stars.js       Sternenhimmel ab Level 4: weltfeste Sterne, Wand-Silhouetten-
+                   Raycast, Funkeln (getestet)
     burst.js       Splitter-Explosionen (Verpuffen bis Game-Over-Crash, getestet)
     waves.js       Kollisionswellen auf der Wandfläche (getestet)
     goal.js        Ziel-Zone (eingerückt) + Leuchtfeuer: Quadrat, Strahlen (getestet)
@@ -104,8 +134,8 @@ src/
     trail.js       präzise Weg-Aufzeichnung (getestet)
   core/
     states.js      Zustands-Automat als reine Funktion (getestet)
-    levels.js      Level 1–15 als reine Daten: Maze-Größe n, Metrik, Fahr-Modus,
-                   Geraden-Bias, Feinde, Schießen
+    levels.js      Level 1–25 als reine Daten: Maze-Größe n, Metrik, Fahr-Modus,
+                   Geraden-Bias, Farb-Thema, Tanker/Spinner/Flipper, Schießen
     game.js        Orchestrierung + animierte Übergänge
   scenes/
     startscreen.js Orbit um den Drahtwürfel, Level-Wahl, An-/Abdock-Flug
