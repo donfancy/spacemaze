@@ -79,8 +79,21 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
   sind sie nur in Links-/Rechts-Stellung (dort kreuzt das X die Schusshöhe —
   mit dem Lenk-Ausschlag zur Seite zielen). Wer einen Tanker aus ≥ 3 Feldern
   Entfernung abschießt, bekommt an dessen Stelle ein anrückendes Flipper-PAAR
-- Auf der Karte: lebende Tanker erscheinen als kleine rote Kreuze, Spinner
-  in ihrer Level-Farbe, Flipper magenta; `Q`
+- Level 26–30 (Arcade-**rot**, Labyrinthe wachsen auf n=51, der Sternenhimmel
+  funkelt **bunt**): alle bisherigen Feinde treten an (Tanker jetzt blau —
+  Rot gehört den Wänden), dazu die gelben **Pulsare**: pulsierende
+  Zackenlinien im Gang-Querschnitt, die wie die Flipper um die Gang-Achse
+  klappen, aber in jeder Stellung länger verharren. Sie sind unzerstörbar —
+  Schüssen weichen sie rechtzeitig nach unten/oben aus — und töten nicht:
+  Wer die Ebene berührt, dem ROTIERT die Blickachse (rasch beschleunigt,
+  rasch gebremst) um 270/360/450 Grad und das Spiel läuft in der verdrehten
+  Welt weiter. Die Steuerung bleibt „logisch": man drückt den Pfeil, der auf
+  dem Bildschirm in die gewünschte Richtung zeigt (bei 90/270 Grad also
+  ↑/↓). Vorbei kommt man genau dann, wenn der Pulsar seitlich eingerastet
+  ist und man zur Gegenseite rüberzieht
+- Auf der Karte: lebende Tanker erscheinen als kleine Kreuze in ihrer
+  Level-Farbe (rot, ab 26 blau), Spinner ebenso, Flipper magenta, Pulsare
+  gelb; `Q`
   weiterspielen (fällt zurück an die Spielerlage, solange das
   Ziel offen ist; nach GAME OVER: Neustart des Levels vom Start), `X` beenden
   (nach 5 min automatisch) — die Karte blendet aus und die Kamera fliegt
@@ -120,6 +133,10 @@ src/
                    ab Level 21 sirrende Schüsse (abfangbar, getestet)
     flippers.js    Flipper ab Level 21: X im Gang-Querschnitt, Flip-Zyklus,
                    tödliche Ebene, Paar-Spawn beim Tanker-Fernabschuss (getestet)
+    pulsars.js     Pulsare ab Level 26: pulsierende Zackenlinie im Querschnitt,
+                   weicht Schüssen aus, Berührung rotiert den Blick (getestet)
+    gyro.js        Blickachsen-Rotation: 270/360/450°, Dreiecks-Tempoprofil,
+                   90°-Einrasten, „logisches" Tasten-Mapping (getestet)
     shots.js       Schießen à la Tempest: max 8 unterwegs, Zielrichtung, Verpuffen (getestet)
     fireworks.js   Ziel-Feuerwerk: Strahlen in klassischen Arcade-Farben (getestet)
     stars.js       Sternenhimmel ab Level 4: weltfeste Sterne, Wand-Silhouetten-
@@ -134,8 +151,8 @@ src/
     trail.js       präzise Weg-Aufzeichnung (getestet)
   core/
     states.js      Zustands-Automat als reine Funktion (getestet)
-    levels.js      Level 1–25 als reine Daten: Maze-Größe n, Metrik, Fahr-Modus,
-                   Geraden-Bias, Farb-Thema, Tanker/Spinner/Flipper, Schießen
+    levels.js      Level 1–30 als reine Daten: Maze-Größe n, Metrik, Fahr-Modus,
+                   Geraden-Bias, Farb-Thema, Tanker/Spinner/Flipper/Pulsare, Schießen
     game.js        Orchestrierung + animierte Übergänge
   scenes/
     startscreen.js Orbit um den Drahtwürfel, Level-Wahl, An-/Abdock-Flug

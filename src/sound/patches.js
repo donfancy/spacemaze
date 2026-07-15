@@ -255,6 +255,30 @@ export function whirrPatch() {
   };
 }
 
+// Pulsar-Beruehrung (ab Level 26): das GYRO-Taumeln. Waehrend die Blickachse
+// rotiert, heult ein Gleitton dem Dreiecks-Tempoprofil hinterher -- rauf bis
+// zur halben Dauer, dann wieder runter -- dazu ein wirbelndes Rauschband;
+// am Ende ein kurzer Einrast-Tick. `duration` = Rotations-Dauer (world/
+// gyro.js liefert sie), der Klang endet also genau mit dem Einrasten.
+export function gyroPatch(duration = 1.25) {
+  const d = Math.max(0.4, duration);
+  return {
+    duration: d + 0.1,
+    voices: [
+      { type: 'osc', shape: 'sawtooth',
+        freq: [[0, 220], [d / 2, 880], [d, 240]],
+        filter: { type: 'lowpass', freq: [[0, 1200], [d / 2, 3200], [d, 900]] },
+        gain: [[0, 0], [0.03, 0.16], [d * 0.85, 0.12], [d, 0]] },
+      { type: 'noise',
+        filter: { type: 'bandpass', freq: [[0, 700], [d / 2, 2600], [d, 600]], q: 4 },
+        gain: [[0, 0], [0.05, 0.1], [d, 0]] },
+      { type: 'osc', shape: 'square', // Einrast-Tick
+        freq: [[d, 1400], [d + 0.08, 1050]],
+        gain: [[d, 0], [d + 0.006, 0.14], [d + 0.09, 0]] },
+    ],
+  };
+}
+
 // Feind-Abschuss: mittlerer Krach -- Rauschexplosion mit gezackter Huellkurve
 // (wie das Brutzeln, aber breiter), harter Rechteck-Schlag, dumpfer Koerper.
 export function boomPatch() {

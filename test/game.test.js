@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../src/core/game.js';
 import { State, GameEvent } from '../src/core/states.js';
-import { PHOSPHOR_GREEN, TEMPEST_BLUE } from '../src/render/colors.js';
+import { PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_RED } from '../src/render/colors.js';
 
 // Renderer-Attrappe: bietet alle vom Spiel genutzten Methoden als No-Op an.
 function fakeRenderer() {
@@ -143,6 +143,35 @@ test('Level 22: gruenes Thema, Flipper + feuernde gelbe Spinner + Tanker entsteh
   assert.ok(r.calls > before, 'Spielablauf zeichnet weiter');
 });
 
+test('Level 26: rotes Thema, alle vier Feindarten entstehen, Pulsare bleiben', () => {
+  const g = new Game();
+  const r = fakeRenderer();
+  g.level = 26;
+
+  g.handleKey('S');
+  advance(g, r, 1.8);  // Andocken -> MazeGen
+  assert.equal(g.stateKey, State.MAZE_GEN);
+  assert.ok(Array.isArray(g.pulsars) && g.pulsars.length > 0,
+    'Pulsare existieren schon auf der Start-Karte');
+  // Wachstum (n=47) + Reinfallen abwarten -- grosszuegig vorspulen.
+  for (let t = 0; t < 40 && g.stateKey !== State.PLAYING; t += 0.5) advance(g, r, 0.5);
+  assert.equal(g.stateKey, State.PLAYING);
+  assert.equal(r.color, ARCADE_RED, 'Level 26 ist Arcade-rot');
+  assert.ok(g.enemies.length > 0 && g.spinners.length > 0 && g.flippers.length > 0,
+    'Tanker, Spinner und Flipper treten weiter an');
+  assert.ok(g.pulsars.length > 0 && g.pulsars.every((p) => p.alive && p.armed),
+    'Pulsare stehen scharf im Gang');
+
+  // Ein paar Sekunden Spiel mit Dauerfeuer: nichts wirft, es wird gezeichnet,
+  // und kein Pulsar stirbt (unzerstoerbar).
+  g.keys.add(' ');
+  const before = r.calls;
+  advance(g, r, 2.0);
+  g.keys.delete(' ');
+  assert.ok(r.calls > before, 'Spielablauf zeichnet weiter');
+  assert.ok(g.pulsars.every((p) => p.alive), 'Pulsare sind unzerstoerbar');
+});
+
 test('voller Zyklus Start -> (Andocken) -> MazeGen -> Playing -> Start', () => {
   const g = new Game();
   const r = fakeRenderer();
@@ -204,7 +233,7 @@ test('Zustands-Zyklus direkt via dispatch (ohne Andocken)', () => {
   assert.equal(g.stateKey, State.STARTSCREEN);
 });
 
-test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..25', () => {
+test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..30', () => {
   const g = new Game();
   assert.equal(g.level, 1);
 
@@ -215,10 +244,10 @@ test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..25', () => {
   g.handleKey('ArrowUp');
   assert.equal(g.level, 3);
 
-  for (let i = 0; i < 30; i++) g.handleKey('ArrowUp'); // oben begrenzt
-  assert.equal(g.level, 25);
+  for (let i = 0; i < 40; i++) g.handleKey('ArrowUp'); // oben begrenzt
+  assert.equal(g.level, 30);
   g.handleKey('ArrowLeft');
-  assert.equal(g.level, 24);
+  assert.equal(g.level, 29);
 });
 
 test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry', () => {

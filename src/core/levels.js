@@ -25,8 +25,16 @@
 //                      toedlich, abschiessbar nur in Links-/Rechts-Stellung.
 //                      Tanker (rote Rauten), die aus >= 3 Feldern abgeschossen
 //                      werden, hinterlassen ein Flipper-PAAR.
+// Ab Level 26 (ARCADE-ROT, alle bisherigen Feinde plus Pulsare):
+//   `enemies.color`    Linienfarbe der Tanker (Tempest-blau -- ihr Rot ist
+//                      jetzt die Wandfarbe); enemyColor()
+//   `pulsars`          { count }: gelbe pulsierende Zackenlinien im Gang-
+//                      Querschnitt (world/pulsars.js) -- unzerstoerbar,
+//                      nicht toedlich: Beruehrung ROTIERT die Blickachse
+//                      (world/gyro.js), gespielt wird in der verdrehten Welt
+//   `rainbowStars`     der Sternenhimmel funkelt BUNT (Arcade-Palette)
 
-import { PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_YELLOW } from '../render/colors.js';
+import { PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_YELLOW, ARCADE_RED, TANKER_RED } from '../render/colors.js';
 
 const THIN = { wall: 1, corridor: 5 }; // schmale Waende (ab Level 6)
 
@@ -78,6 +86,26 @@ export const LEVELS = [
   { n: 45, metric: THIN, drive: true, straight: 0.8, shoot: true,
     flippers: { count: 8 }, enemies: { count: 14, patrol: 1 },
     spinners: { count: 8, shoot: true, color: ARCADE_YELLOW } },                                         // Level 25
+  // Level 26-30: ARCADE-ROT, die Labyrinthe wachsen weiter (47-51), bunte
+  // Sterne, und ALLE bisherigen Feinde treten an -- Tanker jetzt BLAU (Rot
+  // ist die Wandfarbe), Spinner wieder gruen (gelb gehoert den Neuen),
+  // Flipper magenta. Neu: gelbe PULSARE -- unzerstoerbare Zackenlinien,
+  // deren Beruehrung die Blickachse um 270/360/450 Grad verdreht.
+  { n: 47, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
+    pulsars: { count: 3 }, flippers: { count: 6 }, enemies: { count: 12, patrol: 1, color: TEMPEST_BLUE },
+    spinners: { count: 6, shoot: true, color: PHOSPHOR_GREEN } },                                        // Level 26
+  { n: 47, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
+    pulsars: { count: 4 }, flippers: { count: 6 }, enemies: { count: 12, patrol: 1, color: TEMPEST_BLUE },
+    spinners: { count: 7, shoot: true, color: PHOSPHOR_GREEN } },                                        // Level 27
+  { n: 49, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
+    pulsars: { count: 5 }, flippers: { count: 7 }, enemies: { count: 13, patrol: 1, color: TEMPEST_BLUE },
+    spinners: { count: 7, shoot: true, color: PHOSPHOR_GREEN } },                                        // Level 28
+  { n: 49, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
+    pulsars: { count: 6 }, flippers: { count: 7 }, enemies: { count: 14, patrol: 1, color: TEMPEST_BLUE },
+    spinners: { count: 8, shoot: true, color: PHOSPHOR_GREEN } },                                        // Level 29
+  { n: 51, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
+    pulsars: { count: 8 }, flippers: { count: 8 }, enemies: { count: 15, patrol: 1, color: TEMPEST_BLUE },
+    spinners: { count: 8, shoot: true, color: PHOSPHOR_GREEN } },                                        // Level 30
 ];
 
 export const MIN_LEVEL = 1;
@@ -99,6 +127,12 @@ export function levelColor(level) {
 // gelb (spinners.color) -- auch die Karten-Kreuze folgen dieser Farbe.
 export function spinnerColor(level) {
   return levelConfig(level)?.spinners?.color ?? PHOSPHOR_GREEN;
+}
+
+// Tanker-Farbe eines Levels: Standard Rauten-Rot, ab 26 Tempest-blau
+// (enemies.color) -- auch Karten-Kreuze und Abschuss-Splitter folgen ihr.
+export function enemyColor(level) {
+  return levelConfig(level)?.enemies?.color ?? TANKER_RED;
 }
 
 // Auswahl schrittweise aendern, an den Raendern begrenzt (kein Umlauf).

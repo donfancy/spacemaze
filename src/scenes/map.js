@@ -11,8 +11,9 @@ import { generateMaze } from '../world/maze.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
 import { spinnerMarkers } from '../world/spinners.js';
 import { flipperMarkers } from '../world/flippers.js';
-import { NEON_MAGENTA } from '../render/colors.js';
-import { spinnerColor } from '../core/levels.js';
+import { pulsarMarkers } from '../world/pulsars.js';
+import { NEON_MAGENTA, ARCADE_YELLOW } from '../render/colors.js';
+import { spinnerColor, enemyColor } from '../core/levels.js';
 import {
   FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls, mapPose,
   drawMapOverlay, drawEnemyMarkers,
@@ -71,9 +72,10 @@ export function createMap(game) {
         far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight: 0, alpha: fade,
       });
       drawMapOverlay(renderer, maze, face, camera, game.trail, fade, 1); // Rahmen bleibt
-      drawEnemyMarkers(renderer, game.enemies, face, camera, cell, fade); // rote Kreuze (Tanker)
+      drawEnemyMarkers(renderer, game.enemies, face, camera, cell, fade, enemyColor(game.level)); // Tanker-Kreuze (rot, ab 26 blau)
       drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, fade, spinnerColor(game.level)); // Spinner-Kreuze
       drawEnemyMarkers(renderer, flipperMarkers(game.flippers), face, camera, cell, fade, NEON_MAGENTA); // magenta Kreuze
+      drawEnemyMarkers(renderer, pulsarMarkers(game.pulsars), face, camera, cell, fade, ARCADE_YELLOW); // Pulsar-Kreuze
 
       // Nach der Feindberuehrung: GAME OVER pulsiert in der FARBE zwischen
       // Feind-Rot und Weiss, bei voller Deckkraft -- blosses Helligkeits-

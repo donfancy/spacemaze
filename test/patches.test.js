@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, fallPatch, risePatch, gnawPatch, engineParams,
   shotPatch, poofPatch, boomPatch, crashPatch, tickPatch, dockPatch, clinkPatch, whirrPatch,
+  gyroPatch,
 } from '../src/sound/patches.js';
 
 const EPS = 1e-9;
@@ -58,6 +59,7 @@ test('bump/sizzle/fanfare erfuellen die Patch-Invarianten', () => {
   checkPatch(crashPatch(), 'crash');
   checkPatch(clinkPatch(), 'clink');
   checkPatch(whirrPatch(), 'whirr');
+  for (const dur of [1.09, 1.25, 1.4]) checkPatch(gyroPatch(dur), `gyro(${dur})`);
   for (const p of [0, 0.5, 1]) checkPatch(tickPatch(p), `tick(${p})`);
   for (const dur of [1.0, 1.6]) {
     checkPatch(dockPatch(dur, false), `dock(${dur})`);
@@ -225,6 +227,17 @@ test('Fanfare: drei aufsteigende Toene, der letzte klingt laenger', () => {
   }
   const lens = f.voices.map((v) => v.gain[v.gain.length - 1][0] - v.gain[0][0]);
   assert.ok(lens[2] > lens[0] * 1.5, 'Schlusston klingt aus');
+});
+
+test('gyro: Gleitton folgt dem Dreiecksprofil (Scheitel bei halber Dauer), endet mit Einrast-Tick', () => {
+  const d = 1.25;
+  const patch = gyroPatch(d);
+  const glide = patch.voices.find((v) => v.shape === 'sawtooth').freq;
+  assert.ok(glide[1][1] > glide[0][1] && glide[1][1] > glide[2][1], 'rauf und wieder runter');
+  assert.equal(glide[1][0], d / 2, 'Scheitel genau bei halber Rotations-Dauer');
+  const tick = patch.voices[patch.voices.length - 1];
+  assert.equal(tick.gain[0][0], d, 'der Einrast-Tick beginnt exakt beim Einrasten');
+  assert.ok(patch.duration >= d, 'der Klang traegt bis zum Einrasten');
 });
 
 test('Motor-Parameter: walk kaum merklich und im Stand still, drive deutlich', () => {

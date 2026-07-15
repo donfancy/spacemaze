@@ -10,6 +10,7 @@ import { PHOSPHOR_GREEN } from '../render/colors.js';
 import { createEnemies } from '../world/enemies.js';
 import { createSpinners } from '../world/spinners.js';
 import { createFlippers } from '../world/flippers.js';
+import { createPulsars } from '../world/pulsars.js';
 import { createRng } from '../util/rng.js';
 import { unitSize, cellSize } from '../scenes/mazeView.js';
 import { createStartscreen } from '../scenes/startscreen.js';
@@ -38,7 +39,10 @@ export class Game {
     this.enemies = null;      // Tanker (rote Rauten, ab 11), von Playing verwaltet -- bleiben ueber Karte/Resume erhalten
     this.spinners = null;     // Spiral-Spinner (ab 16), gleiche Lebensdauer-Regeln wie enemies
     this.flippers = null;     // X-Flipper (ab 21), gleiche Lebensdauer-Regeln wie enemies
+    this.pulsars = null;      // Pulsare (ab 26), gleiche Lebensdauer-Regeln (sterben aber nie)
     this.gameOver = false;    // Feindberuehrung: Karte zeigt GAME OVER, Q startet den Level neu
+    this.viewRoll = 0;        // Rest-Verdrehung der Blickachse beim Abheben (Pulsar-
+                              // Rotation, ab 26) -- der Rueckschwenk dreht sie aus
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.
     this.scenes = {
@@ -105,6 +109,11 @@ export class Game {
     this.flippers = cfg?.flippers ? createFlippers(maze, cfg.flippers, {
       unit, cell, rng: createRng((maze.seed ^ 0x85ebca6b) >>> 0),
       avoid: this.spinners ?? [],
+    }) : null;
+    // Pulsare zuletzt: Spinner- UND Flipper-Gangstuecke bleiben pulsarfrei.
+    this.pulsars = cfg?.pulsars ? createPulsars(maze, cfg.pulsars, {
+      unit, cell, rng: createRng((maze.seed ^ 0xc2b2ae35) >>> 0),
+      avoid: [...(this.spinners ?? []), ...(this.flippers ?? [])],
     }) : null;
   }
 

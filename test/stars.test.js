@@ -34,9 +34,13 @@ test('createStars: deterministisch, richtige Anzahl, Werte in den Grenzen', () =
     assert.ok(s.el >= STARS.minElevation - 1e-9 && s.el <= Math.PI / 2 + 1e-9,
       'Elevation zwischen Horizont-Schranke und Zenit');
     assert.ok(s.size > 0 && s.size <= STARS.maxSize, 'Pixel-Groesse im Rahmen');
+    assert.ok(Number.isInteger(s.tint) && s.tint >= 0 && s.tint < 6,
+      'Farb-Index fuer bunte Himmel (rainbowStars) im Palette-Bereich');
   }
   // Nicht alle am Zenit, nicht alle am Horizont (Flaechen-Gleichverteilung).
   assert.ok(a.some((s) => s.el < 0.5) && a.some((s) => s.el > 1.0), 'Elevationen streuen');
+  // Die bunten Himmel nutzen wirklich mehrere Farben.
+  assert.ok(new Set(a.map((s) => s.tint)).size >= 4, 'Farb-Indizes streuen');
 });
 
 test('starDirection: Einheitsvektor, Hoehen-Anteil = sin(el)', () => {

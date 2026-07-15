@@ -11,9 +11,11 @@ import { generateMaze } from '../world/maze.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
 import { spinnerMarkers } from '../world/spinners.js';
 import { flipperMarkers } from '../world/flippers.js';
-import { NEON_MAGENTA } from '../render/colors.js';
-import { spinnerColor } from '../core/levels.js';
+import { pulsarMarkers } from '../world/pulsars.js';
+import { NEON_MAGENTA, ARCADE_YELLOW } from '../render/colors.js';
+import { spinnerColor, enemyColor } from '../core/levels.js';
 import { SHATTER } from '../render/shatter.js';
+import { swayTransform } from '../render/sway.js';
 import { risePatch } from '../sound/patches.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, faceWalls, faceFootprints, renderFaceWalls,
@@ -65,6 +67,14 @@ export function createRising(game) {
       const fn = pose.forward[0] * face.normal[0] + pose.forward[1] * face.normal[1] + pose.forward[2] * face.normal[2];
       const occWeight = 1 - Math.abs(fn);
 
+      // Wer VERDREHT abhebt (Pulsar-Rotation, ab 26), wird waehrend des
+      // Schwenks sanft ausgedreht: der Bildraum-Roll (Sway, Kamera bleibt
+      // horizontal) klingt mit dem Ease auf 0 ab -- die Karte kommt aufrecht an.
+      const roll = (game.viewRoll ?? 0) * (1 - e);
+      if (Math.abs(roll) > 1e-4) {
+        renderer.pushSway(swayTransform(roll, 0, { height: renderer.height, fov: camera.fov }));
+      }
+
       // Nach dem Crash beginnt der Schwenk voll ZERSCHERBT (nahtlos zum
       // Zerbersten in playing) -- waehrend es hinausschleudert, klingt das
       // Chaos quadratisch ab und die Linien sortieren sich wieder ein:
@@ -82,11 +92,17 @@ export function createRising(game) {
       const walls = faceWalls(maze, face, WALL_RATIO * cell * (1 - e)); // Waende schrumpfen
       renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell, occWeight });
       drawMapOverlay(renderer, maze, face, camera, game.trail, e); // Rahmen + S/G + Weg blenden ein
-      drawEnemyMarkers(renderer, game.enemies, face, camera, cell, e); // rote Kreuze blenden mit ein
+      drawEnemyMarkers(renderer, game.enemies, face, camera, cell, e, enemyColor(game.level)); // Tanker-Kreuze blenden mit ein
       drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, e, spinnerColor(game.level)); // Spinner dito
       drawEnemyMarkers(renderer, flipperMarkers(game.flippers), face, camera, cell, e, NEON_MAGENTA); // Flipper dito
+      drawEnemyMarkers(renderer, pulsarMarkers(game.pulsars), face, camera, cell, e, ARCADE_YELLOW); // Pulsare dito
 
+      if (Math.abs(roll) > 1e-4) renderer.popSway();
       if (shatter > 0.001) renderer.popShatter();
+    },
+
+    exit() {
+      game.viewRoll = 0; // die Rest-Verdrehung ist ausgedreht
     },
   };
 }

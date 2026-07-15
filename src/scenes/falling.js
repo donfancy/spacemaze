@@ -11,8 +11,9 @@ import { cellCenter, startFacingYaw } from '../world/mazeWorld.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
 import { spinnerMarkers } from '../world/spinners.js';
 import { flipperMarkers } from '../world/flippers.js';
-import { NEON_MAGENTA } from '../render/colors.js';
-import { spinnerColor } from '../core/levels.js';
+import { pulsarMarkers } from '../world/pulsars.js';
+import { NEON_MAGENTA, ARCADE_YELLOW } from '../render/colors.js';
+import { spinnerColor, enemyColor } from '../core/levels.js';
 import { fallPatch } from '../sound/patches.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, unitSize, faceWalls, faceFootprints, renderFaceWalls,
@@ -76,9 +77,10 @@ export function createFalling(game) {
       // (frischer Anlauf hat noch keinen). Die Feinde sind immer aktuell:
       // enter() wuerfelt sie bei frischem Anlauf neu, Resume behaelt sie.
       drawMapOverlay(renderer, maze, face, camera, game.resume ? game.trail : null, 1 - e);
-      drawEnemyMarkers(renderer, game.enemies, face, camera, cell, 1 - e);
+      drawEnemyMarkers(renderer, game.enemies, face, camera, cell, 1 - e, enemyColor(game.level));
       drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, 1 - e, spinnerColor(game.level));
       drawEnemyMarkers(renderer, flipperMarkers(game.flippers), face, camera, cell, 1 - e, NEON_MAGENTA);
+      drawEnemyMarkers(renderer, pulsarMarkers(game.pulsars), face, camera, cell, 1 - e, ARCADE_YELLOW);
     },
   };
 }

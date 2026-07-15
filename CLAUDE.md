@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 310 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 332 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -30,7 +30,8 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - `src/math/` — vec3, camera (6-DOF + optionale freie Basis), projection
 - `src/world/` — maze (Generator), mazeGeometry, metric (Achsen-Metrik), mazeWorld,
   drive (Fahr-Dynamik), walk (Geh-Kinetik mit Rampen), waves (Kollisionswellen),
-  goal (Ziel-Zone + Leuchtfeuer), cubeFaces, shapes, visibility
+  goal (Ziel-Zone + Leuchtfeuer), cubeFaces, shapes, visibility, enemies/spinners/
+  flippers/pulsars (Feinde), gyro (Blickachsen-Rotation ab 26), shots, stars
 - `src/render/` — renderer.js (EINZIGER Canvas-Teil), projection.js, occlusion.js
 - `src/sound/` — patches.js (Klaenge als reine Daten, testbar), audio.js
   (EINZIGER Web-Audio-Teil, analog renderer.js)
@@ -53,7 +54,8 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   (Level 16–20: Spinner — Größe eingefroren, dafür `straight` 0.7→0.8 für
   lange Gänge; 16 nur Spinner, ab 17 Mix mit Rauten, `spinners {count}`)
   und 41/43/43/45/45 (Level 21–25: wieder wachsend, `straight` 0.8 — Flipper,
-  feuernde gelbe Spinner, s.u.);
+  feuernde gelbe Spinner, s.u.) und 47/47/49/49/51 (Level 26–30: ARCADE-ROT,
+  alle Feinde + Pulsare + Blick-Rotation, s.u.);
   `game.level` hält die Auswahl, MazeGen liest daraus. Ab Level 6 SCHMALE WÄNDE:
   gleiche Maze-Topologie, aber `world/metric.js` streckt die Achsen ungleich
   (gerade Zellen = Wände 1 Einheit, ungerade = Gänge 5). Grid↔Welt geht überall
@@ -247,6 +249,44 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Resume/Retry-Regeln; Karten-/Schwenk-Kreuze magenta. Level 21 führt
   Flipper solo ein (+ Tanker als Paar-Quelle), ab 22 Spinner-Mix, bis 25
   steigt das Trio.
+- PULSAR-LEVELS 26–30 (15.7.2026, umgesetzt): ARCADE-ROT (`ARCADE_RED` in
+  colors.js), Sterne BUNT (`rainbowStars` in levels.js, `tint`-Farbindex aus
+  stars.js × FIREWORK_COLORS, gebatcht pro Farbe×Funkel-Stufe), ALLE Feinde:
+  Tanker BLAU (`enemies.color`/`enemyColor(level)` — Rot ist die Wandfarbe;
+  auch Karten-Kreuze und Splitter folgen ihr), Spinner wieder grün, Flipper
+  magenta. NEU die gelben PULSARE (`world/pulsars.js`, pur): pulsierende
+  Zackenlinien im Gang-Querschnitt (flache Enden, Zackenstrecke atmet
+  spreadMin↔spreadMax), Platzierung wie Flipper (lange Gänge, Weg zuerst,
+  S/G-Schutz; Spinner- UND Flipper-Gänge bleiben frei — spawnFoes würfelt
+  sie ZULETZT), FESTE Position in der Gangmitte. Sie klappen wie Flipper um
+  die Gang-Achse, rasten aber in JEDER Stellung lange ein (holdMin–holdMax).
+  UNZERSTÖRBAR: eigene Schüsse im Gang (< dodgeRange 3 Gangbreiten, Flugzeit
+  0.375 s > flipTime 0.25) lassen die Seiten-Stellung rechtzeitig nach
+  unten/oben wegklappen (landet ein Flip unter Beschuss seitlich, klappt er
+  durch); es gibt KEINE Treffer-Funktion. NICHT tödlich: Berühren/Kreuzen
+  der Ebene (eigener Gang, ganzer Querschnitt) ROTIERT die Blickachse —
+  Schlupfloch: seitlich eingerastet + Spieler ≥ passMargin zur GEGENSEITE
+  gezogen. Nach Berührung entschärft (`armed`), bis der Spieler rearmDist
+  Abstand hat (sonst löste die Durchfahrt während der Rotation erneut aus);
+  während `gyro.spinning` löst kein weiterer Pulsar aus. Die ROTATION
+  (`world/gyro.js`, pur): Betrag 270/360/450° und Richtung aus foeRng
+  (deterministisch), Dreiecks-Tempoprofil (accel 16 rad/s², 360° ≈ 1.25 s),
+  rastet EXAKT im 90°-Raster ein (orient 0..3, Roll normalisiert — Snap
+  setzt orient×90°, kein Float-Modulo-Rest). GERENDERT als Bildraum-Roll im
+  Sway (`bank + rollOsc + gyro.roll` — Hidden-Lines-Falle 4: NIE in die
+  Kamerabasis; ein Roll um die Blickachse ist exakt eine 2D-Rotation, auch
+  als 90/180/270°-DAUERZUSTAND). Steuerung "logisch" (`gyroTurn`): man
+  drückt den Pfeil, der auf dem verdrehten Bildschirm zur Zielseite zeigt
+  (Welt-links erscheint bei 90° UNTEN → ↓ lenkt links; 180° = ←/→
+  vertauscht); das Mapping wechselt erst beim EINRASTEN (Boris' Spec), die
+  Steuer-Zeile unten zeigt die aktuelle Belegung. Beim Abheben übergibt
+  `playing.exit` die Rest-Verdrehung kürzester-Weg-normalisiert als
+  `game.viewRoll`; der Rückschwenk (rising) dreht sie mit dem Ease sanft
+  aus (Karte kommt aufrecht an, danach 0; Playing startet immer aufrecht —
+  auch Resume). Sound: `gyroPatch(dur)` — Gleitton folgt dem Dreiecksprofil,
+  Einrast-Tick genau bei dur. `game.pulsars` mit denselben Resume/Retry-
+  Regeln (sterben nie, `alive:true` hält die Marker-Pipeline einheitlich);
+  Karten-/Schwenk-Kreuze gelb.
 - STERNENHIMMEL (14.7.2026): ab Level 4 (1–3 sind "legacy 1974", sagt Boris)
   funkeln in der Ego-Ansicht 250 weltfeste Sterne in der Level-Farbe am
   Himmel — beim Drehen zieht der Himmel vorbei, Drehungen werden spürbar.

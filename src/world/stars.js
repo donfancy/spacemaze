@@ -37,10 +37,12 @@ function hash(i, salt, seed) {
   return s - Math.floor(s);
 }
 
-// Erzeugt den Sternhimmel eines Levels: [{ az, el, size, phase }].
+// Erzeugt den Sternhimmel eines Levels: [{ az, el, size, phase, tint }].
 // az = Azimut (Welt, rad), el = Elevation ueber dem Horizont, size in Pixeln.
 // Gleichverteilt nach FLAECHE auf der Halbkugel oberhalb minElevation
 // (el = asin(u) -- sonst draengeln sich die Sterne am Zenit).
+// `tint` ist ein deterministischer Farb-Index (0..5) fuer BUNTE Himmel
+// (rainbowStars ab Level 26, Arcade-Palette); einfarbige Level ignorieren ihn.
 export function createStars(seed, opts = {}) {
   const count = opts.count ?? STARS.count;
   const u0 = Math.sin(STARS.minElevation);
@@ -51,6 +53,7 @@ export function createStars(seed, opts = {}) {
       el: Math.asin(u0 + (1 - u0) * hash(i, 2, seed)),
       size: STARS.maxSize * (0.45 + 0.55 * hash(i, 3, seed)),
       phase: hash(i, 4, seed) * 2 * Math.PI,
+      tint: Math.floor(hash(i, 5, seed) * 6) % 6,
     });
   }
   return stars;

@@ -5,8 +5,10 @@
 
 export const PHOSPHOR_GREEN = '#4dff7a'; // klassischer Vektor-Phosphor
 export const TEMPEST_BLUE = '#4d7aff';   // Tempest-Blau (Level 6-10)
-export const ARCADE_YELLOW = '#ffe14d';  // Spinner/Spikes auf Gruen (Level 21-25)
+export const ARCADE_YELLOW = '#ffe14d';  // Spinner/Spikes auf Gruen (21-25), Pulsare (ab 26)
 export const NEON_MAGENTA = '#ff4dea';   // Flipper (ab Level 21)
+export const ARCADE_RED = '#ff4d4d';     // Linienfarbe der Pulsar-Levels (26-30)
+export const TANKER_RED = '#ff3b30';     // Tanker-Rauten (Standard; ab 26 blau, s. levels.js)
 
 // '#rrggbb' -> [r, g, b] (0..255).
 export function parseHex(hex) {

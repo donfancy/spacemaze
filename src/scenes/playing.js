@@ -20,6 +20,14 @@
 // Dauerfeuer), dazu magenta X-FLIPPER (`flippers`, world/flippers.js): ihre
 // Querschnitts-Ebene toetet, abschiessbar nur in Links-/Rechts-Stellung;
 // ein Tanker-Abschuss aus >= 3 Feldern spawnt ein Flipper-Paar.
+// Ab Level 26 (`pulsars`, rote Waende, bunte Sterne, Tanker blau): gelbe
+// PULSARE (world/pulsars.js) -- unzerstoerbare Zackenlinien im Querschnitt,
+// die Schuessen nach oben/unten ausweichen. Beruehrung toetet NICHT: die
+// Blickachse ROTIERT um 270/360/450 Grad (world/gyro.js, als Bildraum-Roll
+// im Sway -- die 3D-Kamera bleibt horizontal!) und das Spiel laeuft in der
+// verdrehten Welt weiter; gelenkt wird "logisch" mit dem Pfeil, der auf dem
+// Bildschirm in die gewuenschte Richtung zeigt (gyroTurn, wechselt beim
+// Einrasten).
 
 import { GameEvent } from '../core/states.js';
 import { createCamera } from '../math/camera.js';
@@ -36,15 +44,17 @@ import {
 import {
   FLIPPER, flippersStep, flipperPlayerHit, flipperShotHit, flipperSegments, spawnFlipperPair,
 } from '../world/flippers.js';
+import { pulsarsStep, pulsarPlayerTouch, pulsarSegments } from '../world/pulsars.js';
+import { createGyro, startSpin, gyroStep, gyroTurn } from '../world/gyro.js';
 import { createShotsState, aimYaw, fireShot, shotsStep, shotSegments } from '../world/shots.js';
 import { burstSegments } from '../world/burst.js';
-import { PHOSPHOR_GREEN, NEON_MAGENTA } from '../render/colors.js';
+import { PHOSPHOR_GREEN, NEON_MAGENTA, ARCADE_YELLOW, TANKER_RED } from '../render/colors.js';
 import { SHATTER } from '../render/shatter.js';
 import { mazeMetric } from '../world/metric.js';
 import { createRng } from '../util/rng.js';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams,
-  shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch, whirrPatch,
+  shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch, whirrPatch, gyroPatch,
 } from '../sound/patches.js';
 import {
   goalZone, inGoalZone, goalMarkerSegments, goalBeamFeet, beamFlicker, beamOcclusionCut,
@@ -56,7 +66,7 @@ import { recordTrailPoint } from '../world/trail.js';
 import { compassLayout } from '../render/compass.js';
 import { swayTransform } from '../render/sway.js';
 import { SIDE_FACES, faceLocalToWorld } from '../world/cubeFaces.js';
-import { levelConfig, spinnerColor } from '../core/levels.js';
+import { levelConfig, spinnerColor, enemyColor } from '../core/levels.js';
 import {
   CUBE_SIZE, WALL_RATIO, EYE_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, unitSize,
   faceWalls, faceFootprints, faceSegments, renderFaceWalls, renderFaceOverlay, egoPose,
@@ -116,8 +126,8 @@ const FLASH_GLOW = 16;        // Glow des Blitzes (Standard: 8)
 const BRAKE_HOLD = 0.2;       // s Stillstand nach dem Bremsen (Q), bevor es abhebt
 
 // Kampf-Levels (ab Level 11): Feinde, Schiessen, Game Over.
-const ENEMY_COLOR = '#ff3b30';   // Tanker-Rot (Rauten, Abschuss-Splitter)
 const FLIPPER_COLOR = NEON_MAGENTA; // X-Flipper (ab Level 21)
+const PULSAR_COLOR = ARCADE_YELLOW; // Pulsare (ab Level 26)
 const SHOT_COLOR = '#ffffff';    // Projektile und Verpuffen
 const FOE_SHOT_FLICKER = 12;     // Farb-Schaltrate der Spinner-Schuesse (Hz)
 const ENEMY_GLOW = 12;           // Rauten gluehen etwas staerker (Gefahr)
@@ -168,9 +178,16 @@ export function createPlaying(game) {
   let enemies = [];       // Tanker/rote Rauten (liegen auf game.enemies, s. enter())
   let spinners = [];      // Spinner (liegen auf game.spinners, s. enter())
   let flippers = [];      // X-Flipper ab Level 21 (liegen auf game.flippers)
+  let pulsars = [];       // Pulsare ab Level 26 (liegen auf game.pulsars)
   let foeShots = [];      // sirrende Spinner-Schuesse (ab Level 21)
   let foeRng = null;      // deterministischer Zufall fuers Spinner-Feuern
   let spinnerCol = PHOSPHOR_GREEN; // Spinner-Farbe des Levels (ab 21 gelb)
+  let enemyCol = TANKER_RED;       // Tanker-Farbe des Levels (ab 26 blau)
+  let rainbow = false;    // bunte Sterne (ab Level 26, rainbowStars)
+  // Blickachsen-Rotation nach Pulsar-Beruehrung -- als Bildraum-Roll im Sway
+  // gerendert (Hidden-Lines-Falle 4: NIE in die Kamerabasis). Reset bei
+  // enter(): nach Karte/Resume startet man wieder aufrecht.
+  let gyro = createGyro();
   let pairSource = false; // Level hat Flipper: Tanker-Fernabschuss spawnt ein Paar
   let fieldPitch = 0;     // Feld-Abstand (Kammer + Wand, Welt) fuer die Paar-Distanz
   let shotsState = null;  // Tempest-Schuesse (world/shots.js)
@@ -193,7 +210,7 @@ export function createPlaying(game) {
     game.audio?.engine(null);
     game.audio?.play(crashPatch());
     const h = opts.height ?? EYE_RATIO * cell;
-    const color = opts.color ?? ENEMY_COLOR;
+    const color = opts.color ?? enemyCol;
     bursts.push(
       { born: sceneT, center: [at.x, h, at.z], seed: 11, count: 24, speed: 3.5 * cell, life: 1.2, size: 0.16 * cell, color },
       { born: sceneT, center: [at.x, h, at.z], seed: 47, count: 16, speed: 2.5 * cell, life: 0.9, size: 0.12 * cell, color: SHOT_COLOR },
@@ -227,7 +244,7 @@ export function createPlaying(game) {
       bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: FLIPPER_COLOR });
     } else {
       game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: ENEMY_COLOR });
+      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: enemyCol });
     }
   }
 
@@ -319,20 +336,25 @@ export function createPlaying(game) {
       // aus dem Maze-Seed. Bei Fortsetzung von der Karte bleiben sie samt
       // Abschuessen erhalten. Hier nur der Fallback fuer den Direkteinstieg
       // (Tests ohne MazeGen/Falling) und das Aufraeumen fremder Level-Reste.
-      if ((cfg?.enemies || cfg?.spinners || cfg?.flippers)
-        && !game.enemies && !game.spinners && !game.flippers) {
+      if ((cfg?.enemies || cfg?.spinners || cfg?.flippers || cfg?.pulsars)
+        && !game.enemies && !game.spinners && !game.flippers && !game.pulsars) {
         game.spawnFoes(maze);
       }
       if (!cfg?.enemies) game.enemies = null;
       if (!cfg?.spinners) game.spinners = null;
       if (!cfg?.flippers) game.flippers = null;
       else if (!game.flippers) game.flippers = []; // Paar-Spawns landen auf game.flippers
+      if (!cfg?.pulsars) game.pulsars = null;
       enemies = game.enemies ?? [];
       spinners = game.spinners ?? [];
       flippers = game.flippers ?? [];
+      pulsars = game.pulsars ?? [];
       foeShots = [];
       foeRng = createRng((maze.seed ^ 0x27d4eb2f) >>> 0);
       spinnerCol = spinnerColor(game.level);
+      enemyCol = enemyColor(game.level);
+      rainbow = !!cfg?.rainbowStars;
+      gyro = createGyro(); // aufrecht starten (auch nach Karte/Resume)
       pairSource = !!cfg?.flippers;
       const metric = mazeMetric(maze);
       fieldPitch = (metric.wall + metric.corridor) * unit; // 1 Feld = Kammer + Wand
@@ -366,6 +388,10 @@ export function createPlaying(game) {
       // Letzte Position exakt festhalten (auch unterhalb der Mindestdistanz),
       // damit die Weglinie genau dort endet, wo der Rueckschwenk beginnt.
       recordTrailPoint(game.trail, px, pz, { force: true });
+      // Rest-Verdrehung der Blickachse (Pulsar-Rotation) auf dem kuerzesten
+      // Weg normalisiert an den Rueckschwenk uebergeben: der dreht sie sanft
+      // aus, statt hart auf "aufrecht" zu springen.
+      game.viewRoll = ((gyro.roll + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
       game.audio?.engine(null); // Motor-Klang ausblenden (die Karte ist still)
     },
 
@@ -373,9 +399,12 @@ export function createPlaying(game) {
       sceneT += dt;
 
       // Nach der Feindberuehrung: Steuerung eingefroren, nur die Explosion
-      // und das Nachschwingen laufen noch -- dann hinaus zur Karte.
+      // und das Nachschwingen laufen noch -- dann hinaus zur Karte. Eine
+      // laufende Blick-Rotation dreht dabei zu Ende (eingefroren saehe sie
+      // kaputt aus).
       if (crash) {
         crashT += dt;
+        gyroStep(gyro, dt);
         rollOsc.step(dt);
         pitchOsc.step(dt);
         waves = waves.filter((w) => sceneT - w.born < WAVE_LIFE);
@@ -385,9 +414,20 @@ export function createPlaying(game) {
       }
 
       const keys = game.keys;
-      const left = keys.has('ArrowLeft') || keys.has('A');
-      const right = keys.has('ArrowRight') || keys.has('D');
-      const turn = (left ? 1 : 0) - (right ? 1 : 0);
+      const dirs = {
+        left: keys.has('ArrowLeft') || keys.has('A'),
+        right: keys.has('ArrowRight') || keys.has('D'),
+        up: keys.has('ArrowUp') || keys.has('W'),
+        down: keys.has('ArrowDown') || keys.has('S'),
+      };
+      // Lenk-Eingabe: im Fahrt-Modus "logisch" unter der aktuellen Blick-
+      // Verdrehung (gyroTurn -- ohne Pulsar-Beruehrung ist orient 0 und es
+      // bleibt beim gewohnten links/rechts); die Rotation selbst laeuft als
+      // reine Zeitfunktion weiter und rastet im 90-Grad-Raster ein.
+      gyroStep(gyro, dt);
+      const turn = drive
+        ? gyroTurn(gyro.orient, dirs)
+        : (dirs.left ? 1 : 0) - (dirs.right ? 1 : 0);
       const prevX = px, prevZ = pz; // Lage VOR dem Schritt (Spike-Kreuzungs-Check)
 
       if (drive) {
@@ -399,9 +439,7 @@ export function createPlaying(game) {
           bank: Math.abs(bank) / BANK_MAX,
         }));
       } else {
-        const fwd = keys.has('ArrowUp') || keys.has('W');
-        const back = keys.has('ArrowDown') || keys.has('S');
-        const move = reached ? 0 : (fwd ? 1 : 0) - (back ? 1 : 0);
+        const move = reached ? 0 : (dirs.up ? 1 : 0) - (dirs.down ? 1 : 0);
         const res = walkStep(maze, walkState, { px, pz, yaw }, { move, turn }, dt, {
           unit, cell, radius: RADIUS_RATIO * cell,
         });
@@ -476,6 +514,23 @@ export function createPlaying(game) {
         }
       }
 
+      // Pulsare: pulsieren und klappen an fester Position; eigene Schuesse
+      // in ihrem Gang lassen sie rechtzeitig nach unten/oben ausweichen
+      // (unzerstoerbar). Beruehrung toetet NICHT -- sie ROTIERT die Blick-
+      // achse (world/gyro.js), waehrend der Rotation loest kein weiterer
+      // Pulsar aus (eine Drehung nach der anderen).
+      if (pulsars.length) {
+        pulsarsStep(pulsars, dt, cell, shotsState?.shots);
+        if (!gyro.spinning && !reached) {
+          const touch = pulsarPlayerTouch(pulsars, px, pz, RADIUS_RATIO * cell, cell,
+            { px: prevX, pz: prevZ });
+          if (touch) {
+            const dur = startSpin(gyro, foeRng);
+            game.audio?.play(gyroPatch(dur));
+          }
+        }
+      }
+
       // Schiessen: Space als Dauerfeuer, Tempest-Regel (max 8 unterwegs).
       // Zielrichtung = Blick + Lenk-Ausschlag zum Abschusszeitpunkt.
       if (shoot) {
@@ -541,8 +596,11 @@ export function createPlaying(game) {
       // Kurvenneigung + mechanische Schwingungen NICHT in die 3D-Kamera (das
       // braeche die azimutale Hidden-Line-Annahme), sondern als Bildraum-
       // Schwenk ueber die komplette 3D-Sicht (Waende + Wellen, ohne HUD).
+      // Der Gyro-Roll (Pulsar-Rotation) kommt zur Kurvenneigung dazu -- ein
+      // Roll um die Blickachse ist exakt eine 2D-Rotation um die Bildmitte,
+      // auch bei 90/180/270 Grad Dauerzustand.
       if (drive) {
-        renderer.pushSway(swayTransform(bank + rollOsc.x, pitchOsc.x, { height: renderer.height, fov: camera.fov }));
+        renderer.pushSway(swayTransform(bank + rollOsc.x + gyro.roll, pitchOsc.x, { height: renderer.height, fov: camera.fov }));
       }
       const pose = egoPose(face, px, pz, yaw, cell);
       const view = renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell });
@@ -565,13 +623,18 @@ export function createPlaying(game) {
           if (!p) continue;
           const r = st.size;
           const q = Math.ceil(starTwinkle(st, sceneT) * FLICKER_STEPS) / FLICKER_STEPS;
-          bucketAdd(starBuckets, q, [
+          // BUNTE Sterne (ab Level 26, rainbowStars): jeder Stern behaelt
+          // seine deterministische Arcade-Farbe (tint) -- gebatcht wird
+          // dann pro Farbe UND Funkel-Stufe (ein Stroke pro Kombination).
+          const color = rainbow ? FIREWORK_COLORS[st.tint % FIREWORK_COLORS.length] : null;
+          bucketAdd(starBuckets, color ? color + '|' + q : q, [
             [[p.x - r, p.y], [p.x + r, p.y]],
             [[p.x, p.y - r], [p.x, p.y + r]],
           ]);
         }
-        for (const [q, segs] of starBuckets) {
-          renderer.drawPolylines(segs, { intensity: q, lineWidth: 1 });
+        for (const [key, segs] of starBuckets) {
+          const [color, q] = typeof key === 'string' ? key.split('|') : [undefined, key];
+          renderer.drawPolylines(segs, { intensity: Number(q), lineWidth: 1, color });
         }
       }
 
@@ -682,7 +745,7 @@ export function createPlaying(game) {
           segs.push(...enemySegments(e, sceneT, { cell, px, pz, height: EYE_RATIO * cell }));
         }
         renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
-          intensity: 0.95, dim: ENEMY_OCC_DIM, color: ENEMY_COLOR, glow: ENEMY_GLOW,
+          intensity: 0.95, dim: ENEMY_OCC_DIM, color: enemyCol, glow: ENEMY_GLOW,
         });
       }
 
@@ -711,6 +774,18 @@ export function createPlaying(game) {
         }
         renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
           intensity: 0.95, dim: ENEMY_OCC_DIM, color: FLIPPER_COLOR, glow: ENEMY_GLOW,
+        });
+      }
+
+      // Pulsare: gelbe pulsierende Zackenlinien im Gang-Querschnitt, gleiche
+      // Hidden-Line-Behandlung wie die anderen Feinde.
+      if (pulsars.length) {
+        const segs = [];
+        for (const p of pulsars) {
+          segs.push(...pulsarSegments(p, sceneT, { cell }));
+        }
+        renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
+          intensity: 0.95, dim: ENEMY_OCC_DIM, color: PULSAR_COLOR, glow: ENEMY_GLOW,
         });
       }
 
@@ -775,8 +850,11 @@ export function createPlaying(game) {
         x: 24, y: 24, size: Math.min(20, h * 0.03),
         align: 'left', baseline: 'top', intensity: 0.7,
       });
-      const hint = shoot ? 'LEFT/RIGHT STEER - SPACE FIRE - Q MAP'
-        : drive ? 'LEFT/RIGHT STEER - Q MAP' : 'ARROWS MOVE - Q MAP';
+      // Die Steuer-Zeile folgt der Blick-Verdrehung (erst Lenk-links-Taste,
+      // dann Lenk-rechts): bei 90/270 Grad lenkt man mit runter/rauf.
+      const steerKeys = ['LEFT/RIGHT', 'DOWN/UP', 'RIGHT/LEFT', 'UP/DOWN'][gyro.orient];
+      const hint = shoot ? steerKeys + ' STEER - SPACE FIRE - Q MAP'
+        : drive ? steerKeys + ' STEER - Q MAP' : 'ARROWS MOVE - Q MAP';
       renderer.drawText(hint, {
         x: w - 24, y: h - 20, size: 13,
         align: 'right', baseline: 'bottom', intensity: 0.5,
