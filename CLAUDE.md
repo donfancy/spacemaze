@@ -312,6 +312,11 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Magenta→Cyan nach Weiß und verlischt. Höhen endlich (max 8 Zellen — die
   Spitzen funkeln sichtbar), deterministisch aus maze.seed, OHNE Verdeckung,
   gebatcht pro Farbe×Helligkeits-Stufe (shadowBlur-Regel wie Ziel-Strahlen).
+- 2026-VARIANTE (25.8.2026, AKTUELLES GROSSPROJEKT): gleiches Spiel, EIN Core,
+  ZWEI Engines — moderne Three.js-Grafik, Startscreen-Schalter "1980/2026".
+  **Stufenplan: PLAN2026.md** (dort auch die Testrezepte: CDP-Headless-Chrome,
+  Server auf 3999, NIE 3001). Prototyp + gelernte GPU-Fallen:
+  public/proto2026/ (README). Three.js r185 vendored, kein Build-Tool.
 - Nächste mögliche Themen: echter "Trench Run", Politur; Score/HUD.
   Aufgeschobene (Performance-)Ideen mit Messwerten: siehe IDEAS.md.
 - Performance-Basics sind drin: kollineare Wandzüge werden zusammengefasst
