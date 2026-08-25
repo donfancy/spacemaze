@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>SPACE MAZE</title>
   <link rel="stylesheet" href="/public/style.css">
+  <!-- Three.js (vendored ES-Module) fuer die 2026-Engine; die 1980-Engine
+       laedt nichts davon (Import nur bei ?engine=2026, dynamisch). -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/public/vendor/three.module.min.js",
+      "three/addons/": "/public/vendor/addons/"
+    }
+  }
+  </script>
 </head>
 <body>
   <canvas id="screen"></canvas>

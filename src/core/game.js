@@ -26,6 +26,10 @@ export class Game {
   constructor(options = {}) {
     this.debug = options.debug ?? null;
     this.audio = options.audio ?? null; // Sound-Ausgabe (sound/audio.js); null = stumm (Tests)
+    this.engine = options.engine ?? '1980'; // Rendering-Engine (core/engine.js)
+    // 2026-Backend (render2026/backend.js), von main.js injiziert -- wie audio
+    // NIE direkt importiert (Three.js bleibt aus dem headless-Core draussen).
+    this.renderBackend = options.renderBackend ?? null;
     this.time = 0;
     this.level = 1;       // im Startscreen gewaehltes Level (bestimmt die Maze-Groesse)
     this.dockFace = null; // vom Startscreen gewaehlte Andock-Flaeche (fuer MazeGen)
@@ -141,6 +145,14 @@ export class Game {
   }
 
   render(renderer) {
+    // Naht der beiden Engines (PLAN2026.md): 2026 zeichnet komplett selbst
+    // aus dem Spielzustand; ohne injiziertes Backend faellt es sicher auf
+    // die 1980-Zeichnung zurueck.
+    if (this.engine === '2026' && this.renderBackend) {
+      this.renderBackend.render(this);
+      return;
+    }
+
     // Theme-Farbe des Levels fuer alles ohne explizite Farbe (Kanten, Marker,
     // Beschriftung). Der Startscreen bleibt gruen und blendet beim An-/Abdocken
     // selbst zwischen Gruen und der Level-Farbe (explizite color-Option).

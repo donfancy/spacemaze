@@ -3,6 +3,7 @@
 
 import { Renderer } from './render/renderer.js';
 import { Game } from './core/game.js';
+import { parseEngine } from './core/engine.js';
 import { createAudioOutput } from './sound/audio.js';
 import { DebugConsole } from './debug/debugConsole.js';
 
@@ -12,17 +13,29 @@ const renderer = new Renderer(canvas);
 const debug = new DebugConsole();
 const debugEnabled = new URLSearchParams(location.search).has('debug');
 
+// --- Rendering-Engine (PLAN2026.md): 1980 = 2D-Canvas, 2026 = Three.js ----------
+// Das 2026-Backend wird NUR bei Bedarf geladen (dynamischer Import) und wie
+// audio in game injiziert -- der Core importiert nie Three.js.
+const engine = parseEngine(location.search);
+let backend = null;
+if (engine === '2026') {
+  const { createBackend2026 } = await import('./render2026/backend.js');
+  backend = createBackend2026(document.body);
+  canvas.style.display = 'none'; // 1980-Canvas schlaeft, solange 2026 zeichnet
+}
+
 // --- Canvas-Groesse an Fenster + Pixeldichte anpassen ---------------------------
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2); // 2 reicht; mehr kostet nur Fuellrate
   renderer.resize(window.innerWidth, window.innerHeight, dpr);
+  backend?.resize(window.innerWidth, window.innerHeight, dpr);
 }
 window.addEventListener('resize', resize);
 resize();
 
 // --- Spiel + Eingabe ------------------------------------------------------------
 const audio = createAudioOutput();
-const game = new Game({ debug: debugEnabled ? debug : null, audio });
+const game = new Game({ debug: debugEnabled ? debug : null, audio, engine, renderBackend: backend });
 
 // Einzelzeichen (Buchstaben) normalisieren wir auf Grossbuchstaben.
 const normKey = (e) => (e.key.length === 1 ? e.key.toUpperCase() : e.key);
@@ -76,7 +89,7 @@ function frame(now) {
 
   game.update(dt);
 
-  renderer.beginFrame();
+  if (!backend) renderer.beginFrame(); // 2026 zeichnet auf dem eigenen Canvas
   game.render(renderer);
 
   // FPS gemittelt ueber ~0,5s.
@@ -93,7 +106,7 @@ function frame(now) {
     debug.set('FPS', fps);
     debug.set('TRANS', game.transition.active ? game.transition.toState : '-');
     debug.set('TIME', game.time.toFixed(1));
-    renderDebug();
+    if (!backend) renderDebug(); // Debug-Overlay lebt auf dem 1980-Canvas
   }
 
   requestAnimationFrame(frame);
