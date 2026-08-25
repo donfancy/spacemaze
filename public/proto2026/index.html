@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>SPACE MAZE 2026 — Prototyp</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; }
+  #hud {
+    position: fixed; top: 12px; left: 14px;
+    color: #9fffc0; font: 12px/1.6 "SF Mono", Menlo, Consolas, monospace;
+    text-shadow: 0 0 8px rgba(80, 255, 140, .7);
+    user-select: none; white-space: pre; pointer-events: none;
+  }
+  #hud b { color: #fff; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/": "./vendor/addons/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="hud"></div>
+<script type="module" src="./main.js"></script>
+</body>
+</html>
