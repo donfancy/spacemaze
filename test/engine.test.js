@@ -111,6 +111,40 @@ test('Playing: Wand-Auftreffen landet als Flanke in viewState().bump', () => {
   assert.ok(Number.isFinite(b.x) && Number.isFinite(b.z), 'Ort des Auftreffens');
 });
 
+// Stufe 2: im Fahrt-Modus kommen drive/roll/pitch dazu, und die Kollisions-
+// Flanke traegt den exakten Wand-Auftreffpunkt (fuer Blitz + Funken).
+test('Playing (Fahrt, Level 6): viewState mit drive/roll/pitch und Auftreffpunkt', () => {
+  const g = new Game();
+  g.level = 6;
+  g.dispatch(GameEvent.START);
+  advance(g, 0.8 + 4.5 + 2.0); // -> MazeGen -> Falling -> Playing
+  assert.equal(g.stateKey, State.PLAYING);
+
+  let view = g.current.viewState();
+  assert.equal(view.drive, true);
+  assert.ok(Number.isFinite(view.roll) && Number.isFinite(view.pitch));
+
+  // Das Auto faehrt von selbst -- ohne Lenkung prallt es spaetestens an der
+  // ersten Kurve ab (Feder-Impuls); auf die Flanke warten.
+  for (let t = 0; t < 20 && !view.bump; t += 1 / 60) {
+    g.update(1 / 60);
+    view = g.current.viewState();
+  }
+  const b = view.bump;
+  assert.ok(b, 'Fahrt-Aufprall wurde aufgezeichnet');
+  assert.ok(Array.isArray(b.point) && b.point.every(Number.isFinite),
+    'Fahrt-Flanke traegt den Wand-Auftreffpunkt');
+  assert.ok(b.impact >= 0.3, 'unter minImpact gibt es keine Flanke');
+
+  // Der Aufprall stoesst die Oszillatoren an: der Roll schwingt danach echt.
+  let maxRoll = 0;
+  for (let t = 0; t < 0.4; t += 1 / 60) {
+    g.update(1 / 60);
+    maxRoll = Math.max(maxRoll, Math.abs(g.current.viewState().roll));
+  }
+  assert.ok(maxRoll > 1e-4, 'rollOsc/bank erreichen die 2026-Kamera');
+});
+
 test('Game: Backend sieht auch Szenenwechsel und Transition-Zustand', () => {
   const seen = [];
   const backend = { render(g) { seen.push([g.stateKey, g.transition.active]); } };

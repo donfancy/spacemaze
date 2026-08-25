@@ -294,6 +294,11 @@ export function createPlaying(game) {
   // + elektrisches Brutzeln (Wucht bestimmt Lautstaerke und Dauer).
   function spawnCollision(col) {
     game.audio?.play(sizzlePatch(col.impact));
+    // Flanke fuer die 2026-Engine (Stufe 2): mit exaktem Wand-Auftreffpunkt
+    // (`point`) -- daraus werden Licht-Blitz + Funken statt der 1980-Wellen.
+    // Der Feder-Impuls selbst steckt schon in der Pose (drive.js).
+    bump = { at: sceneT, axis: col.axis, side: col.side, impact: col.impact,
+      x: px, z: pz, point: col.point };
     const wave = collisionWave(maze, col, { unit, eye: EYE_RATIO * cell });
     for (let i = 0; i < WAVE_PULSES; i++) {
       // Nur der ERSTE Wellenzug blitzt weiss auf -- ein Blitz pro Treffer.
@@ -895,13 +900,18 @@ export function createPlaying(game) {
       }
     },
 
-    // Lese-Schnittstelle fuer die 2026-Engine (PLAN2026.md, Stufe 1): gibt den
-    // privaten Zeichen-Zustand der Szene frei, ohne dass der Core die Engine
-    // kennt -- der 2026-Zeichner liest hieraus Kamera-Pose, Ziel-Status und
-    // die letzte Wand-Beruehrung. Bewusst klein (pro Stufe erweitert, nicht
-    // auf Vorrat); reine Daten, headless testbar.
+    // Lese-Schnittstelle fuer die 2026-Engine (PLAN2026.md, Stufe 1+2): gibt
+    // den privaten Zeichen-Zustand der Szene frei, ohne dass der Core die
+    // Engine kennt -- der 2026-Zeichner liest hieraus Kamera-Pose, Ziel-Status
+    // und die letzte Wand-Beruehrung. Bewusst klein (pro Stufe erweitert,
+    // nicht auf Vorrat); reine Daten, headless testbar.
+    // roll/pitch in SWAY-Konvention (render/sway.js: roll > 0 = Kamera legt
+    // sich nach rechts, pitch > 0 = Blick hebt sich) -- 1980 rendert sie als
+    // Bildraum-Schwenk, 2026 als ECHTEN Kamera-Roll (dort erlaubt; der
+    // Gyro-Roll ab Level 26 kommt in Stufe 5 dazu).
     viewState() {
-      return { maze, cell, unit, px, pz, yaw, sceneT, reached, reachedAt, bump };
+      return { maze, cell, unit, px, pz, yaw, sceneT, reached, reachedAt, bump,
+        drive, roll: bank + rollOsc.x, pitch: pitchOsc.x };
     },
 
     onKey(key) {

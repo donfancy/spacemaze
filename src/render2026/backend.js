@@ -21,6 +21,7 @@ import { State } from '../core/states.js';
 import { levelColor } from '../core/levels.js';
 import { PHOSPHOR_GREEN, ARCADE_YELLOW } from '../render/colors.js';
 import { EYE_RATIO } from '../scenes/mazeView.js';
+import { burstSegments } from '../world/burst.js';
 import { createRng } from '../util/rng.js';
 import {
   buildWorld, applyTheme, disposeWorld, hdr,
@@ -36,10 +37,25 @@ const BUMP_ROLL = 0.045;     // rad: mechanisches Zittern um die Blickachse
 const BUMP_LIGHT = 220;      // Spitzen-Intensitaet des Wand-Blitzes
 const BUMP_WALL_DIST = 0.4;  // Blitz-Abstand vom Spieler Richtung Wand (Gangbreiten)
                              // -- Mindestabstand zur Wandflaeche (decay-2-Falle!)
+const BUMP_LIGHT_CAP = 25;   // Deckel: Intensitaet <= CAP * Kamera-Abstand^2.
+                             // Die decay-2-Falle in neuer Form (Stufe 2): beim
+                             // FRONTAL-Aufprall der Fahrt sitzt der Blitz am
+                             // Auftreffpunkt < 1 Einheit vor der Kamera -- ohne
+                             // Deckel brannte das ganze Bild weiss aus.
 
 const GOAL_FLASH_TIME = 1.0; // s: weisses Aufstrahlen + Erloeschen wie 1980
 const BEACON_COLOR = hdr(ARCADE_YELLOW, 2.6); // einmal alloziert (pro Frame kopiert)
 const FLASH_COLOR = hdr('#ffffff', 2.6);
+
+// Funken beim Fahrt-Aufprall (Stufe 2, statt der 1980-Wellen): dieselbe pure
+// Splitter-Mathematik wie die 1980-Explosionen (world/burst.js), als kleine
+// weisse HDR-Segmente an der Wand. Masse in Gangbreiten (Face-Einheiten).
+const SPARK_COUNT = 14;
+const SPARK_SPEED = 2.2;     // Flugtempo (Gangbreiten/s)
+const SPARK_LIFE = 0.5;      // s
+const SPARK_SIZE = 0.09;     // Splitter-Halblaenge (Gangbreiten)
+const SPARK_OFF = 0.1;       // Abstand des Ursprungs von der Wandflaeche
+                             // (Gangbreiten) -- sonst halb IN der Wand geboren
 
 export function createBackend2026(container = document.body) {
   // --- Renderer + Bloom-Kette (Rezept aus public/proto2026/) ------------------
@@ -161,6 +177,48 @@ export function createBackend2026(container = document.body) {
     }
   }
 
+  // Funken beim Fahrt-Aufprall: pro Frame aus der Bump-Flanke berechnet
+  // (world/burst.js ist eine reine Funktion des Alters -- kein Partikel-
+  // Zustand, deterministisch wie die 1980-Splitter). Ein wiederverwendetes
+  // LineSegments-Objekt pro Welt; ohne aktiven Wurf unsichtbar.
+  function updateSparks(view, b, k) {
+    if (!world.sparks) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position',
+        new THREE.BufferAttribute(new Float32Array(SPARK_COUNT * 6), 3));
+      world.sparks = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+        color: hdr('#ffffff', 2.5), transparent: true, opacity: 1,
+      }));
+      world.sparks.frustumCulled = false; // Positionen aendern sich pro Frame
+      world.scene.add(world.sparks);
+    }
+    const s = world.sparks;
+    // Nur Fahrt-Kollisionen (b.point) funken; Geh-Bumps bleiben Blitz+Impuls.
+    const spec = b && b.point ? {
+      center: [
+        b.point[0] - (b.axis === 'x' ? b.side * SPARK_OFF * view.cell : 0),
+        EYE_RATIO * view.cell,
+        b.point[1] - (b.axis === 'z' ? b.side * SPARK_OFF * view.cell : 0)],
+      count: SPARK_COUNT, speed: SPARK_SPEED * view.cell, life: SPARK_LIFE,
+      size: SPARK_SIZE * view.cell, seed: b.at,
+    } : null;
+    const burst = spec ? burstSegments(view.sceneT - b.at, spec) : null;
+    if (!burst) {
+      s.visible = false;
+      return;
+    }
+    s.visible = true;
+    const pos = s.geometry.attributes.position;
+    for (let i = 0; i < burst.segments.length; i++) {
+      const [a, c] = burst.segments[i];
+      pos.setXYZ(i * 2, a[0] * k, a[1] * k, a[2] * k);
+      pos.setXYZ(i * 2 + 1, c[0] * k, c[1] * k, c[2] * k);
+    }
+    pos.needsUpdate = true;
+    s.geometry.setDrawRange(0, burst.segments.length * 2);
+    s.material.opacity = burst.fade;
+  }
+
   // --- Szenen-Zeichner ---------------------------------------------------------
 
   // Platzhalter (Startscreen, MazeGen): Wuerfel dreht, Himmel zieht vorbei.
@@ -185,34 +243,50 @@ export function createBackend2026(container = document.body) {
     const k = UNITS_PER_CELL / view.cell;
     let x = view.px * k;
     let z = view.pz * k;
-    let roll = 0;
+    let shakeRoll = 0;
 
-    // Bump-Feedback: Rueckstoss von der Wand weg + kurzes Zittern + Blitz an
-    // der Wand. Alles eine reine Funktion des Alters -> deterministisch, und
-    // die Wand-Position kommt aus der Kollisions-Flanke (walk.js via viewState).
+    // Bump-Feedback: Licht-Blitz an der Wand, dazu je nach Modus --
+    //   Gehen (kein `point`): Kamera-Rueckstoss + kurzes Zittern (die
+    //     Physik kennt keinen Abpraller, also spielt ihn die Kamera);
+    //   Fahrt (`point` aus drive.js): der Feder-Impuls steckt schon in der
+    //     Pose und rollOsc/pitchOsc kommen echt ueber view.roll/pitch --
+    //     hier nur Blitz + FUNKEN am exakten Auftreffpunkt (statt Wellen).
+    // Alles reine Funktionen des Alters -> deterministisch.
     const b = view.bump;
     const age = b ? view.sceneT - b.at : Infinity;
     if (b && age < BUMP_TIME) {
       const decay = Math.exp(-age * 9);
-      const push = b.impact * BUMP_RECOIL * UNITS_PER_CELL * decay;
-      if (b.axis === 'x') x -= b.side * push;
-      else z -= b.side * push;
-      roll = b.impact * BUMP_ROLL * Math.sin(age * 45) * decay;
-
       const d = BUMP_WALL_DIST * UNITS_PER_CELL; // Mindestabstand zur Wand (decay-2-Falle)
-      world.bumpLight.position.set(
-        b.x * k + (b.axis === 'x' ? b.side * d : 0), EYE,
-        b.z * k + (b.axis === 'z' ? b.side * d : 0));
-      world.bumpLight.intensity = BUMP_LIGHT * b.impact * decay;
+      if (b.point) {
+        // Blitz KURZ VOR der Wandebene, vom Auftreffpunkt in den Gang gerueckt.
+        world.bumpLight.position.set(
+          b.point[0] * k - (b.axis === 'x' ? b.side * d : 0), EYE,
+          b.point[1] * k - (b.axis === 'z' ? b.side * d : 0));
+      } else {
+        const push = b.impact * BUMP_RECOIL * UNITS_PER_CELL * decay;
+        if (b.axis === 'x') x -= b.side * push;
+        else z -= b.side * push;
+        shakeRoll = b.impact * BUMP_ROLL * Math.sin(age * 45) * decay;
+        world.bumpLight.position.set(
+          b.x * k + (b.axis === 'x' ? b.side * d : 0), EYE,
+          b.z * k + (b.axis === 'z' ? b.side * d : 0));
+      }
+      const lp = world.bumpLight.position;
+      const dc2 = (lp.x - x) ** 2 + (lp.y - EYE) ** 2 + (lp.z - z) ** 2;
+      world.bumpLight.intensity =
+        Math.min(BUMP_LIGHT * b.impact * decay, BUMP_LIGHT_CAP * dc2);
     } else {
       world.bumpLight.intensity = 0;
     }
+    updateSparks(view, b, k);
 
     camera.position.set(x, EYE, z);
     // Kamera-Konvention wie im Core: forward = (-sin yaw, 0, -cos yaw) --
-    // exakt Three.js' Blick nach -z, um yaw gegiert. Roll ist hier ERLAUBT
-    // (echter 3D-Renderer; die Bildraum-Sway-Falle gilt nur der 1980-Occlusion).
-    camera.rotation.set(0, view.yaw, roll);
+    // exakt Three.js' Blick nach -z, um yaw gegiert. Roll/Nick sind hier
+    // ERLAUBT (echter 3D-Renderer; die Bildraum-Sway-Falle gilt nur der
+    // 1980-Occlusion). Sway-Konvention: roll > 0 = Kamera nach rechts =
+    // negative Drehung um die Three.js-Blickachse; pitch passt direkt.
+    camera.rotation.set(view.pitch, view.yaw, -(view.roll + shakeRoll));
 
     // Scheinwerfer schwebt UEBER der Kamera (Mindestabstand zu den Waenden,
     // sonst Bloom-Blowout an naher Wand, siehe world3d.js).
@@ -230,6 +304,7 @@ export function createBackend2026(container = document.body) {
     world.scene.fog.density = 0;
     world.headlight.intensity = 0;
     world.bumpLight.intensity = 0;
+    if (world.sparks) world.sparks.visible = false;
 
     const c = world.total / 2;
     camera.position.set(c, world.total * 0.85, c);
@@ -254,7 +329,10 @@ export function createBackend2026(container = document.body) {
     switch (game.stateKey) {
       case State.PLAYING: {
         const view = game.current.viewState?.();
-        return view?.reached ? 'YOU MADE IT' : 'FIND THE EXIT · ARROWS MOVE · Q MAP';
+        if (view?.reached) return 'YOU MADE IT';
+        return view?.drive
+          ? 'FIND THE EXIT · LEFT/RIGHT STEER · Q MAP'
+          : 'FIND THE EXIT · ARROWS MOVE · Q MAP';
       }
       case State.MAP:
         return game.reachedGoal ? 'YOU MADE IT · X LAUNCH' : 'Q RESUME · X LAUNCH';
