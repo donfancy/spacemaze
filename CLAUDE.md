@@ -24,7 +24,9 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
 - 2026-Engine (PLAN2026.md): `http://localhost:3001/?engine=2026` (Stand:
-  Stufe 0, Platzhalter-Zeichnung; Naht = `game.renderBackend`).
+  Stufe 1 — Ego-Ansicht echt (Level 1–5+, `playing.viewState()`-Naht,
+  Bump-Blitz), Falling/Rising/Karte = Draufsicht-Platzhalter; Naht =
+  `game.renderBackend`).
 - Boris sieht aktuell die Terminal-Ausgaben evtl. NICHT (Client-Hänger) — wichtige
   Ergebnisse im Antworttext zusammenfassen; visuell prüft er im Browser.
 

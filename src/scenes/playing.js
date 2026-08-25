@@ -170,6 +170,8 @@ export function createPlaying(game) {
   let sceneT = 0;    // Szenenzeit fuer die Wellen-Alter
   let braking = false;  // Q gedrueckt: erst abbremsen, dann abheben
   let brakeHold = 0;    // s Stillstand vor dem Abheben (kurzer Beat)
+  let bump = null;      // letzte Wand-Beruehrung (Flanke aus walk.js) -- fuer
+                        // das 2026-Bump-Feedback (viewState), 1980 nutzt Sound
   const rollOsc = createOscillator({ freq: 5, damping: 0.22 });
   const pitchOsc = createOscillator({ freq: 8, damping: 0.3 });
 
@@ -327,6 +329,7 @@ export function createPlaying(game) {
       sceneT = 0;
       braking = false;
       brakeHold = 0;
+      bump = null;
       rollOsc.reset();
       pitchOsc.reset();
 
@@ -444,7 +447,14 @@ export function createPlaying(game) {
           unit, cell, radius: RADIUS_RATIO * cell,
         });
         ({ px, pz, yaw } = res);
-        if (res.collision) game.audio?.play(bumpPatch(res.collision.impact));
+        if (res.collision) {
+          game.audio?.play(bumpPatch(res.collision.impact));
+          // Flanke festhalten (Ort = Spielerlage im Moment des Auftreffens):
+          // die 2026-Engine liest sie via viewState() und macht daraus
+          // Kamera-Impuls + Licht-Blitz an der Wand.
+          const { axis, side, impact } = res.collision;
+          bump = { at: sceneT, axis, side, impact, x: px, z: pz };
+        }
         // Kaum merkliches Gleiten: nur das ERREICHTE Tempo klingt -- an der
         // Wand angedrueckt ist es still, obwohl die Taste gehalten wird.
         game.audio?.engine(engineParams('walk', {
@@ -883,6 +893,15 @@ export function createPlaying(game) {
         // und gibt den Blick auf das zerberstende Bild frei.
         renderer.flash(0.9 * (1 - Math.min(1, crashT / CRASH_FLASH)));
       }
+    },
+
+    // Lese-Schnittstelle fuer die 2026-Engine (PLAN2026.md, Stufe 1): gibt den
+    // privaten Zeichen-Zustand der Szene frei, ohne dass der Core die Engine
+    // kennt -- der 2026-Zeichner liest hieraus Kamera-Pose, Ziel-Status und
+    // die letzte Wand-Beruehrung. Bewusst klein (pro Stufe erweitert, nicht
+    // auf Vorrat); reine Daten, headless testbar.
+    viewState() {
+      return { maze, cell, unit, px, pz, yaw, sceneT, reached, reachedAt, bump };
     },
 
     onKey(key) {
