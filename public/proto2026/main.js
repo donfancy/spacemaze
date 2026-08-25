@@ -67,7 +67,8 @@ addEventListener('resize', () => {
 
 // ---------- Zustand: Toggles, Themen, Autopilot, Freiflug ----------
 
-const FOG_BASE = 0.016;
+const FOG_BASE = 0.028;
+const MIRROR_DIM = 0.7; // Deck-Opazitaet des Bodens bei aktiver Spiegelung
 const state = {
   bloom: true, mirror: true, fog: true, free: false, hueCycle: false,
   themeHex: PALETTE.PHOSPHOR_GREEN, themeName: 'Phosphor',
@@ -86,6 +87,7 @@ function setTheme(hex, name) {
 
 function applyThemeColor(col) {
   world.lineMat.color.copy(col).multiplyScalar(2.2);
+  world.mirrorLineMat.color.copy(col).multiplyScalar(0.85); // Spiegel ohne HDR
   world.gridMat.color.copy(col).multiplyScalar(0.3);
   world.headlight.color.copy(col);
 }
@@ -96,8 +98,8 @@ addEventListener('keydown', (e) => {
   if (k === 'b') { state.bloom = !state.bloom; bloomPass.enabled = state.bloom; }
   if (k === 'r') {
     state.mirror = !state.mirror;
-    world.reflector.visible = state.mirror;
-    world.floorOverlay.material.opacity = state.mirror ? 0.68 : 1.0;
+    world.mirror.visible = state.mirror;
+    world.floorOverlay.material.opacity = state.mirror ? MIRROR_DIM : 1.0;
   }
   if (k === 'n') { state.fog = !state.fog; scene.fog.density = state.fog ? FOG_BASE : 1e-7; }
   if (k === 'f') {
@@ -214,6 +216,7 @@ function animateWorld(dt, time) {
   const pulse = 0.5 + 0.5 * Math.sin(time * 2.1);
   world.beaconCone.material.opacity = 0.06 + 0.07 * pulse;
   world.beaconLines.material.opacity = 0.7 + 0.3 * pulse;
+  world.beaconMirrorMat.opacity = (0.7 + 0.3 * pulse) * 0.45; // Spiegelbild pulsiert mit
   world.beaconLight.intensity = 350 + 400 * pulse;
 
   // Tanker: pulsieren wie im Spiel, drehen langsam, schweben leicht.

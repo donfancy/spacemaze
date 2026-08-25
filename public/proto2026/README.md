@@ -34,6 +34,15 @@ Kosten der Effekte live vergleichen (Toggle druecken, FPS beobachten).
 
 ## Gelernte Fallen (fuers echte Projekt)
 
+- Echtzeit-Reflector (2. Render-Pass) war fuer den Boden die falsche Waffe:
+  sein Dimm-Multiplikator + dunkle Deckplatte druecken dunkle FLAECHEN unter
+  die Sichtbarkeit, nur die HDR-Kanten ueberleben grell ("es spiegelt nur
+  Wireframe", Boris). Loesung: die Welt einmal GESPIEGELT unter den Boden
+  bauen (Group mit scale.y = -1, gleiche Geometrien) — Flaechen spiegeln
+  sichtbar, Spiegel-Kanten bewusst ohne HDR (kein Bloom im Spiegelbild),
+  Staerke zentral ueber die Deck-Opazitaet (MIRROR_DIM), und es ist sogar
+  billiger (keine zusaetzliche Szenen-Renderung).
+
 - Punktlicht mit `decay: 2` explodiert an nahen Waenden (1/d²) ins Bloom-Weiss.
   Loesung: Licht ueber die Kamera haengen (Mindestabstand) und klein halten.
 - Albedo denkt in LINEAREM Farbraum: sRGB `0x1a` reflektiert nur ~1 % — solche

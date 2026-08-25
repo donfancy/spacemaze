@@ -7,7 +7,6 @@
 // Dieses Modul baut nur AUF -- die Animation steuert main.js.
 
 import * as THREE from 'three';
-import { Reflector } from 'three/addons/objects/Reflector.js';
 import { OPEN } from '/src/world/maze.js';
 import { corridorOutline, mergeCollinear } from '/src/world/mazeGeometry.js';
 import { mazeMetric } from '/src/world/metric.js';
@@ -32,7 +31,9 @@ export function buildWorld(maze) {
   const H = metric.corridor;                   // Wandhoehe = 1 Gangbreite
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x05030c, 0.016);
+  // Dichte + sichtbare Eigenfarbe: bei den kurzen Sichtweiten im Gang braucht
+  // der Nebel beides, sonst ist der N-Toggle unsichtbar (Boris' Befund).
+  scene.fog = new THREE.FogExp2(0x0d0618, 0.028);
 
   const world = { scene, metric, total, H };
 
@@ -40,6 +41,7 @@ export function buildWorld(maze) {
   buildFloor(world, maze);
   buildSky(world, maze);
   buildBeacon(world, maze);
+  buildMirror(world);
   buildTankers(world, maze);
   buildFloodlights(world, maze);
 
@@ -101,26 +103,21 @@ function buildWallsAndLines(world, maze) {
   lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
   world.lineMat = new THREE.LineBasicMaterial({ color: hdr(PHOSPHOR_GREEN) });
   scene.add(new THREE.LineSegments(lineGeo, world.lineMat));
+
+  // Geometrien fuers Spiegelbild aufheben (buildMirror).
+  world.wallGeo = wallGeo;
+  world.lineGeo = lineGeo;
 }
 
-// Boden: Spiegel (Reflector) + dunkle Abdunkel-Flaeche darueber + dezentes
-// Neon-Raster auf den Zellgrenzen der Metrik.
+// Boden: halbtransparente dunkle Flaeche, durch die das SPIEGELBILD der Welt
+// schimmert (buildMirror), + dezentes Neon-Raster auf den Zellgrenzen.
 function buildFloor(world, maze) {
   const { metric, total, scene } = world;
 
-  world.reflector = new Reflector(new THREE.PlaneGeometry(total, total), {
-    textureWidth: 1024, textureHeight: 1024,
-    color: 0x8a9298, clipBias: 0.003,
-  });
-  world.reflector.rotation.x = -Math.PI / 2;
-  world.reflector.position.set(total / 2, 0, total / 2);
-  scene.add(world.reflector);
-
-  // Halbtransparente dunkle Flaeche: dimmt die Spiegelung auf "nasser Neon-
-  // Asphalt" und traegt den Nebel (der Reflector selbst kennt keinen Nebel).
+  // Die Deck-Opazitaet regelt die Staerke der Spiegelung ("nasser Asphalt").
   world.floorOverlay = new THREE.Mesh(
     new THREE.PlaneGeometry(total, total),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.68 })
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.7 })
   );
   world.floorOverlay.rotation.x = -Math.PI / 2;
   world.floorOverlay.position.set(total / 2, 0.02, total / 2);
@@ -152,6 +149,7 @@ function buildSky(world, maze) {
   const tints = [PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_YELLOW, NEON_MAGENTA, ARCADE_RED];
 
   world.starGroups = [];
+  world.starGeos = [];
   for (let g = 0; g < 3; g++) {
     const pts = [], cols = [];
     for (let i = 0; i < 2000; i++) {
@@ -178,6 +176,7 @@ function buildSky(world, maze) {
     });
     scene.add(new THREE.Points(geo, mat));
     world.starGroups.push(mat);
+    world.starGeos.push(geo);
   }
 
   // Psychedelischer Weltraum-Dunst: grosse additive Glow-Sprites am Horizont.
@@ -250,6 +249,40 @@ function buildBeacon(world, maze) {
   world.beaconLight = new THREE.PointLight(ARCADE_YELLOW, 600, 80, 2);
   world.beaconLight.position.set(gx, 3, gz);
   scene.add(world.beaconLight);
+}
+
+// Spiegelbild der Welt unter dem Boden (klassischer Trick statt Echtzeit-
+// Reflector): Waende, Kanten, Leuchtfeuer und Sterne einmal mit y -> -y,
+// die halbtransparente Bodenplatte dimmt alles gleichmaessig. Vorteile:
+// Flaechen bleiben im Spiegel SICHTBAR, die Kanten sind dort bewusst OHNE
+// HDR (kein Bloom-Gluehen im Spiegel -> wirkt wie echte matte Reflexion),
+// und es kostet keinen zweiten Render-Pass.
+function buildMirror(world) {
+  const { scene } = world;
+  const g = new THREE.Group();
+  g.scale.y = -1; // spiegelt alle Kinder an der Bodenebene
+
+  g.add(new THREE.Mesh(world.wallGeo, world.wallMat)); // DoubleSide vertraegt die Spiegelung
+  world.mirrorLineMat = new THREE.LineBasicMaterial({
+    color: new THREE.Color(PHOSPHOR_GREEN).multiplyScalar(0.85),
+  });
+  g.add(new THREE.LineSegments(world.lineGeo, world.mirrorLineMat));
+
+  world.beaconMirrorMat = new THREE.LineBasicMaterial({
+    color: new THREE.Color(ARCADE_YELLOW), transparent: true, opacity: 0.5,
+  });
+  g.add(new THREE.LineSegments(world.beaconLines.geometry, world.beaconMirrorMat));
+
+  for (const geo of world.starGeos) {
+    g.add(new THREE.Points(geo, new THREE.PointsMaterial({
+      size: 2.5, sizeAttenuation: false, vertexColors: true,
+      transparent: true, opacity: 0.3, depthWrite: false,
+      blending: THREE.AdditiveBlending, fog: false,
+    })));
+  }
+
+  world.mirror = g;
+  scene.add(g);
 }
 
 // Drei farbige Flutlichter ueber dem Labyrinth: psychedelischer Widerschein
