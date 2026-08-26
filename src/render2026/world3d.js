@@ -36,7 +36,10 @@ export function hdr(hex, boost = 2.2) {
 
 // Baut die komplette Welt fuer EIN Labyrinth. Rueckgabe: alles, was backend.js
 // animieren will (Materialien, Leuchtfeuer, Lichter) + Masse (k, total, H).
-export function buildWorld(maze) {
+// opts.rainbow (Level 26+, rainbowStars): der Sternenhimmel funkelt BUNT --
+// deutlich mehr getoente Sterne (das 2026-Pendant zu den 1980-Regenbogen-
+// Sternen; die Arcade-Tints stecken schon in buildStarField).
+export function buildWorld(maze, opts = {}) {
   const metric = mazeMetric(maze);
   const k = UNITS_PER_CELL / metric.corridor; // 3D-Einheiten pro Metrik-Einheit
   const total = metric.total(maze.n) * k;     // Kantenlaenge der Welt
@@ -51,7 +54,7 @@ export function buildWorld(maze) {
 
   buildWallsAndLines(world, maze);
   buildFloor(world, maze);
-  buildSky(world, maze);
+  buildSky(world, maze, opts.rainbow);
   buildBeacon(world, maze);
   buildMirror(world);
   buildFloodlights(world, maze);
@@ -274,8 +277,10 @@ function buildFloor(world, maze) {
 // Sternenhimmel: drei Punktwolken mit Phasenversatz -> unabhaengiges Funkeln
 // in backend.js. Deterministisch aus `seed`, Flaechen-Gleichverteilung
 // (el = asin(u); `hemisphere` false = ganze Kugel, fuer den Startscreen-Orbit).
+// `tintProb` ist der Anteil GETOENTER Sterne (Arcade-Palette) -- Standard
+// dezent, Level 26+ drehen ihn fuer den Regenbogen-Himmel hoch.
 // Auch der Startscreen (startscreen3d.js) baut seinen Himmel hiermit.
-export function buildStarField(scene, { seed, center = [0, 0], hemisphere = true }) {
+export function buildStarField(scene, { seed, center = [0, 0], hemisphere = true, tintProb = 0.16 }) {
   const rng = createRng(seed);
   const R = 600;
   const [cx, cz] = center;
@@ -292,7 +297,7 @@ export function buildStarField(scene, { seed, center = [0, 0], hemisphere = true
         R * Math.sin(el),
         cz + R * Math.cos(el) * Math.sin(az)
       );
-      const c = rng() < 0.16
+      const c = rng() < tintProb
         ? new THREE.Color(tints[Math.floor(rng() * tints.length)])
         : new THREE.Color(0xffffff);
       c.multiplyScalar(0.35 + rng() * 0.65);
@@ -338,10 +343,11 @@ export function buildDust(scene, center = [0, 0]) {
   }
 }
 
-function buildSky(world, maze) {
+function buildSky(world, maze, rainbow = false) {
   const { scene, total } = world;
   const { mats, geos } = buildStarField(scene, {
     seed: maze.seed, center: [total / 2, total / 2], hemisphere: true,
+    tintProb: rainbow ? 0.85 : 0.16,
   });
   world.starGroups = mats;
   world.starGeos = geos;

@@ -239,13 +239,13 @@ export function createPlaying(game) {
       bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 3, count: 6, speed: 1.4 * cell, life: 0.3, size: 0.06 * cell, color: spinnerCol });
     } else if (ev.type === 'spinner') {
       game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: spinnerCol });
+      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: spinnerCol, shardCount: 6, shardSize: 0.3 * cell });
     } else if (ev.type === 'zap') {
       game.audio?.play(poofPatch());
       bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 7, count: 10, speed: 1.8 * cell, life: 0.4, size: 0.08 * cell, color: SHOT_COLOR });
     } else if (ev.type === 'flipper') {
       game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: FLIPPER_COLOR });
+      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: FLIPPER_COLOR, shardCount: 6, shardSize: 0.3 * cell });
     } else {
       // Tanker-Abschuss: Funken-Splitter + flaechige Truemmer (nur 2026).
       game.audio?.play(boomPatch());
@@ -917,9 +917,16 @@ export function createPlaying(game) {
     // Spezifikationen) und der Crash-Zustand (Shake steckt schon in roll/
     // pitch, der weisse Blitz haengt an crash.t). Die Tanker selbst liest
     // die Engine von game.enemies (dort leben sie, Resume/Retry inklusive).
+    // Stufe 5: roll traegt jetzt auch den GYRO-Roll (Pulsar-Rotation) --
+    // in 2026 ein ECHTER Kamera-Roll um die Blickachse, auch als
+    // Dauerzustand (1980 rendert ihn weiter als Bildraum-Sway); `orient`
+    // fuer die Steuer-Hinweis-Zeile, `foeShots` fuer die sirrenden
+    // Spinner-Schuesse. Spinner/Flipper/Pulsare liest die Engine wie die
+    // Tanker von game.* (dort leben sie samt Resume/Retry-Regeln).
     viewState() {
       return { maze, cell, unit, px, pz, yaw, sceneT, reached, reachedAt, bump,
-        drive, roll: bank + rollOsc.x, pitch: pitchOsc.x,
+        drive, roll: bank + rollOsc.x + gyro.roll, pitch: pitchOsc.x,
+        orient: gyro.orient, foeShots,
         shoot, steer: drive ? driveState.steer : walkState.steer,
         shots: shotsState ? shotsState.shots : [], bursts,
         crash: crash ? { t: crashT, x: crashPos.x, z: crashPos.z } : null };

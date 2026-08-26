@@ -222,6 +222,48 @@ test('Playing (Kampf): Feindberuehrung setzt crash im viewState und Game Over', 
   assert.equal(g.stateKey, State.RISING);
 });
 
+// Stufe 5: der Gyro-Roll (Pulsar-Beruehrung) erreicht die 2026-Kamera als
+// ECHTER Roll ueber viewState().roll und rastet im 90-Grad-Raster ein;
+// foeShots und orient (Steuer-Hinweiszeile) liegen ebenfalls in der Naht.
+test('Playing (Level 26): Pulsar-Beruehrung rotiert view.roll und rastet ein', () => {
+  const g = new Game();
+  g.level = 26;
+  g.dispatch(GameEvent.START);
+  advance(g, 0.8 + 4.5 + 2.0);
+  assert.equal(g.stateKey, State.PLAYING);
+  assert.ok(g.pulsars?.length > 0, 'Level 26 hat Pulsare');
+  let view = g.current.viewState();
+  assert.ok(Array.isArray(view.foeShots), 'foeShots liegen im viewState');
+  assert.equal(view.orient, 0, 'aufrecht gestartet');
+
+  // Andere Feinde stilllegen (die Auto-Fahrt soll nicht crashen) und den
+  // ersten Pulsar quer in den Fahrweg legen: der naechste Schritt kreuzt
+  // seine Querschnitts-Ebene -- deterministisch, ohne dorthin zu steuern.
+  for (const e of g.enemies ?? []) e.alive = false;
+  for (const s of g.spinners ?? []) s.alive = false;
+  for (const f of g.flippers ?? []) f.alive = false;
+  const s0 = g.playerState;
+  const axis = Math.abs(Math.sin(s0.yaw)) > 0.5 ? 'x' : 'z';
+  const fwd = axis === 'x' ? -Math.sin(s0.yaw) : -Math.cos(s0.yaw);
+  const p = g.pulsars[0];
+  p.axis = axis;
+  p.cross = axis === 'x' ? s0.pz : s0.px;
+  p.along = (axis === 'x' ? s0.px : s0.pz) + fwd * 0.3 * view.cell;
+  p.armed = true;
+
+  let maxRoll = 0;
+  for (let t = 0; t < 3.0; t += 1 / 60) {
+    g.update(1 / 60);
+    view = g.current.viewState();
+    maxRoll = Math.max(maxRoll, Math.abs(view.roll));
+  }
+  // bank/rollOsc allein bleiben weit unter 1 rad -- ueber 1 ist nur der Gyro.
+  assert.ok(maxRoll > 1.0, 'die Rotation erreicht die Kamera: ' + maxRoll);
+  const rest = Math.abs(view.roll % (Math.PI / 2));
+  assert.ok(Math.min(rest, Math.PI / 2 - rest) < 0.15,
+    'roll rastet im 90-Grad-Raster ein: ' + view.roll);
+});
+
 // Stufe 3: Vorrang-Regel des Schalters -- URL vor gemerkter Wahl vor Default.
 test('resolveEngine: URL-Parameter vor localStorage vor Default', () => {
   assert.equal(resolveEngine('', null), ENGINE_1980);

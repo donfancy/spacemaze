@@ -24,22 +24,25 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
 - 2026-Engine (PLAN2026.md): `http://localhost:3001/?engine=2026` (Stand:
-  Stufe 4 — voller Zyklus + KAMPF (Level 11–15) echt: Startscreen in
-  Prototyp-Optik samt **Live-Schalter „1980 / 2026“** (←/→ Level, ↑/↓
+  Stufe 5 — ALLE Levels 1–30 komplett in 2026: voller Zyklus, Startscreen
+  in Prototyp-Optik samt **Live-Schalter „1980 / 2026“** (←/→ Level, ↑/↓
   Engine; Wahl in localStorage, URL-Param hat Vorrang, main.js
-  `applyEngine` blendet live um), Maze-Wachstum als Boden-Kontur,
-  Quaternion-Schwenks mit wachsenden Waenden (`setWallHeight`, fov 75↔70),
-  Karte mit Weg/Markern/Feind-Kreuzen; Tanker als rotierende Okta-Rauten
-  (Glut-Kanten, Rebuild-Schluessel = Identitaet von `game.enemies`),
-  Schuesse/Fadenkreuz/Splitter aus den puren Modulen (shotSegments/aimYaw/
-  burstSegments), Crash = 3D-Splitter + echter Kamera-Shake (roll/pitch)
-  + weisser DOM-Blitz; `viewState()`-Naht in ALLEN Szenen, fuer den Kampf
-  erweitert um shoot/steer/shots/bursts/crash; Naht = `game.renderBackend`).
-  CDP-FALLE: unter `--headless=new` steht rAF ohne erzwungene Frames still —
-  Sichtpruefungs-Skripte pumpen Frames per Wegwerf-Screenshot und pollen
-  `window.spacemaze`; ZEITRAFFER dabei beachten: ~5 rAF a 0.1s pro Pump =
-  0.5s Spielzeit, kurze Effekte sofort fotografieren (Details PLAN2026.md,
-  Stufe-3/4-Notizen).
+  `applyEngine` blendet live um), Quaternion-Schwenks (`setWallHeight`,
+  fov 75↔70), Karte mit Weg/Markern/Feind-Kreuzen (Karten-Glow
+  LUMINANZ-normiert, `setLineGlow`); Tanker als rotierende Okta-Rauten
+  mit Boden-Spiegelung, Spinner/Flipper/Pulsare als HDR-Linien DIREKT aus
+  den puren Segment-Funktionen, Gyro-Roll als ECHTER Kamera-Roll (steckt
+  in viewState().roll, Dauerzustand ok), Schuesse bunt-rotierend +
+  Spinner-Schuesse flirrend, Splitter + Truemmer (`burstShards`), Crash =
+  Splitter/Truemmer + Kamera-Shake + Licht-Puls + DOM-Blitz, Feuerwerk,
+  bunte Sterne ab 26; `viewState()`-Naht in ALLEN Szenen; Naht =
+  `game.renderBackend`). NEAR_STAR-FALLE: Schuss-Sterne an der Kamera
+  malen sonst Riesen-Strahlen (1980 clippte das weg) — Radius waechst mit
+  der Kamera-Distanz auf. CDP-FALLE: unter `--headless=new` steht rAF ohne
+  erzwungene Frames still — Sichtpruefungs-Skripte pumpen Frames per
+  Wegwerf-Screenshot und pollen `window.spacemaze`; ZEITRAFFER dabei
+  beachten: ~5 rAF a 0.1s pro Pump = 0.5s Spielzeit, kurze Effekte sofort
+  fotografieren (Details PLAN2026.md, Stufe-3/4/5-Notizen).
 - Boris sieht aktuell die Terminal-Ausgaben evtl. NICHT (Client-Hänger) — wichtige
   Ergebnisse im Antworttext zusammenfassen; visuell prüft er im Browser.
 

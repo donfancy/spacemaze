@@ -15,9 +15,13 @@
 // Stern-Billboards, Fadenkreuz in der Welt, Splitter-Explosionen aus
 // burst.js; Crash = Splitter + echter Kamera-Shake (rollOsc/pitchOsc
 // kommen ueber roll/pitch) + weisser Blitz -- das 1980-Bild-Zerbersten
-// bleibt 1980. Texte laufen als DOM-Overlay (Platzhalter bis zur
-// HUD-Frage in Stufe 6). Alle Animation haengt an game.time / den
-// Szenen-Uhren.
+// bleibt 1980. Stufe 5: Spinner-Spiralen/Flipper-X/Pulsar-Zacken als
+// HDR-Linien direkt aus den puren Segment-Funktionen, sirrende Spinner-
+// Schuesse (flirrende Farben), Ziel-Feuerwerk, bunte Sterne ab 26 -- und
+// der Gyro-Roll als ECHTER Kamera-Roll (steckt in view.roll, auch als
+// 90/180/270-Grad-Dauerzustand). Texte laufen als DOM-Overlay
+// (Platzhalter bis zur HUD-Frage in Stufe 6). Alle Animation haengt an
+// game.time / den Szenen-Uhren.
 
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -25,17 +29,19 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { State } from '../core/states.js';
-import { levelColor, enemyColor, spinnerColor } from '../core/levels.js';
+import { levelColor, levelConfig, enemyColor, spinnerColor } from '../core/levels.js';
 import { PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA } from '../render/colors.js';
 import { EYE_RATIO, cellSize } from '../scenes/mazeView.js';
 import { burstSegments, burstShards } from '../world/burst.js';
 import { ENEMY } from '../world/enemies.js';
 import { SHOTS, aimYaw, shotSegments } from '../world/shots.js';
-import { FIREWORK_COLORS } from '../world/fireworks.js';
+import { FIREWORK, FIREWORK_COLORS, fireworkBeams } from '../world/fireworks.js';
 import { growthOutline } from '../world/mazeGeometry.js';
-import { spinnerMarkers } from '../world/spinners.js';
-import { flipperMarkers } from '../world/flippers.js';
-import { pulsarMarkers } from '../world/pulsars.js';
+import {
+  SPINNER, spinnerMarkers, spinnerSegments, spinnerShotSegments, spinnerShotPos,
+} from '../world/spinners.js';
+import { flipperMarkers, flipperSegments } from '../world/flippers.js';
+import { pulsarMarkers, pulsarSegments } from '../world/pulsars.js';
 import {
   buildWorld, applyTheme, disposeWorld, hdr, setWallHeight, setMarkerFade,
   UNITS_PER_CELL, FOG_DENSITY, HEADLIGHT_INTENSITY,
@@ -102,6 +108,14 @@ const SHARD_HDR = 1.35;         // flaechige Truemmer: gluehende Platten, kein V
 const SHOT_PARAMS = { size: 0.12, spin: 18 };
 const SHOT_FLICKER = 12;        // Farb-Schaltrate (Hz)
 const SHOT_WHITE_MIX = 0.55;    // Weiss-Anteil der Arcade-Farben
+const NEAR_STAR = 0.6;          // Gangbreiten: der Stern-Radius waechst erst mit
+                                // der Kamera-Distanz auf ("Muendung"). FALLE:
+                                // ein Schuss-Stern AN der Kamera (frisch
+                                // abgefeuert, oder ein ankommender Spinner-
+                                // Schuss) malt sonst Riesen-Strahlen uebers
+                                // Bild bis zum Bloom-Blowout -- die 1980-
+                                // Pipeline hat das per Near-Clipping
+                                // verschluckt, der 3D-Renderer nicht.
 
 // Death-Crash (Stufe-4-Politur, "spektakulaerer"): laengerer weisser
 // Vollbild-Blitz + greller Licht-Puls am Einschlag, dazu die grossen
@@ -111,6 +125,17 @@ const CRASH_LIGHT = 3200;       // Spitzen-Intensitaet des Crash-Lichts
 const CRASH_LIGHT_TIME = 0.7;   // s: Licht-Puls klingt aus
 const CRASH_LIGHT_CAP = 60;     // Deckel: Intensitaet <= CAP * Kamera-Abstand^2
                                 // (decay-2-Falle -- der Crash ist direkt vor der Kamera)
+
+// Stufe 5: Spinner-Spiralen, Flipper-X und Pulsar-Zacken kommen als fertige
+// Liniensegmente aus den puren Modulen (spinnerSegments & Co.) -- die Engine
+// zeichnet sie nur, als leuchtende HDR-Linien pro Feindart. Dazu die
+// sirrenden Spinner-Schuesse (flirrende Arcade-Farben, 12 Hz wie 1980)
+// und das Ziel-FEUERWERK (fireworkBeams, Masse wie in playing.js).
+const FOE_LINE_HDR = 2.6;       // Feind-Konturen gluehen etwas staerker (Gefahr)
+const FOE_SHOT_FLICKER = 12;    // Farb-Schaltrate der Spinner-Schuesse (Hz, wie 1980)
+const FIREWORK_SPREAD = 2.2;    // Feuerwerk-Radius um die Zielmitte (Gangbreiten)
+const FIREWORK_HEIGHT = 8;      // maximale Strahlhoehe (Gangbreiten, wie 1980)
+const FIREWORK_HDR = 2.4;       // Strahlen bloomen in ihrer Arcade-Farbe
 
 // Karten-Glow (Boris' Punkt "Overglow ab Level 11"): der Bloom-Schwellwert
 // (0.85) arbeitet auf LUMINANZ -- Phosphor-Gruen (lum ~0.81) landet mit dem
@@ -221,10 +246,11 @@ export function createBackend2026(container = document.body) {
   let worldMaze = null;  // Maze-Objekt, fuer das `world` gebaut wurde
   let themeHex = null;   // zuletzt angewandte Level-Farbe
 
-  function ensureWorld(maze, color) {
+  function ensureWorld(game, maze, color) {
     if (maze !== worldMaze) {
       if (world) disposeWorld(world);
-      world = buildWorld(maze);
+      // Level 26+ (rainbowStars): der Himmel funkelt BUNT.
+      world = buildWorld(maze, { rainbow: !!levelConfig(game.level)?.rainbowStars });
       // Umrechnung lokale Flaechen-Einheiten (px/pz, trail, Feinde) -> 3D.
       world.kLocal = UNITS_PER_CELL / cellSize(maze);
       worldMaze = maze;
@@ -263,6 +289,9 @@ export function createBackend2026(container = document.body) {
       }
     }
     world.crashLight.intensity = 0;
+    if (world.foeLines) for (const m of world.foeLines) { if (m) m.mesh.visible = false; }
+    if (world.foeShotLines) world.foeShotLines.mesh.visible = false;
+    if (world.fireworkLines) world.fireworkLines.mesh.visible = false;
   }
 
   // Karten-Glow dosieren (s. Konstanten oben): mix 0 = Ego (voller Boost
@@ -470,16 +499,20 @@ export function createBackend2026(container = document.body) {
     }
     const pos = world.shotLines.geometry.attributes.position;
     const col = world.shotLines.geometry.attributes.color;
-    const opts = {
-      cell: view.cell, yaw: view.yaw, height: EYE_RATIO * view.cell,
-      params: SHOT_PARAMS,
-    };
     const tick = Math.floor(view.sceneT * SHOT_FLICKER);
     let j = 0;
     let n = 0;
     for (const sh of view.shots) {
       n++;
-      const segs = shotSegments(sh, view.sceneT, opts);
+      // Muendungs-Skalierung (NEAR_STAR): frisch abgefeuert sitzt der Stern
+      // AN der Kamera -- er waechst mit der Distanz auf volle Groesse.
+      const scale = Math.min(1,
+        Math.hypot(sh.x - view.px, sh.z - view.pz) / (NEAR_STAR * view.cell));
+      if (scale < 0.01) continue;
+      const segs = shotSegments(sh, view.sceneT, {
+        cell: view.cell, yaw: view.yaw, height: EYE_RATIO * view.cell,
+        params: { ...SHOT_PARAMS, size: SHOT_PARAMS.size * scale },
+      });
       for (let i = 0; i < segs.length; i++) {
         const [a, b] = segs[i];
         shotColor.set(FIREWORK_COLORS[(tick + n * 3 + i) % FIREWORK_COLORS.length])
@@ -614,6 +647,153 @@ export function createBackend2026(container = document.body) {
       }
       used++;
     }
+  }
+
+  // --- Stufe 5: Spinner, Flipper, Pulsare, Spinner-Schuesse, Feuerwerk --------
+
+  // Generischer Feind-Linien-Renderer: pro Feindart EIN dynamisches
+  // LineSegments (Puffer waechst bei Bedarf -- der Spinner-Spike aendert
+  // seine Segmentzahl beim Wachsen). Die Geometrie kommt FERTIG aus den
+  // puren Modulen (lokale Flaechen-Koordinaten -> x kLocal), die Engine
+  // zeichnet nur: leuchtende HDR-Konturen in der Feindart-Farbe.
+  function updateFoeLines(game, view) {
+    const kinds = [
+      { list: game.spinners, color: spinnerColor(game.level),
+        segs: (s) => spinnerSegments(s, view.sceneT, { cell: view.cell }) },
+      { list: game.flippers, color: NEON_MAGENTA,
+        segs: (f) => flipperSegments(f, { cell: view.cell }) },
+      { list: game.pulsars, color: ARCADE_YELLOW,
+        segs: (p) => pulsarSegments(p, view.sceneT, { cell: view.cell }) },
+    ];
+    if (!world.foeLines) world.foeLines = kinds.map(() => null);
+    const k = world.kLocal;
+    kinds.forEach((kind, i) => {
+      const alive = (kind.list ?? []).filter((f) => f.alive);
+      let m = world.foeLines[i];
+      if (!alive.length) {
+        if (m) m.mesh.visible = false;
+        return;
+      }
+      const segs = [];
+      for (const f of alive) segs.push(...kind.segs(f));
+      const floats = segs.length * 6;
+      if (!m || m.cap < floats) {
+        if (m) {
+          world.scene.remove(m.mesh);
+          m.mesh.geometry.dispose();
+          m.mesh.material.dispose();
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(floats), 3));
+        const mesh = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({}));
+        mesh.frustumCulled = false;
+        world.scene.add(mesh);
+        m = world.foeLines[i] = { mesh, cap: floats };
+      }
+      const pos = m.mesh.geometry.attributes.position;
+      let j = 0;
+      for (const [a, b] of segs) {
+        pos.setXYZ(j++, a[0] * k, a[1] * k, a[2] * k);
+        pos.setXYZ(j++, b[0] * k, b[1] * k, b[2] * k);
+      }
+      pos.needsUpdate = true;
+      m.mesh.geometry.setDrawRange(0, j);
+      m.mesh.material.color.set(kind.color).multiplyScalar(FOE_LINE_HDR);
+      m.mesh.visible = true;
+    });
+  }
+
+  // Sirrende Spinner-Schuesse (ab Level 21): gezackte Stern-Ringe quer zum
+  // Gang in FLIRRENDEN Arcade-Farben -- harte 12-Hz-Schaltung pro Schuss
+  // (Phase versetzt), wie 1980. Ein Puffer mit vertexColors fuer alle.
+  function updateFoeShots(view, k) {
+    const shots = view.foeShots;
+    if (!shots || !shots.length) return; // resetWorldFrame hat schon versteckt
+    const floats = shots.length * 6 * 6; // 6 Ring-Segmente pro Schuss
+    let m = world.foeShotLines;
+    if (!m || m.cap < floats) {
+      if (m) {
+        world.scene.remove(m.mesh);
+        m.mesh.geometry.dispose();
+        m.mesh.material.dispose();
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(floats), 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(floats), 3));
+      const mesh = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true }));
+      mesh.frustumCulled = false;
+      world.scene.add(mesh);
+      m = world.foeShotLines = { mesh, cap: floats };
+    }
+    const pos = m.mesh.geometry.attributes.position;
+    const col = m.mesh.geometry.attributes.color;
+    let j = 0;
+    for (const s of shots) {
+      // Er fliegt AUF den Spieler zu: kurz vor dem (toedlichen) Kreuzen
+      // schrumpft der Stern statt das Bild zu fuellen (NEAR_STAR-Falle).
+      const [sx, sz] = spinnerShotPos(s);
+      const scale = Math.min(1,
+        Math.hypot(sx - view.px, sz - view.pz) / (NEAR_STAR * view.cell));
+      if (scale < 0.01) continue;
+      const cy = SPINNER.height * view.cell;
+      shotColor.set(FIREWORK_COLORS[
+        Math.floor(view.sceneT * FOE_SHOT_FLICKER + (s.phase ?? 0)) % FIREWORK_COLORS.length])
+        .multiplyScalar(BURST_HDR);
+      for (const [a, b] of spinnerShotSegments(s, view.sceneT, { cell: view.cell })) {
+        col.setXYZ(j, shotColor.r, shotColor.g, shotColor.b);
+        pos.setXYZ(j++, (sx + (a[0] - sx) * scale) * k,
+          (cy + (a[1] - cy) * scale) * k, (sz + (a[2] - sz) * scale) * k);
+        col.setXYZ(j, shotColor.r, shotColor.g, shotColor.b);
+        pos.setXYZ(j++, (sx + (b[0] - sx) * scale) * k,
+          (cy + (b[1] - cy) * scale) * k, (sz + (b[2] - sz) * scale) * k);
+      }
+    }
+    pos.needsUpdate = true;
+    col.needsUpdate = true;
+    m.mesh.geometry.setDrawRange(0, j);
+    m.mesh.visible = true;
+  }
+
+  // Ziel-FEUERWERK: waehrend die Leuchtfeuer-Strahlen weiss verloeschen,
+  // spriessen rund ums Ziel senkrechte Strahlen und schalten hart durch
+  // die Arcade-Palette nach Weiss (fireworkBeams, pur -- Masse wie 1980).
+  // Ein Puffer mit vertexColors, Kapazitaet = FIREWORK.count.
+  function updateFireworks(view) {
+    if (!view.reached) return;
+    const beams = fireworkBeams(view.sceneT - view.reachedAt, {
+      seed: view.maze.seed,
+      center: [world.u(view.maze.goal[0] + 0.5), world.u(view.maze.goal[1] + 0.5)],
+      spread: FIREWORK_SPREAD * UNITS_PER_CELL,
+      height: FIREWORK_HEIGHT * UNITS_PER_CELL,
+    });
+    if (!beams.length) return;
+    let m = world.fireworkLines;
+    if (!m) {
+      const floats = FIREWORK.count * 6;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(floats), 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(floats), 3));
+      const mesh = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+        vertexColors: true, fog: false,
+      }));
+      mesh.frustumCulled = false;
+      world.scene.add(mesh);
+      m = world.fireworkLines = { mesh };
+    }
+    const pos = m.mesh.geometry.attributes.position;
+    const col = m.mesh.geometry.attributes.color;
+    let j = 0;
+    for (const b of beams) {
+      shotColor.set(b.color).multiplyScalar(FIREWORK_HDR * b.intensity);
+      col.setXYZ(j, shotColor.r, shotColor.g, shotColor.b);
+      pos.setXYZ(j++, b.x, 0, b.z);
+      col.setXYZ(j, shotColor.r, shotColor.g, shotColor.b);
+      pos.setXYZ(j++, b.x, b.top, b.z);
+    }
+    pos.needsUpdate = true;
+    col.needsUpdate = true;
+    m.mesh.geometry.setDrawRange(0, j);
+    m.mesh.visible = true;
   }
 
   // --- Karten-Diagramm: Wachstums-Kontur, Weg, Feind-Kreuze -------------------
@@ -822,7 +1002,7 @@ export function createBackend2026(container = document.body) {
   function drawMazeGen(game, color) {
     const view = game.current.viewState?.();
     if (!view?.maze) return drawPlaceholder(game);
-    ensureWorld(view.maze, color);
+    ensureWorld(game, view.maze, color);
     resetWorldFrame();
     setLineGlow(1);
     setTopDownCamera();
@@ -841,7 +1021,7 @@ export function createBackend2026(container = document.body) {
   function drawFalling(game, color) {
     const view = game.current.viewState?.();
     if (!view?.maze) return drawPlaceholder(game);
-    ensureWorld(view.maze, color);
+    ensureWorld(game, view.maze, color);
     resetWorldFrame();
     const e = view.e;
     setLineGlow(1 - e);
@@ -864,7 +1044,7 @@ export function createBackend2026(container = document.body) {
   function drawRising(game, color) {
     const view = game.current.viewState?.();
     if (!view?.maze) return drawPlaceholder(game);
-    ensureWorld(view.maze, color);
+    ensureWorld(game, view.maze, color);
     resetWorldFrame();
     const a = 1 - view.e;
     setLineGlow(view.e);
@@ -886,7 +1066,7 @@ export function createBackend2026(container = document.body) {
   function drawMap(game, color) {
     const view = game.current.viewState?.();
     if (!view?.maze) return drawPlaceholder(game);
-    ensureWorld(view.maze, color);
+    ensureWorld(game, view.maze, color);
     resetWorldFrame();
     setLineGlow(1);
     setTopDownCamera();
@@ -906,7 +1086,7 @@ export function createBackend2026(container = document.body) {
   function drawEgo(game, color) {
     const view = game.current.viewState?.();
     if (!view?.maze) return drawPlaceholder(game);
-    ensureWorld(view.maze, color);
+    ensureWorld(game, view.maze, color);
     resetWorldFrame();
     setLineGlow(0);
     setFov(EGO_FOV);
@@ -968,6 +1148,12 @@ export function createBackend2026(container = document.body) {
     updateShots(view, k);
     updateCrosshair(view, k);
     updateBursts(view, k);
+    // Stufe 5: Spinner/Flipper/Pulsare als HDR-Konturen aus den puren
+    // Modulen, sirrende Spinner-Schuesse, Ziel-Feuerwerk. Der Gyro-Roll
+    // steckt schon in view.roll (echter Kamera-Roll, s.u.).
+    updateFoeLines(game, view);
+    updateFoeShots(view, k);
+    updateFireworks(view);
     if (view.crash && view.crash.t < CRASH_LIGHT_TIME) {
       const lp = world.crashLight.position;
       lp.set(view.crash.x * k, EYE, view.crash.z * k);
@@ -1008,7 +1194,10 @@ export function createBackend2026(container = document.body) {
         const view = game.current.viewState?.();
         if (view?.crash) return '';
         if (view?.reached) return 'YOU MADE IT';
-        const steer = view?.drive ? 'LEFT/RIGHT STEER' : 'ARROWS MOVE';
+        // Die Lenk-Tasten folgen der Blick-Verdrehung (Pulsar-Rotation,
+        // wie die 1980-Steuerzeile): bei 90/270 Grad lenkt runter/rauf.
+        const steerKeys = ['LEFT/RIGHT', 'DOWN/UP', 'RIGHT/LEFT', 'UP/DOWN'][view?.orient ?? 0];
+        const steer = view?.drive ? steerKeys + ' STEER' : 'ARROWS MOVE';
         return 'FIND THE EXIT · ' + steer
           + (view?.shoot ? ' · SPACE FIRE' : '') + ' · Q MAP';
       }
