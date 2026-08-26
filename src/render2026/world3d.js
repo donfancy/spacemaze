@@ -39,6 +39,10 @@ export function hdr(hex, boost = 2.2) {
 // opts.rainbow (Level 26+, rainbowStars): der Sternenhimmel funkelt BUNT --
 // deutlich mehr getoente Sterne (das 2026-Pendant zu den 1980-Regenbogen-
 // Sternen; die Arcade-Tints stecken schon in buildStarField).
+// opts.shotLights (Kampf-Levels): so viele Punktlichter fuer den Wand-
+// Widerschein der Schuesse anlegen -- als FESTER Pool (intensity 0 = aus),
+// denn eine wechselnde Licht-Anzahl liesse Three.js alle Shader neu
+// kompilieren (Ruckler); Levels ohne Schiessen zahlen keine Licht-Kosten.
 export function buildWorld(maze, opts = {}) {
   const metric = mazeMetric(maze);
   const k = UNITS_PER_CELL / metric.corridor; // 3D-Einheiten pro Metrik-Einheit
@@ -81,6 +85,15 @@ export function buildWorld(maze, opts = {}) {
   // der Crash-Ort liegt SEHR nah an der Kamera, decay-2-Falle).
   world.crashLight = new THREE.PointLight(0xffffff, 0, 60, 2);
   scene.add(world.crashLight);
+
+  // Schuss-Lichter (Wand-Widerschein, s.o.): backend.js fuehrt sie den
+  // naechsten Schuessen nach.
+  world.shotLights = [];
+  for (let i = 0; i < (opts.shotLights ?? 0); i++) {
+    const light = new THREE.PointLight(0xffffff, 0, 15, 2);
+    scene.add(light);
+    world.shotLights.push(light);
+  }
 
   return world;
 }

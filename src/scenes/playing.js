@@ -238,8 +238,10 @@ export function createPlaying(game) {
       game.audio?.play(clinkPatch());
       bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 3, count: 6, speed: 1.4 * cell, life: 0.3, size: 0.06 * cell, color: spinnerCol });
     } else if (ev.type === 'spinner') {
+      // Ohne Truemmer-Platten (Boris): Spinner sind reine LINIEN-Wesen --
+      // flaechige Truemmer passen zu Tankern und Flippern, nicht hier.
       game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: spinnerCol, shardCount: 6, shardSize: 0.3 * cell });
+      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: spinnerCol });
     } else if (ev.type === 'zap') {
       game.audio?.play(poofPatch());
       bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 7, count: 10, speed: 1.8 * cell, life: 0.4, size: 0.08 * cell, color: SHOT_COLOR });

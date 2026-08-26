@@ -14,7 +14,7 @@ import { DRIVE } from '../src/world/drive.js';
 import {
   FLIPPER, createFlippers, flippersStep, flipperSide, flipperPos,
   flipperShotHit, flipperPlayerHit, flipperMarkers, flipperSegments,
-  spawnFlipperPair,
+  flipperTriangles, spawnFlipperPair,
 } from '../src/world/flippers.js';
 
 const THIN = { wall: 1, corridor: 5 };
@@ -263,4 +263,31 @@ test('flipperSegments: X-Kontur im Querschnitt -- unten flach unter Augenhoehe, 
     }
   }
   assert.ok(minV < 0.5 * CELL && maxV > 0.5 * CELL, 'kreuzt die Augen-/Schusshoehe');
+});
+
+// Stufe-5-Politur (2026): gefuellte X-Flaeche als vier "Schmetterlings-
+// Fluegel"-Dreiecke um die Kreuzungsmitte -- die selbstschneidende Kontur
+// laesst sich nicht normal triangulieren.
+test('flipperTriangles: vier Dreiecke in der Querschnitts-Ebene, deckungsgleich mit der Kontur', () => {
+  const { flippers } = makeFlipper();
+  const f = flippers[0];
+  const tris = flipperTriangles(f, { cell: CELL });
+  assert.equal(tris.length, 4);
+  const segs = flipperSegments(f, { cell: CELL });
+  for (const tri of tris) {
+    assert.equal(tri.length, 3);
+    for (const p of tri) {
+      assert.ok(p.length === 3 && p.every(Number.isFinite));
+      // Querschnitts-Ebene: die Gang-Laengs-Koordinate ist konstant f.along.
+      const along = f.axis === 'x' ? p[0] : p[2];
+      assert.ok(Math.abs(along - f.along) < 1e-9, 'liegt in der Flipper-Ebene');
+    }
+  }
+  // Die Fluegel teilen sich die Kreuzungsmitte (erster Punkt aller Dreiecke)
+  // und enden in den Kontur-Ecken (jede Dreiecks-Ecke liegt auf der Kontur).
+  assert.deepEqual(tris[0][0], tris[2][0], 'gemeinsame Kreuzungsmitte');
+  const corner = tris[0][1];
+  assert.ok(segs.some(([a, b]) => [a, b].some(
+    (p) => Math.hypot(p[0] - corner[0], p[1] - corner[1], p[2] - corner[2]) < 1e-9,
+  )), 'Fluegel-Ecken sind Kontur-Ecken');
 });

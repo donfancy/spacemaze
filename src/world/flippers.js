@@ -279,7 +279,19 @@ export function flipperMarkers(flippers) {
 // die lange Achse steht senkrecht dazu ("zwischen zwei Gangkanten").
 // opts = { cell }.
 export function flipperSegments(f, opts) {
-  const { cell } = opts;
+  const { ring } = flipperShape(f, opts.cell);
+  const segs = [];
+  for (let i = 0; i < ring.length; i++) {
+    segs.push([ring[i], ring[(i + 1) % ring.length]]);
+  }
+  return segs;
+}
+
+// Eck-Punkte der X-Kontur + Kreuzungsmitte (gemeinsame Basis fuer Kontur
+// und Flaeche): Reihenfolge [A, B, KerbeR, D, E, KerbeL] -- A->B und D->E
+// sind die langen Diagonalen (laufen durch die Mitte), dazwischen die
+// gekerbten Pfeil-Spitzen.
+function flipperShape(f, cell) {
   const L = FLIPPER.length * cell;
   const W = FLIPPER.width * cell;
   const N = FLIPPER.notch * cell;
@@ -296,12 +308,22 @@ export function flipperSegments(f, opts) {
     return f.axis === 'x' ? [f.along, v, f.cross + u] : [f.cross + u, v, f.along];
   };
   // Kontur: Diagonale hoch, rechte Pfeil-Kerbe, Diagonale zurueck, linke Kerbe.
-  const ring = [
-    pt(-L, -W), pt(L, W), pt(L - N, 0), pt(L, -W), pt(-L, W), pt(-L + N, 0),
+  return {
+    ring: [pt(-L, -W), pt(L, W), pt(L - N, 0), pt(L, -W), pt(-L, W), pt(-L + N, 0)],
+    center: pt(0, 0),
+  };
+}
+
+// Gefuellte X-Flaeche als VIER Dreiecke (2026-Engine -- 1980 zeichnet nur
+// die Kontur): die Kontur ist bei der Kreuzungsmitte selbstschneidend,
+// eine normale Triangulation scheitert. Die Fuellung sind die beiden
+// "Schmetterlings-Fluegel" um die Mitte Z: rechts (Z,B,KerbeR),(Z,KerbeR,D),
+// links (Z,E,KerbeL),(Z,KerbeL,A). opts = { cell }.
+export function flipperTriangles(f, opts) {
+  const { ring, center } = flipperShape(f, opts.cell);
+  const [a, b, notchR, d, e, notchL] = ring;
+  return [
+    [center, b, notchR], [center, notchR, d],
+    [center, e, notchL], [center, notchL, a],
   ];
-  const segs = [];
-  for (let i = 0; i < ring.length; i++) {
-    segs.push([ring[i], ring[(i + 1) % ring.length]]);
-  }
-  return segs;
 }

@@ -40,7 +40,7 @@ import { growthOutline } from '../world/mazeGeometry.js';
 import {
   SPINNER, spinnerMarkers, spinnerSegments, spinnerShotSegments, spinnerShotPos,
 } from '../world/spinners.js';
-import { flipperMarkers, flipperSegments } from '../world/flippers.js';
+import { flipperMarkers, flipperSegments, flipperTriangles } from '../world/flippers.js';
 import { pulsarMarkers, pulsarSegments } from '../world/pulsars.js';
 import {
   buildWorld, applyTheme, disposeWorld, hdr, setWallHeight, setMarkerFade,
@@ -133,6 +133,21 @@ const CRASH_LIGHT_CAP = 60;     // Deckel: Intensitaet <= CAP * Kamera-Abstand^2
 // und das Ziel-FEUERWERK (fireworkBeams, Masse wie in playing.js).
 const FOE_LINE_HDR = 2.6;       // Feind-Konturen gluehen etwas staerker (Gefahr)
 const FOE_SHOT_FLICKER = 12;    // Farb-Schaltrate der Spinner-Schuesse (Hz, wie 1980)
+const MIRROR_LINE_DIM = 0.85;   // Spiegel-Konturen ohne HDR (Regel: kein Bloom im Spiegel)
+const MIRROR_SHOT_OPACITY = 0.35; // Spiegel-Schuesse/-Feuerwerk: vertexColors sind
+                                // HDR-geboostet, die Opazitaet dimmt sie stattdessen
+const FLIPPER_FILL_DIM = 0.3;   // Flaechen-Fuellung des Flipper-X (dunkler Koerper,
+                                // die Glut sitzt in der Kontur -- wie beim Tanker)
+const FLIPPER_FILL_OPACITY = 0.85;
+
+// Licht-Widerschein der Schuesse an den Waenden (Boris' Punkt 5): ein FESTER
+// Pool kleiner Punktlichter, die den naechsten Schuessen folgen. FALLE: eine
+// WECHSELNDE Licht-Anzahl liesse Three.js alle Shader neu kompilieren
+// (Ruckler mitten im Kampf) -- darum immer alle im Baum (intensity 0 = aus)
+// und nur in Schiess-Levels ueberhaupt angelegt (buildWorld opts.shoot).
+const SHOT_LIGHT_COUNT = 4;     // folgt den 4 naechsten Schuessen (eigene + Feind)
+const SHOT_LIGHT = 8;           // Intensitaet pro Schuss-Licht (dezent)
+const SHOT_LIGHT_DIST = 15;     // Reichweite (3 Gangbreiten)
 const FIREWORK_SPREAD = 2.2;    // Feuerwerk-Radius um die Zielmitte (Gangbreiten)
 const FIREWORK_HEIGHT = 8;      // maximale Strahlhoehe (Gangbreiten, wie 1980)
 const FIREWORK_HDR = 2.4;       // Strahlen bloomen in ihrer Arcade-Farbe
@@ -249,8 +264,13 @@ export function createBackend2026(container = document.body) {
   function ensureWorld(game, maze, color) {
     if (maze !== worldMaze) {
       if (world) disposeWorld(world);
-      // Level 26+ (rainbowStars): der Himmel funkelt BUNT.
-      world = buildWorld(maze, { rainbow: !!levelConfig(game.level)?.rainbowStars });
+      // Level 26+ (rainbowStars): der Himmel funkelt BUNT; Kampf-Levels
+      // bekommen den festen Schuss-Licht-Pool (Wand-Widerschein).
+      const cfg = levelConfig(game.level);
+      world = buildWorld(maze, {
+        rainbow: !!cfg?.rainbowStars,
+        shotLights: cfg?.shoot ? SHOT_LIGHT_COUNT : 0,
+      });
       // Umrechnung lokale Flaechen-Einheiten (px/pz, trail, Feinde) -> 3D.
       world.kLocal = UNITS_PER_CELL / cellSize(maze);
       worldMaze = maze;
@@ -289,9 +309,22 @@ export function createBackend2026(container = document.body) {
       }
     }
     world.crashLight.intensity = 0;
-    if (world.foeLines) for (const m of world.foeLines) { if (m) m.mesh.visible = false; }
-    if (world.foeShotLines) world.foeShotLines.mesh.visible = false;
-    if (world.fireworkLines) world.fireworkLines.mesh.visible = false;
+    for (const light of world.shotLights) light.intensity = 0;
+    if (world.foeLines) {
+      for (const m of world.foeLines) {
+        if (m) m.mesh.visible = m.mirror.visible = false;
+      }
+    }
+    if (world.flipperFill) {
+      world.flipperFill.mesh.visible = world.flipperFill.mirror.visible = false;
+    }
+    if (world.shotMirror) world.shotMirror.visible = false;
+    if (world.foeShotLines) {
+      world.foeShotLines.mesh.visible = world.foeShotLines.mirror.visible = false;
+    }
+    if (world.fireworkLines) {
+      world.fireworkLines.mesh.visible = world.fireworkLines.mirror.visible = false;
+    }
   }
 
   // Karten-Glow dosieren (s. Konstanten oben): mix 0 = Ego (voller Boost
@@ -496,6 +529,13 @@ export function createBackend2026(container = document.body) {
       }));
       world.shotLines.frustumCulled = false;
       world.scene.add(world.shotLines);
+      // Spiegelbild: gleiche Geometrie, per Opazitaet gedimmt (die HDR-
+      // Farben stecken im vertexColors-Attribut).
+      world.shotMirror = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+        vertexColors: true, transparent: true, opacity: MIRROR_SHOT_OPACITY,
+      }));
+      world.shotMirror.frustumCulled = false;
+      world.mirror.add(world.shotMirror);
     }
     const pos = world.shotLines.geometry.attributes.position;
     const col = world.shotLines.geometry.attributes.color;
@@ -527,7 +567,29 @@ export function createBackend2026(container = document.body) {
     pos.needsUpdate = true;
     col.needsUpdate = true;
     world.shotLines.geometry.setDrawRange(0, j);
-    world.shotLines.visible = true;
+    world.shotLines.visible = world.shotMirror.visible = true;
+  }
+
+  // Licht-Widerschein der Schuesse an den Waenden: der feste Licht-Pool
+  // (world.shotLights, nur in Schiess-Levels angelegt) folgt den ersten
+  // Schuessen -- eigene zuerst, dann die sirrenden Spinner-Schuesse.
+  function updateShotLights(view, k) {
+    const lights = world.shotLights;
+    if (!lights || !lights.length) return;
+    let i = 0;
+    for (const sh of view.shots) {
+      if (i >= lights.length) break;
+      lights[i].position.set(sh.x * k, EYE, sh.z * k);
+      lights[i].intensity = SHOT_LIGHT;
+      i++;
+    }
+    for (const s of view.foeShots ?? []) {
+      if (i >= lights.length) break;
+      const [sx, sz] = spinnerShotPos(s);
+      lights[i].position.set(sx * k, SPINNER.height * view.cell * k, sz * k);
+      lights[i].intensity = SHOT_LIGHT;
+      i++;
+    }
   }
 
   // Fadenkreuz: haengt an der ZIELRICHTUNG (aimYaw = Blick + gerampter
@@ -655,7 +717,10 @@ export function createBackend2026(container = document.body) {
   // LineSegments (Puffer waechst bei Bedarf -- der Spinner-Spike aendert
   // seine Segmentzahl beim Wachsen). Die Geometrie kommt FERTIG aus den
   // puren Modulen (lokale Flaechen-Koordinaten -> x kLocal), die Engine
-  // zeichnet nur: leuchtende HDR-Konturen in der Feindart-Farbe.
+  // zeichnet nur: leuchtende HDR-Konturen in der Feindart-Farbe. Jede Art
+  // bekommt ein SPIEGELBILD unter world.mirror -- dieselbe Geometrie-
+  // Instanz (der Parent spiegelt mit scale.y=-1), nur ein mattes Material
+  // ohne HDR (Regel: kein Bloom im Spiegel).
   function updateFoeLines(game, view) {
     const kinds = [
       { list: game.spinners, color: spinnerColor(game.level),
@@ -671,7 +736,7 @@ export function createBackend2026(container = document.body) {
       const alive = (kind.list ?? []).filter((f) => f.alive);
       let m = world.foeLines[i];
       if (!alive.length) {
-        if (m) m.mesh.visible = false;
+        if (m) m.mesh.visible = m.mirror.visible = false;
         return;
       }
       const segs = [];
@@ -680,15 +745,20 @@ export function createBackend2026(container = document.body) {
       if (!m || m.cap < floats) {
         if (m) {
           world.scene.remove(m.mesh);
+          world.mirror.remove(m.mirror);
           m.mesh.geometry.dispose();
           m.mesh.material.dispose();
+          m.mirror.material.dispose();
         }
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(floats), 3));
         const mesh = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({}));
         mesh.frustumCulled = false;
         world.scene.add(mesh);
-        m = world.foeLines[i] = { mesh, cap: floats };
+        const mirror = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({}));
+        mirror.frustumCulled = false;
+        world.mirror.add(mirror);
+        m = world.foeLines[i] = { mesh, mirror, cap: floats };
       }
       const pos = m.mesh.geometry.attributes.position;
       let j = 0;
@@ -699,8 +769,57 @@ export function createBackend2026(container = document.body) {
       pos.needsUpdate = true;
       m.mesh.geometry.setDrawRange(0, j);
       m.mesh.material.color.set(kind.color).multiplyScalar(FOE_LINE_HDR);
-      m.mesh.visible = true;
+      m.mirror.material.color.set(kind.color).multiplyScalar(MIRROR_LINE_DIM);
+      m.mesh.visible = m.mirror.visible = true;
     });
+
+    updateFlipperFill(game, view, k);
+  }
+
+  // Flaechen-Fuellung der Flipper (Boris: "flaechig, nicht nur Kontur"):
+  // die vier Schmetterlings-Dreiecke aus flipperTriangles als dunkler
+  // Koerper unter der Glut-Kontur (Tanker-Prinzip); das Spiegelbild teilt
+  // die Geometrie (DoubleSide vertraegt die Spiegelung).
+  function updateFlipperFill(game, view, k) {
+    const alive = (game.flippers ?? []).filter((f) => f.alive);
+    let m = world.flipperFill;
+    if (!alive.length) {
+      if (m) m.mesh.visible = m.mirror.visible = false;
+      return;
+    }
+    const tris = [];
+    for (const f of alive) tris.push(...flipperTriangles(f, { cell: view.cell }));
+    const floats = tris.length * 9;
+    if (!m || m.cap < floats) {
+      if (m) {
+        world.scene.remove(m.mesh);
+        world.mirror.remove(m.mirror);
+        m.mesh.geometry.dispose();
+        m.mesh.material.dispose();
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(floats), 3));
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(NEON_MAGENTA).multiplyScalar(FLIPPER_FILL_DIM),
+        transparent: true, opacity: FLIPPER_FILL_OPACITY,
+        side: THREE.DoubleSide, depthWrite: false, // die Glut-Kontur gewinnt
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.frustumCulled = false;
+      world.scene.add(mesh);
+      const mirror = new THREE.Mesh(geo, mat);
+      mirror.frustumCulled = false;
+      world.mirror.add(mirror);
+      m = world.flipperFill = { mesh, mirror, cap: floats };
+    }
+    const pos = m.mesh.geometry.attributes.position;
+    let j = 0;
+    for (const tri of tris) {
+      for (const [x, y, z] of tri) pos.setXYZ(j++, x * k, y * k, z * k);
+    }
+    pos.needsUpdate = true;
+    m.mesh.geometry.setDrawRange(0, j);
+    m.mesh.visible = m.mirror.visible = true;
   }
 
   // Sirrende Spinner-Schuesse (ab Level 21): gezackte Stern-Ringe quer zum
@@ -714,8 +833,10 @@ export function createBackend2026(container = document.body) {
     if (!m || m.cap < floats) {
       if (m) {
         world.scene.remove(m.mesh);
+        world.mirror.remove(m.mirror);
         m.mesh.geometry.dispose();
         m.mesh.material.dispose();
+        m.mirror.material.dispose();
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(floats), 3));
@@ -723,7 +844,12 @@ export function createBackend2026(container = document.body) {
       const mesh = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true }));
       mesh.frustumCulled = false;
       world.scene.add(mesh);
-      m = world.foeShotLines = { mesh, cap: floats };
+      const mirror = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+        vertexColors: true, transparent: true, opacity: MIRROR_SHOT_OPACITY,
+      }));
+      mirror.frustumCulled = false;
+      world.mirror.add(mirror);
+      m = world.foeShotLines = { mesh, mirror, cap: floats };
     }
     const pos = m.mesh.geometry.attributes.position;
     const col = m.mesh.geometry.attributes.color;
@@ -751,7 +877,7 @@ export function createBackend2026(container = document.body) {
     pos.needsUpdate = true;
     col.needsUpdate = true;
     m.mesh.geometry.setDrawRange(0, j);
-    m.mesh.visible = true;
+    m.mesh.visible = m.mirror.visible = true;
   }
 
   // Ziel-FEUERWERK: waehrend die Leuchtfeuer-Strahlen weiss verloeschen,
@@ -778,7 +904,12 @@ export function createBackend2026(container = document.body) {
       }));
       mesh.frustumCulled = false;
       world.scene.add(mesh);
-      m = world.fireworkLines = { mesh };
+      const mirror = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+        vertexColors: true, fog: false, transparent: true, opacity: MIRROR_SHOT_OPACITY,
+      }));
+      mirror.frustumCulled = false;
+      world.mirror.add(mirror);
+      m = world.fireworkLines = { mesh, mirror };
     }
     const pos = m.mesh.geometry.attributes.position;
     const col = m.mesh.geometry.attributes.color;
@@ -793,7 +924,7 @@ export function createBackend2026(container = document.body) {
     pos.needsUpdate = true;
     col.needsUpdate = true;
     m.mesh.geometry.setDrawRange(0, j);
-    m.mesh.visible = true;
+    m.mesh.visible = m.mirror.visible = true;
   }
 
   // --- Karten-Diagramm: Wachstums-Kontur, Weg, Feind-Kreuze -------------------
@@ -1153,6 +1284,7 @@ export function createBackend2026(container = document.body) {
     // steckt schon in view.roll (echter Kamera-Roll, s.u.).
     updateFoeLines(game, view);
     updateFoeShots(view, k);
+    updateShotLights(view, k);
     updateFireworks(view);
     if (view.crash && view.crash.t < CRASH_LIGHT_TIME) {
       const lp = world.crashLight.position;
