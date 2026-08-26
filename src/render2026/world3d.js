@@ -19,7 +19,7 @@ import { createRng } from '../util/rng.js';
 import {
   PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_RED, ARCADE_YELLOW, NEON_MAGENTA,
 } from '../render/colors.js';
-import { WALL_RATIO, compassUnitPoints } from '../scenes/mazeView.js';
+import { WALL_RATIO } from '../scenes/mazeView.js';
 
 export const UNITS_PER_CELL = 5;        // 3D-Einheiten pro Gangbreite
 export const FOG_DENSITY = 0.028;       // pro 3D-Einheit (Prototyp-Wert; die
@@ -452,6 +452,11 @@ function buildFloodlights(world, maze) {
 // UND waehrend der Schwenks. Die Farbe kommt per applyTheme (HDR -> Bloom-
 // Gluehen wie die 1980-Textschrift), `base` ist die Grund-Deckkraft
 // (Kompass gedimmt wie 1980); setMarkerFade blendet alle gemeinsam.
+// FALLE (Boris' Punkt 1+2, 26.8.2026): die Sprites muessen KNAPP ueber dem
+// Boden sitzen -- jede Hoehe verschiebt sie in der Draufsicht per Parallaxe
+// radial nach aussen (S/G standen schief im Feld, N/S rutschten aus dem Bild).
+const MARKER_Y = 0.4;
+
 function textSprite(world, text, x, z, size, base) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
@@ -466,26 +471,34 @@ function textSprite(world, text, x, z, size, base) {
     transparent: true, opacity: base, depthWrite: false, fog: false,
   });
   const sp = new THREE.Sprite(mat);
-  sp.position.set(x, 0.6 * size, z);
+  sp.position.set(x, MARKER_Y, z);
   sp.scale.set(size, size, 1);
   world.scene.add(sp);
   world.markerMats.push({ mat, base });
   return sp;
 }
 
-// S/G-Marker in den Start-/Zielkammern + N/W/E/S am Kartenrand (dieselben
-// Punkte wie 1980: compassUnitPoints). Groessen folgen Gangbreite bzw.
-// Kartenkante -- wie die 1980-Regel (Marker passt ins Raster).
+// S/G-Marker in den Start-/Zielkammern + N/W/E/S am Kartenrand. Groessen
+// folgen Gangbreite bzw. Kartenkante -- wie die 1980-Regel (Marker passt
+// ins Raster). Kompass-Abstand ENGER als 1980 (0.03 statt 0.06): die Karte
+// fuellt 85% der Bildhoehe, mit dem 1980-Abstand schnitt das Querformat
+// N und S oben/unten ab (Boris' Punkt 2).
+const COMPASS_MARGIN_3D = 0.03;
+
 function buildMarkers(world, maze) {
-  const { u, k, total, metric } = world;
+  const { u, total } = world;
   world.markerMats = [];
   const s = 0.9 * UNITS_PER_CELL;
   textSprite(world, 'S', u(maze.start[0] + 0.5), u(maze.start[1] + 0.5), s, 1);
   textSprite(world, 'G', u(maze.goal[0] + 0.5), u(maze.goal[1] + 0.5), s, 1);
-  const points = compassUnitPoints(maze.n, metric);
+  const m = COMPASS_MARGIN_3D * total;
+  const points = {
+    N: [total / 2, -m], S: [total / 2, total + m],
+    W: [-m, total / 2], E: [total + m, total / 2],
+  };
   const cs = Math.max(0.045 * total, 0.6 * UNITS_PER_CELL);
-  for (const [label, [ux, uy]] of Object.entries(points)) {
-    textSprite(world, label, ux * k, uy * k, cs, 0.7);
+  for (const [label, [x, z]] of Object.entries(points)) {
+    textSprite(world, label, x, z, cs, 0.7);
   }
 }
 

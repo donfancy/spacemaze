@@ -72,6 +72,12 @@ const SPARK_OFF = 0.1;       // Abstand des Ursprungs von der Wandflaeche
 
 const FOE_MARK_RATIO = 0.22; // Kreuz-Halbarm der Feind-Marker (Gangbreiten)
 
+// Leuchtfeuer in der Draufsicht: BLASSE Lichtsaeule am Ziel (Boris' Punkt 4,
+// 26.8.2026 -- "macht alles verstehbarer"), die Schwenks blenden von dort
+// zur vollen Ego-Helligkeit. Der additive KEGEL bleibt im Diagramm aus
+// (von oben laengs durchblickt = Blowout, Stufe-3-Falle).
+const DIAGRAM_BEACON = 0.25;
+
 export function createBackend2026(container = document.body) {
   // Alles DOM (Canvas + Overlays) lebt in EINEM Wurzel-Element -- der Live-
   // Engine-Schalter (Stufe 3) blendet damit die ganze 2026-Ausgabe ein/aus.
@@ -479,10 +485,8 @@ export function createBackend2026(container = document.body) {
     setMarkerFade(world, view.markerFade);
     updateFoeMarkers(game, view.foeFade);
     updateTrail(null, 0);
-    // dim 0: das Leuchtfeuer bleibt im Diagramm GANZ aus (wie 1980 -- von
-    // oben wirken die 40 Einheiten hohen Saeulen sonst als gelber "Komet"
-    // quer ueber die Karte, der Kegel als Vollbild-Blowout).
-    animateWorld(game, null, 0);
+    animateWorld(game, null, DIAGRAM_BEACON * view.markerFade); // blendet mit G ein
+    world.beaconCone.visible = false;
   }
 
   // Reinfallen: Schwenk Draufsicht -> Ego; Waende, Nebel und Scheinwerfer
@@ -501,7 +505,10 @@ export function createBackend2026(container = document.body) {
     updateTrail(view.resume ? game.trail : null, 1 - e);
     swoopCamera(view.target, e);
     world.headlight.position.set(camera.position.x, camera.position.y + 2, camera.position.z);
-    animateWorld(game, null, e); // Leuchtfeuer blendet mit der Ego-Naehe ein
+    // Leuchtfeuer: von der blassen Karten-Saeule zur vollen Ego-Helligkeit;
+    // der Kegel kommt erst mit der Ego-Naehe dazu (end-on = Blowout).
+    animateWorld(game, null, DIAGRAM_BEACON + (1 - DIAGRAM_BEACON) * e);
+    world.beaconCone.material.opacity *= e;
   }
 
   // Rueckschwenk: dasselbe rueckwaerts; eine Rest-Verdrehung (Pulsar,
@@ -520,7 +527,8 @@ export function createBackend2026(container = document.body) {
     updateTrail(game.trail, view.e);
     swoopCamera(view.origin, a, (game.viewRoll ?? 0) * a);
     world.headlight.position.set(camera.position.x, camera.position.y + 2, camera.position.z);
-    animateWorld(game, null, a); // Leuchtfeuer blendet zur Karte hin aus
+    animateWorld(game, null, DIAGRAM_BEACON + (1 - DIAGRAM_BEACON) * a); // hin zur blassen Karten-Saeule
+    world.beaconCone.material.opacity *= a;
   }
 
   // Karte: Draufsicht auf das flache Labyrinth mit Weg, Markern und Feind-
@@ -540,7 +548,8 @@ export function createBackend2026(container = document.body) {
     setMarkerFade(world, f);
     updateFoeMarkers(game, f);
     updateTrail(game.trail, f);
-    animateWorld(game, null, 0); // Leuchtfeuer im Diagramm aus (wie MazeGen)
+    animateWorld(game, null, DIAGRAM_BEACON * f); // blasse Saeule, blendet mit aus
+    world.beaconCone.visible = false;
   }
 
   // Ego-Ansicht (Playing): Kamera aus dem ECHTEN Spielzustand.
