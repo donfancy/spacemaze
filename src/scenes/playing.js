@@ -909,9 +909,17 @@ export function createPlaying(game) {
     // sich nach rechts, pitch > 0 = Blick hebt sich) -- 1980 rendert sie als
     // Bildraum-Schwenk, 2026 als ECHTEN Kamera-Roll (dort erlaubt; der
     // Gyro-Roll ab Level 26 kommt in Stufe 5 dazu).
+    // Stufe 4 (Kampf): dazu Schuesse samt gerampter Lenkgroesse (Fadenkreuz),
+    // die Splitter-Explosionen (Verpuffen/Abschuss/Crash -- reine burst.js-
+    // Spezifikationen) und der Crash-Zustand (Shake steckt schon in roll/
+    // pitch, der weisse Blitz haengt an crash.t). Die Tanker selbst liest
+    // die Engine von game.enemies (dort leben sie, Resume/Retry inklusive).
     viewState() {
       return { maze, cell, unit, px, pz, yaw, sceneT, reached, reachedAt, bump,
-        drive, roll: bank + rollOsc.x, pitch: pitchOsc.x };
+        drive, roll: bank + rollOsc.x, pitch: pitchOsc.x,
+        shoot, steer: drive ? driveState.steer : walkState.steer,
+        shots: shotsState ? shotsState.shots : [], bursts,
+        crash: crash ? { t: crashT, x: crashPos.x, z: crashPos.z } : null };
     },
 
     onKey(key) {

@@ -24,15 +24,22 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
 - 2026-Engine (PLAN2026.md): `http://localhost:3001/?engine=2026` (Stand:
-  Stufe 3 — VOLLER Zyklus echt: Startscreen in Prototyp-Optik samt
-  **Live-Schalter „1980 / 2026“** (←/→ Level, ↑/↓ Engine; Wahl in
-  localStorage, URL-Param hat Vorrang, main.js `applyEngine` blendet live
-  um), Maze-Wachstum als Boden-Kontur, Quaternion-Schwenks mit wachsenden
-  Waenden (`setWallHeight`, fov 75↔70), Karte mit Weg/Markern/Feind-Kreuzen;
-  `viewState()`-Naht in ALLEN Szenen; Naht = `game.renderBackend`).
+  Stufe 4 — voller Zyklus + KAMPF (Level 11–15) echt: Startscreen in
+  Prototyp-Optik samt **Live-Schalter „1980 / 2026“** (←/→ Level, ↑/↓
+  Engine; Wahl in localStorage, URL-Param hat Vorrang, main.js
+  `applyEngine` blendet live um), Maze-Wachstum als Boden-Kontur,
+  Quaternion-Schwenks mit wachsenden Waenden (`setWallHeight`, fov 75↔70),
+  Karte mit Weg/Markern/Feind-Kreuzen; Tanker als rotierende Okta-Rauten
+  (Glut-Kanten, Rebuild-Schluessel = Identitaet von `game.enemies`),
+  Schuesse/Fadenkreuz/Splitter aus den puren Modulen (shotSegments/aimYaw/
+  burstSegments), Crash = 3D-Splitter + echter Kamera-Shake (roll/pitch)
+  + weisser DOM-Blitz; `viewState()`-Naht in ALLEN Szenen, fuer den Kampf
+  erweitert um shoot/steer/shots/bursts/crash; Naht = `game.renderBackend`).
   CDP-FALLE: unter `--headless=new` steht rAF ohne erzwungene Frames still —
   Sichtpruefungs-Skripte pumpen Frames per Wegwerf-Screenshot und pollen
-  `window.spacemaze` (Details PLAN2026.md, Stufe-3-Notizen).
+  `window.spacemaze`; ZEITRAFFER dabei beachten: ~5 rAF a 0.1s pro Pump =
+  0.5s Spielzeit, kurze Effekte sofort fotografieren (Details PLAN2026.md,
+  Stufe-3/4-Notizen).
 - Boris sieht aktuell die Terminal-Ausgaben evtl. NICHT (Client-Hänger) — wichtige
   Ergebnisse im Antworttext zusammenfassen; visuell prüft er im Browser.
 

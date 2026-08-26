@@ -10,8 +10,14 @@
 // Slerp, dieselben Zeitkurven wie 1980; die Waende wachsen/schrumpfen mit),
 // Karte als Draufsicht mit Weg, S/G-/Kompass-Markern und Feind-Kreuzen.
 // Ego-Ansicht (Stufe 1+2): Kamera aus playing.viewState(), Bump-Blitz +
-// Funken. Texte laufen als DOM-Overlay (Platzhalter bis zur HUD-Frage in
-// Stufe 6). Alle Animation haengt an game.time / den Szenen-Uhren.
+// Funken. Kampf (Stufe 4): Tanker als Okta-Rauten in Prototyp-Optik
+// (dunkler Koerper, Glut-Kanten, drehen/schweben), Schuesse als weisse
+// Stern-Billboards, Fadenkreuz in der Welt, Splitter-Explosionen aus
+// burst.js; Crash = Splitter + echter Kamera-Shake (rollOsc/pitchOsc
+// kommen ueber roll/pitch) + weisser Blitz -- das 1980-Bild-Zerbersten
+// bleibt 1980. Texte laufen als DOM-Overlay (Platzhalter bis zur
+// HUD-Frage in Stufe 6). Alle Animation haengt an game.time / den
+// Szenen-Uhren.
 
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -23,6 +29,8 @@ import { levelColor, enemyColor, spinnerColor } from '../core/levels.js';
 import { PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA } from '../render/colors.js';
 import { EYE_RATIO, cellSize } from '../scenes/mazeView.js';
 import { burstSegments } from '../world/burst.js';
+import { ENEMY } from '../world/enemies.js';
+import { SHOTS, aimYaw, shotSegments } from '../world/shots.js';
 import { growthOutline } from '../world/mazeGeometry.js';
 import { spinnerMarkers } from '../world/spinners.js';
 import { flipperMarkers } from '../world/flippers.js';
@@ -71,6 +79,21 @@ const SPARK_OFF = 0.1;       // Abstand des Ursprungs von der Wandflaeche
                              // (Gangbreiten) -- sonst halb IN der Wand geboren
 
 const FOE_MARK_RATIO = 0.22; // Kreuz-Halbarm der Feind-Marker (Gangbreiten)
+
+// Kampf (Stufe 4). Tanker in Prototyp-Optik: Groesse/Puls aus ENEMY (wie die
+// 1980-Raute), Drehen und Schweben aus dem Prototyp (dort ertastete Werte).
+const TANKER_WIDTH = 0.75;      // Breite relativ zur Hoehe (wie die 1980-Raute)
+const TANKER_SPIN = 0.7;        // rad/s Drehung um die Hochachse
+const TANKER_HOVER = 0.25;      // Schwebe-Hub (3D-Einheiten)
+const TANKER_HOVER_FREQ = 1.1;  // rad/s des Schwebens
+const TANKER_BODY_DIM = 0.13;   // Koerper-Farbe = Feind-Farbe stark abgedunkelt
+const TANKER_GLOW = 0.16;       // Emissiv-Glut des Koerpers
+const TANKER_EDGE_HDR = 3.2;    // Kanten-Boost (Bloom-Glut wie im Prototyp)
+const CROSSHAIR_DIST = 2.5;     // Fadenkreuz-Anker (Gangbreiten voraus, wie 1980)
+const CROSSHAIR_SIZE = 0.12;    // Fadenkreuz-Halbarm (Gangbreiten)
+const CROSSHAIR_GAP = 0.4;      // Luecke in der Mitte (Anteil des Halbarms)
+const CRASH_FLASH = 0.18;       // s: weisser Einschlag-Blitz blendet aus (wie 1980)
+const BURST_HDR = 2.4;          // Splitter-Farben leicht in den Bloom geboostet
 
 // Leuchtfeuer in der Draufsicht: BLASSE Lichtsaeule am Ziel (Boris' Punkt 4,
 // 26.8.2026 -- "macht alles verstehbarer"), die Schwenks blenden von dort
@@ -136,6 +159,13 @@ export function createBackend2026(container = document.body) {
   const headline = overlay('left:0;right:0;top:12vh;text-align:center;' +
     'font-size:min(7vh,52px);letter-spacing:.18em;');
 
+  // Weisser Einschlag-Blitz des Crashs (Stufe 4) -- das 2026-Pendant zu
+  // renderer.flash; liegt UNTER dem Fade (der Szenen-Uebergang deckt alles).
+  const flashEl = document.createElement('div');
+  flashEl.style.cssText =
+    'position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;';
+  root.appendChild(flashEl);
+
   const fade = document.createElement('div');
   fade.style.cssText =
     'position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;';
@@ -188,6 +218,12 @@ export function createBackend2026(container = document.body) {
     world.outlineMat.opacity = 1;
     world.outlineLines.visible = true;
     if (world.growth?.lines) world.growth.lines.visible = false;
+    // Kampf-Objekte (Stufe 4): nur die Ego-Ansicht schaltet sie sichtbar --
+    // in den Draufsichten stehen stattdessen die Feind-Kreuze.
+    if (world.tankers?.group) world.tankers.group.visible = false;
+    if (world.shotLines) world.shotLines.visible = false;
+    if (world.crosshair) world.crosshair.visible = false;
+    if (world.burstPool) for (const p of world.burstPool) p.mesh.visible = false;
   }
 
   // Gemeinsame Welt-Animation: Sterne funkeln, Leuchtfeuer pulsiert -- und am
@@ -268,6 +304,179 @@ export function createBackend2026(container = document.body) {
     pos.needsUpdate = true;
     s.geometry.setDrawRange(0, burst.segments.length * 2);
     s.material.opacity = burst.fade;
+  }
+
+  // --- Kampf (Stufe 4): Tanker, Schuesse, Fadenkreuz, Explosionen -------------
+
+  // Tanker in Prototyp-Optik: dunkler Okta-Koerper mit Glut-Kanten (der
+  // Bloom macht das Gluehen). Gebaut pro Feind-LISTE (game.enemies): Retry
+  // wuerfelt eine neue Liste, Resume behaelt sie samt Abschuessen -- die
+  // Identitaet der Liste ist genau der richtige Rebuild-Schluessel.
+  // Geometrie und Materialien werden von allen Tankern geteilt.
+  function ensureTankers(game) {
+    if (!world.tankers) world.tankers = { src: undefined, group: null, items: [] };
+    const t = world.tankers;
+    if (t.src === game.enemies) return t;
+    t.src = game.enemies;
+    if (t.group) {
+      world.scene.remove(t.group);
+      t.geo.dispose();
+      t.edgeGeo.dispose();
+      t.bodyMat.dispose();
+      t.edgeMat.dispose();
+    }
+    t.group = new THREE.Group();
+    t.items = [];
+    t.geo = new THREE.OctahedronGeometry(1);
+    t.edgeGeo = new THREE.EdgesGeometry(t.geo);
+    const col = new THREE.Color(enemyColor(game.level));
+    t.bodyMat = new THREE.MeshStandardMaterial({
+      color: col.clone().multiplyScalar(TANKER_BODY_DIM),
+      roughness: 0.6, metalness: 0.1,
+      emissive: col, emissiveIntensity: TANKER_GLOW,
+    });
+    t.edgeMat = new THREE.LineBasicMaterial({ color: col.clone().multiplyScalar(TANKER_EDGE_HDR) });
+    for (const foe of game.enemies ?? []) {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(t.geo, t.bodyMat));
+      g.add(new THREE.LineSegments(t.edgeGeo, t.edgeMat));
+      t.group.add(g);
+      t.items.push({ foe, obj: g });
+    }
+    world.scene.add(t.group);
+    return t;
+  }
+
+  // Pro Frame: Puls wie die 1980-Raute (ENEMY.pulseFreq/Amp an der Szenenzeit,
+  // individuelle Phase), Drehen und Schweben wie im Prototyp (game.time --
+  // laeuft ueber Szenen hinweg weiter). Position folgt der Patrouille live.
+  function updateTankers(game, view) {
+    const t = ensureTankers(game);
+    if (!t.items.length) return;
+    t.group.visible = true;
+    const k = world.kLocal;
+    const s = ENEMY.size * UNITS_PER_CELL; // Rauten-Halbhoehe in 3D-Einheiten
+    for (const { foe, obj } of t.items) {
+      obj.visible = foe.alive;
+      if (!foe.alive) continue;
+      const pulse = 1 + ENEMY.pulseAmp
+        * Math.sin(2 * Math.PI * ENEMY.pulseFreq * view.sceneT + foe.phase);
+      obj.scale.set(TANKER_WIDTH * s * pulse, s * pulse, TANKER_WIDTH * s * pulse);
+      obj.position.set(foe.x * k,
+        EYE + TANKER_HOVER * Math.sin(game.time * TANKER_HOVER_FREQ + foe.phase),
+        foe.z * k);
+      obj.rotation.y = game.time * TANKER_SPIN + foe.phase;
+    }
+  }
+
+  // Projektile: dieselbe pure Stern-Geometrie wie 1980 (world/shots.js,
+  // rotierende Billboards) als weisse HDR-Segmente in EINEM wiederverwendeten
+  // LineSegments -- die Tempest-Regel deckelt die Puffergroesse (max 8).
+  function updateShots(view, k) {
+    if (!view.shots.length) return; // resetWorldFrame hat schon versteckt
+    if (!world.shotLines) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position',
+        new THREE.BufferAttribute(new Float32Array(SHOTS.max * 3 * 6), 3));
+      world.shotLines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+        color: hdr('#ffffff', 2.5),
+      }));
+      world.shotLines.frustumCulled = false;
+      world.scene.add(world.shotLines);
+    }
+    const pos = world.shotLines.geometry.attributes.position;
+    const opts = { cell: view.cell, yaw: view.yaw, height: EYE_RATIO * view.cell };
+    let j = 0;
+    for (const sh of view.shots) {
+      for (const [a, b] of shotSegments(sh, view.sceneT, opts)) {
+        pos.setXYZ(j++, a[0] * k, a[1] * k, a[2] * k);
+        pos.setXYZ(j++, b[0] * k, b[1] * k, b[2] * k);
+      }
+    }
+    pos.needsUpdate = true;
+    world.shotLines.geometry.setDrawRange(0, j);
+    world.shotLines.visible = true;
+  }
+
+  // Fadenkreuz: haengt an der ZIELRICHTUNG (aimYaw = Blick + gerampter
+  // Lenk-Ausschlag) und sitzt als kleines Kreuz IN DER WELT 2.5 Gangbreiten
+  // voraus -- es atmet mit der Perspektive und rollt mit der Kamera mit
+  // (das 1980-Pendant zeichnet im Sway). Querarme in der Bildebene des
+  // Blicks (Rechts-Richtung aus yaw, wie shotSegments).
+  function updateCrosshair(view, k) {
+    if (!view.shoot || view.crash || view.reached) return;
+    if (!world.crosshair) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(4 * 6), 3));
+      world.crosshair = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+        color: hdr('#ffffff', 1.1), transparent: true, opacity: 0.85, fog: false,
+      }));
+      world.crosshair.frustumCulled = false;
+      world.scene.add(world.crosshair);
+    }
+    const aim = aimYaw(view.yaw, view.steer);
+    const d = CROSSHAIR_DIST * view.cell;
+    const cx = (view.px - Math.sin(aim) * d) * k;
+    const cy = EYE;
+    const cz = (view.pz - Math.cos(aim) * d) * k;
+    const r = CROSSHAIR_SIZE * view.cell * k;
+    const g = r * CROSSHAIR_GAP;
+    const rx = Math.cos(view.yaw); // Rechts-Richtung der Bildebene (xz)
+    const rz = -Math.sin(view.yaw);
+    const pos = world.crosshair.geometry.attributes.position;
+    let j = 0;
+    const put = (x1, y1, z1, x2, y2, z2) => {
+      pos.setXYZ(j++, x1, y1, z1);
+      pos.setXYZ(j++, x2, y2, z2);
+    };
+    put(cx, cy + g, cz, cx, cy + r, cz);
+    put(cx, cy - r, cz, cx, cy - g, cz);
+    put(cx - rx * r, cy, cz - rz * r, cx - rx * g, cy, cz - rz * g);
+    put(cx + rx * g, cy, cz + rz * g, cx + rx * r, cy, cz + rz * r);
+    pos.needsUpdate = true;
+    world.crosshair.visible = true;
+  }
+
+  // Splitter-Explosionen (Verpuffen an der Wand, Tanker-Abschuss, Crash):
+  // dieselben puren burst.js-Spezifikationen, die die Szene fuehrt
+  // (view.bursts) -- reine Funktion des Alters, deterministisch. Kleiner
+  // Pool aus LineSegments mit eigener Farbe pro Explosion (die Farben
+  // unterscheiden sich: Feind-Farbe, Schuss-Weiss).
+  function updateBursts(view, k) {
+    if (!world.burstPool) world.burstPool = [];
+    const pool = world.burstPool;
+    let used = 0;
+    for (const b of view.bursts) {
+      const geo = burstSegments(view.sceneT - b.born, b);
+      if (!geo) continue;
+      let p = pool[used];
+      const floats = geo.segments.length * 6;
+      if (!p || p.cap < floats) {
+        if (p) {
+          world.scene.remove(p.mesh);
+          p.mesh.geometry.dispose();
+          p.mesh.material.dispose();
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(floats), 3));
+        const mesh = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ transparent: true }));
+        mesh.frustumCulled = false;
+        world.scene.add(mesh);
+        p = pool[used] = { mesh, cap: floats };
+      }
+      const pos = p.mesh.geometry.attributes.position;
+      let j = 0;
+      for (const [a, c] of geo.segments) {
+        pos.setXYZ(j++, a[0] * k, a[1] * k, a[2] * k);
+        pos.setXYZ(j++, c[0] * k, c[1] * k, c[2] * k);
+      }
+      pos.needsUpdate = true;
+      p.mesh.geometry.setDrawRange(0, j);
+      p.mesh.material.opacity = geo.fade;
+      p.mesh.material.color.set(b.color ?? '#ffffff').multiplyScalar(BURST_HDR);
+      p.mesh.visible = true;
+      used++;
+    }
   }
 
   // --- Karten-Diagramm: Wachstums-Kontur, Weg, Feind-Kreuze -------------------
@@ -607,6 +816,15 @@ export function createBackend2026(container = document.body) {
     }
     updateSparks(view, b, k);
 
+    // Kampf (Stufe 4): Tanker, Projektile, Fadenkreuz, Splitter-Explosionen.
+    // Der Crash braucht hier nichts Eigenes -- seine Splitter liegen in
+    // view.bursts, der Kamera-Shake kommt echt ueber view.roll/pitch
+    // (rollOsc/pitchOsc), und den weissen Blitz setzt render() aufs Bild.
+    updateTankers(game, view);
+    updateShots(view, k);
+    updateCrosshair(view, k);
+    updateBursts(view, k);
+
     camera.position.set(x, EYE, z);
     // Kamera-Konvention wie im Core: forward = (-sin yaw, 0, -cos yaw) --
     // exakt Three.js' Blick nach -z, um yaw gegiert. Roll/Nick sind hier
@@ -636,10 +854,11 @@ export function createBackend2026(container = document.body) {
     switch (game.stateKey) {
       case State.PLAYING: {
         const view = game.current.viewState?.();
+        if (view?.crash) return '';
         if (view?.reached) return 'YOU MADE IT';
-        return view?.drive
-          ? 'FIND THE EXIT · LEFT/RIGHT STEER · Q MAP'
-          : 'FIND THE EXIT · ARROWS MOVE · Q MAP';
+        const steer = view?.drive ? 'LEFT/RIGHT STEER' : 'ARROWS MOVE';
+        return 'FIND THE EXIT · ' + steer
+          + (view?.shoot ? ' · SPACE FIRE' : '') + ' · Q MAP';
       }
       case State.MAP: {
         if (game.current.viewState?.()?.fade < 0.99) return '';
@@ -696,6 +915,13 @@ export function createBackend2026(container = document.body) {
       composer.render();
 
       updateOverlays(game);
+
+      // Crash-Einschlag (Stufe 4): weisser Blitz blendet in CRASH_FLASH aus,
+      // waehrend die Splitter fliegen (analog renderer.flash in 1980).
+      const pv = game.stateKey === State.PLAYING ? game.current.viewState?.() : null;
+      flashEl.style.opacity = pv?.crash && pv.crash.t < CRASH_FLASH
+        ? String(0.9 * (1 - pv.crash.t / CRASH_FLASH))
+        : '0';
 
       // Fade-Uebergang analog renderer.fillBlack in game.render().
       const tr = game.transition;

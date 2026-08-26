@@ -147,6 +147,79 @@ test('Playing (Fahrt, Level 6): viewState mit drive/roll/pitch und Auftreffpunkt
   assert.ok(maxRoll > 1e-4, 'rollOsc/bank erreichen die 2026-Kamera');
 });
 
+// Stufe 4: Kampf-Naht -- Schuesse, Fadenkreuz-Lenkgroesse und die Splitter-
+// Explosionen liegen im viewState (die Tanker liest die Engine von
+// game.enemies, dort leben sie samt Resume/Retry-Regeln).
+test('Playing (Kampf, Level 11): viewState mit Schuessen und Bursts', () => {
+  const g = new Game();
+  g.level = 11;
+  g.dispatch(GameEvent.START);
+  advance(g, 0.8 + 4.5 + 2.0); // -> MazeGen -> Falling -> Playing
+  assert.equal(g.stateKey, State.PLAYING);
+  assert.ok(g.enemies?.length > 0, 'MazeGen hat die Tanker gewuerfelt');
+
+  let view = g.current.viewState();
+  assert.equal(view.shoot, true);
+  assert.ok(Number.isFinite(view.steer), 'gerampte Lenkgroesse fuers Fadenkreuz');
+  assert.deepEqual(view.shots, []);
+  assert.equal(view.crash, null);
+
+  // Space-Dauerfeuer: Projektile erscheinen im viewState; spaetestens an der
+  // ersten Wand verpufft eines als Splitter-Explosion (view.bursts).
+  g.keys.add(' ');
+  let sawShot = false;
+  let burst = null;
+  for (let t = 0; t < 6 && !(sawShot && burst); t += 1 / 60) {
+    g.update(1 / 60);
+    view = g.current.viewState();
+    if (view.shots.length > 0) sawShot = true;
+    if (!burst && view.bursts.length > 0) [burst] = view.bursts;
+  }
+  g.keys.delete(' ');
+  assert.ok(sawShot, 'Projektile liegen im viewState');
+  assert.ok(burst, 'Verpuffen/Abschuss erzeugt eine Splitter-Explosion');
+  assert.ok(burst.center.length === 3 && burst.center.every(Number.isFinite));
+  assert.ok(burst.life > 0 && typeof burst.color === 'string',
+    'die Explosion ist eine vollstaendige burst.js-Spezifikation');
+});
+
+test('Playing (Kampf): Feindberuehrung setzt crash im viewState und Game Over', () => {
+  const g = new Game();
+  g.level = 11;
+  g.dispatch(GameEvent.START);
+  advance(g, 0.8 + 4.5 + 2.0);
+  assert.equal(g.stateKey, State.PLAYING);
+
+  // Einen Tanker direkt auf die Spielerlage setzen: der naechste Schritt
+  // ist die Beruehrung -- deterministisch, ohne dorthin steuern zu muessen.
+  const foe = g.enemies[0];
+  foe.patrol = null;
+  foe.x = g.playerState.px;
+  foe.z = g.playerState.pz;
+  g.update(1 / 60);
+
+  const view = g.current.viewState();
+  assert.ok(view.crash, 'Crash-Zustand liegt im viewState');
+  assert.ok(view.crash.t >= 0, 'Crash-Alter fuer den weissen Blitz');
+  assert.ok([view.crash.x, view.crash.z].every(Number.isFinite), 'Einschlagsort');
+  assert.equal(g.gameOver, true);
+  assert.equal(foe.alive, false, 'die Beruehrung reisst den Tanker mit');
+  assert.ok(view.bursts.length >= 2, 'Crash-Explosion (zwei Splitter-Wuerfe)');
+
+  // Der Shake erreicht die 2026-Kamera echt ueber roll/pitch (Oszillatoren).
+  let maxRoll = 0;
+  for (let t = 0; t < 0.3; t += 1 / 60) {
+    g.update(1 / 60);
+    const v = g.current.viewState();
+    maxRoll = Math.max(maxRoll, Math.abs(v.roll), Math.abs(v.pitch));
+  }
+  assert.ok(maxRoll > 1e-4, 'Crash-Kick der Oszillatoren kommt an');
+
+  // Nach CRASH_TIME schleudert es hinaus in den (schnellen) Rueckschwenk.
+  advance(g, 1.2);
+  assert.equal(g.stateKey, State.RISING);
+});
+
 // Stufe 3: Vorrang-Regel des Schalters -- URL vor gemerkter Wahl vor Default.
 test('resolveEngine: URL-Parameter vor localStorage vor Default', () => {
   assert.equal(resolveEngine('', null), ENGINE_1980);
