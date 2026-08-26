@@ -72,6 +72,13 @@ export function buildWorld(maze) {
   world.bumpLight = new THREE.PointLight(0xffffff, 0, 30, 2);
   scene.add(world.bumpLight);
 
+  // Crash-Licht (Stufe-4-Politur): greller Puls am Einschlagsort des
+  // Spieler-Crashs, laesst Gangwaende und Truemmer aufleuchten.
+  // Intensitaet 0 = aus; backend.js pulst ihn (mit Abstands-Deckel --
+  // der Crash-Ort liegt SEHR nah an der Kamera, decay-2-Falle).
+  world.crashLight = new THREE.PointLight(0xffffff, 0, 60, 2);
+  scene.add(world.crashLight);
+
   return world;
 }
 

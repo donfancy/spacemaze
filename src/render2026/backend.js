@@ -28,9 +28,10 @@ import { State } from '../core/states.js';
 import { levelColor, enemyColor, spinnerColor } from '../core/levels.js';
 import { PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA } from '../render/colors.js';
 import { EYE_RATIO, cellSize } from '../scenes/mazeView.js';
-import { burstSegments } from '../world/burst.js';
+import { burstSegments, burstShards } from '../world/burst.js';
 import { ENEMY } from '../world/enemies.js';
 import { SHOTS, aimYaw, shotSegments } from '../world/shots.js';
+import { FIREWORK_COLORS } from '../world/fireworks.js';
 import { growthOutline } from '../world/mazeGeometry.js';
 import { spinnerMarkers } from '../world/spinners.js';
 import { flipperMarkers } from '../world/flippers.js';
@@ -92,8 +93,37 @@ const TANKER_EDGE_HDR = 3.2;    // Kanten-Boost (Bloom-Glut wie im Prototyp)
 const CROSSHAIR_DIST = 2.5;     // Fadenkreuz-Anker (Gangbreiten voraus, wie 1980)
 const CROSSHAIR_SIZE = 0.12;    // Fadenkreuz-Halbarm (Gangbreiten)
 const CROSSHAIR_GAP = 0.4;      // Luecke in der Mitte (Anteil des Halbarms)
-const CRASH_FLASH = 0.18;       // s: weisser Einschlag-Blitz blendet aus (wie 1980)
 const BURST_HDR = 2.4;          // Splitter-Farben leicht in den Bloom geboostet
+const SHARD_HDR = 1.35;         // flaechige Truemmer: gluehende Platten, kein Voll-Bloom
+
+// Schuesse: groesser und schneller rotierend als die 1980-Defaults, damit
+// sie sich klar von den Kollisionsfunken abheben (Boris' Punkt); dazu
+// FLIRRENDE Arcade-Farben zum Weiss gemischt (harte Schaltung wie 1981).
+const SHOT_PARAMS = { size: 0.12, spin: 18 };
+const SHOT_FLICKER = 12;        // Farb-Schaltrate (Hz)
+const SHOT_WHITE_MIX = 0.55;    // Weiss-Anteil der Arcade-Farben
+
+// Death-Crash (Stufe-4-Politur, "spektakulaerer"): laengerer weisser
+// Vollbild-Blitz + greller Licht-Puls am Einschlag, dazu die grossen
+// Truemmer-Platten aus burstShards (Spezifikation kommt aus der Szene).
+const CRASH_FLASH = 0.4;        // s: weisser Einschlag-Blitz (quadratisch ausklingend)
+const CRASH_LIGHT = 3200;       // Spitzen-Intensitaet des Crash-Lichts
+const CRASH_LIGHT_TIME = 0.7;   // s: Licht-Puls klingt aus
+const CRASH_LIGHT_CAP = 60;     // Deckel: Intensitaet <= CAP * Kamera-Abstand^2
+                                // (decay-2-Falle -- der Crash ist direkt vor der Kamera)
+
+// Karten-Glow (Boris' Punkt "Overglow ab Level 11"): der Bloom-Schwellwert
+// (0.85) arbeitet auf LUMINANZ -- Phosphor-Gruen (lum ~0.81) landet mit dem
+// festen HDR-Boost x2.2 weit darueber und ueberglueht die dichte Karte,
+// Tempest-Blau (lum ~0.48) nur knapp. In den DIAGRAMM-Ansichten wird der
+// Boost deshalb LUMINANZ-NORMIERT (Ziel knapp ueberm Schwellwert), die
+// Schwenks blenden zum vollen Ego-Boost; die Ego-Ansicht bleibt unveraendert.
+const EGO_BOOST = 2.2;          // der bisherige feste HDR-Boost (applyTheme)
+const DIAGRAM_LINE_LUM = 1.0;   // Ziel-Luminanz der Karten-Linien
+const DIAGRAM_MARKER_LUM = 1.0; // Buchstaben: ueberall ein LEICHTER Glow
+                                // (1.15 machte um S/G runde Bloom-Flecken)
+const MARKER_BOOST_MAX = 3.0;   // Deckel fuer dunkle Farben (Blau braucht mehr Boost)
+const luminance = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 
 // Leuchtfeuer in der Draufsicht: BLASSE Lichtsaeule am Ziel (Boris' Punkt 4,
 // 26.8.2026 -- "macht alles verstehbarer"), die Schwenks blenden von dort
@@ -220,10 +250,37 @@ export function createBackend2026(container = document.body) {
     if (world.growth?.lines) world.growth.lines.visible = false;
     // Kampf-Objekte (Stufe 4): nur die Ego-Ansicht schaltet sie sichtbar --
     // in den Draufsichten stehen stattdessen die Feind-Kreuze.
-    if (world.tankers?.group) world.tankers.group.visible = false;
+    if (world.tankers?.group) {
+      world.tankers.group.visible = false;
+      world.tankers.mirrorGroup.visible = false;
+    }
     if (world.shotLines) world.shotLines.visible = false;
     if (world.crosshair) world.crosshair.visible = false;
-    if (world.burstPool) for (const p of world.burstPool) p.mesh.visible = false;
+    if (world.burstPool) {
+      for (const p of world.burstPool) {
+        p.mesh.visible = false;
+        if (p.shardMesh) p.shardMesh.visible = false;
+      }
+    }
+    world.crashLight.intensity = 0;
+  }
+
+  // Karten-Glow dosieren (s. Konstanten oben): mix 0 = Ego (voller Boost
+  // x2.2 wie applyTheme), mix 1 = Diagramm (luminanz-normiert knapp ueberm
+  // Bloom-Schwellwert -- Gruen wird zahmer, Blau bleibt praktisch gleich,
+  // die Buchstaben gluehen in JEDER Farbe leicht). Die Schwenks blenden.
+  function setLineGlow(mix) {
+    const key = mix.toFixed(3) + '|' + themeHex;
+    if (world.glowKey === key) return;
+    world.glowKey = key;
+    const col = new THREE.Color(themeHex);
+    const lum = Math.max(luminance(col), 1e-3);
+    const lineBoost = EGO_BOOST + (Math.min(EGO_BOOST, DIAGRAM_LINE_LUM / lum) - EGO_BOOST) * mix;
+    world.lineMat.color.copy(col).multiplyScalar(lineBoost);
+    world.outlineMat.color.copy(col).multiplyScalar(lineBoost);
+    const markerBoost = EGO_BOOST
+      + (Math.min(MARKER_BOOST_MAX, DIAGRAM_MARKER_LUM / lum) - EGO_BOOST) * mix;
+    for (const { mat } of world.markerMats) mat.color.copy(col).multiplyScalar(markerBoost);
   }
 
   // Gemeinsame Welt-Animation: Sterne funkeln, Leuchtfeuer pulsiert -- und am
@@ -314,18 +371,23 @@ export function createBackend2026(container = document.body) {
   // Identitaet der Liste ist genau der richtige Rebuild-Schluessel.
   // Geometrie und Materialien werden von allen Tankern geteilt.
   function ensureTankers(game) {
-    if (!world.tankers) world.tankers = { src: undefined, group: null, items: [] };
+    if (!world.tankers) {
+      world.tankers = { src: undefined, group: null, mirrorGroup: null, items: [] };
+    }
     const t = world.tankers;
     if (t.src === game.enemies) return t;
     t.src = game.enemies;
     if (t.group) {
       world.scene.remove(t.group);
+      world.mirror.remove(t.mirrorGroup);
       t.geo.dispose();
       t.edgeGeo.dispose();
       t.bodyMat.dispose();
       t.edgeMat.dispose();
+      t.mirrorEdgeMat.dispose();
     }
     t.group = new THREE.Group();
+    t.mirrorGroup = new THREE.Group();
     t.items = [];
     t.geo = new THREE.OctahedronGeometry(1);
     t.edgeGeo = new THREE.EdgesGeometry(t.geo);
@@ -334,30 +396,42 @@ export function createBackend2026(container = document.body) {
       color: col.clone().multiplyScalar(TANKER_BODY_DIM),
       roughness: 0.6, metalness: 0.1,
       emissive: col, emissiveIntensity: TANKER_GLOW,
+      side: THREE.DoubleSide, // die Spiegelung (scale.y=-1) invertiert das Winding
     });
     t.edgeMat = new THREE.LineBasicMaterial({ color: col.clone().multiplyScalar(TANKER_EDGE_HDR) });
+    // Spiegel-Kanten wie ueberall OHNE HDR (kein Bloom im Spiegelbild).
+    t.mirrorEdgeMat = new THREE.LineBasicMaterial({ color: col.clone().multiplyScalar(0.85) });
     for (const foe of game.enemies ?? []) {
       const g = new THREE.Group();
       g.add(new THREE.Mesh(t.geo, t.bodyMat));
       g.add(new THREE.LineSegments(t.edgeGeo, t.edgeMat));
       t.group.add(g);
-      t.items.push({ foe, obj: g });
+      const m = new THREE.Group();
+      m.add(new THREE.Mesh(t.geo, t.bodyMat));
+      m.add(new THREE.LineSegments(t.edgeGeo, t.mirrorEdgeMat));
+      t.mirrorGroup.add(m);
+      t.items.push({ foe, obj: g, mirrorObj: m });
     }
     world.scene.add(t.group);
+    // Unter die Spiegel-Wurzel (scale.y=-1): gleiche Transformationen wie das
+    // Original erscheinen automatisch unter dem Boden (Boris' Punkt 2).
+    world.mirror.add(t.mirrorGroup);
     return t;
   }
 
   // Pro Frame: Puls wie die 1980-Raute (ENEMY.pulseFreq/Amp an der Szenenzeit,
   // individuelle Phase), Drehen und Schweben wie im Prototyp (game.time --
-  // laeuft ueber Szenen hinweg weiter). Position folgt der Patrouille live.
+  // laeuft ueber Szenen hinweg weiter). Position folgt der Patrouille live;
+  // das Spiegelbild bekommt dieselbe Transformation (Parent spiegelt).
   function updateTankers(game, view) {
     const t = ensureTankers(game);
     if (!t.items.length) return;
     t.group.visible = true;
+    t.mirrorGroup.visible = true;
     const k = world.kLocal;
     const s = ENEMY.size * UNITS_PER_CELL; // Rauten-Halbhoehe in 3D-Einheiten
-    for (const { foe, obj } of t.items) {
-      obj.visible = foe.alive;
+    for (const { foe, obj, mirrorObj } of t.items) {
+      obj.visible = mirrorObj.visible = foe.alive;
       if (!foe.alive) continue;
       const pulse = 1 + ENEMY.pulseAmp
         * Math.sin(2 * Math.PI * ENEMY.pulseFreq * view.sceneT + foe.phase);
@@ -366,34 +440,59 @@ export function createBackend2026(container = document.body) {
         EYE + TANKER_HOVER * Math.sin(game.time * TANKER_HOVER_FREQ + foe.phase),
         foe.z * k);
       obj.rotation.y = game.time * TANKER_SPIN + foe.phase;
+      mirrorObj.position.copy(obj.position);
+      mirrorObj.scale.copy(obj.scale);
+      mirrorObj.rotation.copy(obj.rotation);
     }
   }
 
   // Projektile: dieselbe pure Stern-Geometrie wie 1980 (world/shots.js,
-  // rotierende Billboards) als weisse HDR-Segmente in EINEM wiederverwendeten
-  // LineSegments -- die Tempest-Regel deckelt die Puffergroesse (max 8).
+  // rotierende Billboards) in EINEM wiederverwendeten LineSegments -- die
+  // Tempest-Regel deckelt die Puffergroesse (max 8). Abgrenzung zu den
+  // Kollisionsfunken (Boris' Punkt 3): groesser + schneller rotierend
+  // (SHOT_PARAMS) und in FLIRRENDEN Arcade-Farben zum Weiss gemischt
+  // (harte Schaltung mit SHOT_FLICKER, pro Stern-Linie eine Farbe).
+  const shotColor = new THREE.Color();
+  const shotWhite = new THREE.Color('#ffffff');
   function updateShots(view, k) {
     if (!view.shots.length) return; // resetWorldFrame hat schon versteckt
     if (!world.shotLines) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position',
         new THREE.BufferAttribute(new Float32Array(SHOTS.max * 3 * 6), 3));
+      geo.setAttribute('color',
+        new THREE.BufferAttribute(new Float32Array(SHOTS.max * 3 * 6), 3));
       world.shotLines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
-        color: hdr('#ffffff', 2.5),
+        vertexColors: true,
       }));
       world.shotLines.frustumCulled = false;
       world.scene.add(world.shotLines);
     }
     const pos = world.shotLines.geometry.attributes.position;
-    const opts = { cell: view.cell, yaw: view.yaw, height: EYE_RATIO * view.cell };
+    const col = world.shotLines.geometry.attributes.color;
+    const opts = {
+      cell: view.cell, yaw: view.yaw, height: EYE_RATIO * view.cell,
+      params: SHOT_PARAMS,
+    };
+    const tick = Math.floor(view.sceneT * SHOT_FLICKER);
     let j = 0;
+    let n = 0;
     for (const sh of view.shots) {
-      for (const [a, b] of shotSegments(sh, view.sceneT, opts)) {
+      n++;
+      const segs = shotSegments(sh, view.sceneT, opts);
+      for (let i = 0; i < segs.length; i++) {
+        const [a, b] = segs[i];
+        shotColor.set(FIREWORK_COLORS[(tick + n * 3 + i) % FIREWORK_COLORS.length])
+          .lerp(shotWhite, SHOT_WHITE_MIX)
+          .multiplyScalar(BURST_HDR);
+        col.setXYZ(j, shotColor.r, shotColor.g, shotColor.b);
         pos.setXYZ(j++, a[0] * k, a[1] * k, a[2] * k);
+        col.setXYZ(j, shotColor.r, shotColor.g, shotColor.b);
         pos.setXYZ(j++, b[0] * k, b[1] * k, b[2] * k);
       }
     }
     pos.needsUpdate = true;
+    col.needsUpdate = true;
     world.shotLines.geometry.setDrawRange(0, j);
     world.shotLines.visible = true;
   }
@@ -441,7 +540,10 @@ export function createBackend2026(container = document.body) {
   // dieselben puren burst.js-Spezifikationen, die die Szene fuehrt
   // (view.bursts) -- reine Funktion des Alters, deterministisch. Kleiner
   // Pool aus LineSegments mit eigener Farbe pro Explosion (die Farben
-  // unterscheiden sich: Feind-Farbe, Schuss-Weiss).
+  // unterscheiden sich: Feind-Farbe, Schuss-Weiss). Traegt die
+  // Spezifikation `shardCount` (Tanker-Abschuss, Crash), fliegen
+  // zusaetzlich FLAECHIGE Truemmer-Dreiecke mit (burstShards, Boris'
+  // Punkt 4) -- gluehende Platten in der Explosionsfarbe, taumelnd.
   function updateBursts(view, k) {
     if (!world.burstPool) world.burstPool = [];
     const pool = world.burstPool;
@@ -456,13 +558,18 @@ export function createBackend2026(container = document.body) {
           world.scene.remove(p.mesh);
           p.mesh.geometry.dispose();
           p.mesh.material.dispose();
+          if (p.shardMesh) {
+            world.scene.remove(p.shardMesh);
+            p.shardMesh.geometry.dispose();
+            p.shardMesh.material.dispose();
+          }
         }
         const g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(floats), 3));
         const mesh = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ transparent: true }));
         mesh.frustumCulled = false;
         world.scene.add(mesh);
-        p = pool[used] = { mesh, cap: floats };
+        p = pool[used] = { mesh, cap: floats, shardMesh: null, shardCap: 0 };
       }
       const pos = p.mesh.geometry.attributes.position;
       let j = 0;
@@ -475,6 +582,36 @@ export function createBackend2026(container = document.body) {
       p.mesh.material.opacity = geo.fade;
       p.mesh.material.color.set(b.color ?? '#ffffff').multiplyScalar(BURST_HDR);
       p.mesh.visible = true;
+
+      const shards = b.shardCount ? burstShards(view.sceneT - b.born, b) : null;
+      if (shards) {
+        const sFloats = shards.triangles.length * 9;
+        if (!p.shardMesh || p.shardCap < sFloats) {
+          if (p.shardMesh) {
+            world.scene.remove(p.shardMesh);
+            p.shardMesh.geometry.dispose();
+            p.shardMesh.material.dispose();
+          }
+          const sg = new THREE.BufferGeometry();
+          sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(sFloats), 3));
+          p.shardMesh = new THREE.Mesh(sg, new THREE.MeshBasicMaterial({
+            transparent: true, side: THREE.DoubleSide, depthWrite: false,
+          }));
+          p.shardMesh.frustumCulled = false;
+          world.scene.add(p.shardMesh);
+          p.shardCap = sFloats;
+        }
+        const sPos = p.shardMesh.geometry.attributes.position;
+        let sj = 0;
+        for (const tri of shards.triangles) {
+          for (const [x, y, z] of tri) sPos.setXYZ(sj++, x * k, y * k, z * k);
+        }
+        sPos.needsUpdate = true;
+        p.shardMesh.geometry.setDrawRange(0, sj);
+        p.shardMesh.material.opacity = shards.fade;
+        p.shardMesh.material.color.set(b.color ?? '#ffffff').multiplyScalar(SHARD_HDR);
+        p.shardMesh.visible = true;
+      }
       used++;
     }
   }
@@ -687,6 +824,7 @@ export function createBackend2026(container = document.body) {
     if (!view?.maze) return drawPlaceholder(game);
     ensureWorld(view.maze, color);
     resetWorldFrame();
+    setLineGlow(1);
     setTopDownCamera();
     setWallHeight(world, 0);
     world.outlineLines.visible = false; // stattdessen die Teil-Kontur
@@ -706,6 +844,7 @@ export function createBackend2026(container = document.body) {
     ensureWorld(view.maze, color);
     resetWorldFrame();
     const e = view.e;
+    setLineGlow(1 - e);
     world.scene.fog.density = FOG_DENSITY * e;
     world.headlight.intensity = HEADLIGHT_INTENSITY * e;
     setWallHeight(world, e);
@@ -728,6 +867,7 @@ export function createBackend2026(container = document.body) {
     ensureWorld(view.maze, color);
     resetWorldFrame();
     const a = 1 - view.e;
+    setLineGlow(view.e);
     world.scene.fog.density = FOG_DENSITY * a;
     world.headlight.intensity = HEADLIGHT_INTENSITY * a;
     setWallHeight(world, a);
@@ -748,6 +888,7 @@ export function createBackend2026(container = document.body) {
     if (!view?.maze) return drawPlaceholder(game);
     ensureWorld(view.maze, color);
     resetWorldFrame();
+    setLineGlow(1);
     setTopDownCamera();
     setWallHeight(world, 0);
     const f = view.fade;
@@ -767,6 +908,7 @@ export function createBackend2026(container = document.body) {
     if (!view?.maze) return drawPlaceholder(game);
     ensureWorld(view.maze, color);
     resetWorldFrame();
+    setLineGlow(0);
     setFov(EGO_FOV);
     world.scene.fog.density = FOG_DENSITY;
     world.headlight.intensity = HEADLIGHT_INTENSITY;
@@ -817,13 +959,23 @@ export function createBackend2026(container = document.body) {
     updateSparks(view, b, k);
 
     // Kampf (Stufe 4): Tanker, Projektile, Fadenkreuz, Splitter-Explosionen.
-    // Der Crash braucht hier nichts Eigenes -- seine Splitter liegen in
-    // view.bursts, der Kamera-Shake kommt echt ueber view.roll/pitch
-    // (rollOsc/pitchOsc), und den weissen Blitz setzt render() aufs Bild.
+    // Der Crash bringt seine Splitter + Truemmer ueber view.bursts mit, der
+    // Kamera-Shake kommt echt ueber view.roll/pitch (rollOsc/pitchOsc), den
+    // weissen Vollbild-Blitz setzt render() aufs Bild -- hier kommt nur der
+    // grelle LICHT-Puls am Einschlag dazu (mit Abstands-Deckel: der Crash
+    // ist direkt vor der Kamera, decay-2-Falle).
     updateTankers(game, view);
     updateShots(view, k);
     updateCrosshair(view, k);
     updateBursts(view, k);
+    if (view.crash && view.crash.t < CRASH_LIGHT_TIME) {
+      const lp = world.crashLight.position;
+      lp.set(view.crash.x * k, EYE, view.crash.z * k);
+      const d2 = (lp.x - x) ** 2 + (lp.z - z) ** 2;
+      const fadeL = (1 - view.crash.t / CRASH_LIGHT_TIME) ** 2;
+      world.crashLight.intensity =
+        Math.min(CRASH_LIGHT * fadeL, CRASH_LIGHT_CAP * Math.max(d2, 1));
+    }
 
     camera.position.set(x, EYE, z);
     // Kamera-Konvention wie im Core: forward = (-sin yaw, 0, -cos yaw) --
@@ -916,11 +1068,12 @@ export function createBackend2026(container = document.body) {
 
       updateOverlays(game);
 
-      // Crash-Einschlag (Stufe 4): weisser Blitz blendet in CRASH_FLASH aus,
-      // waehrend die Splitter fliegen (analog renderer.flash in 1980).
+      // Crash-Einschlag (Stufe 4): weisser Vollbild-Blitz, quadratisch
+      // ausklingend (haerter Einschlag, weiches Verglimmen), waehrend
+      // Splitter + Truemmer fliegen (analog renderer.flash in 1980).
       const pv = game.stateKey === State.PLAYING ? game.current.viewState?.() : null;
       flashEl.style.opacity = pv?.crash && pv.crash.t < CRASH_FLASH
-        ? String(0.9 * (1 - pv.crash.t / CRASH_FLASH))
+        ? String(0.95 * (1 - pv.crash.t / CRASH_FLASH) ** 2)
         : '0';
 
       // Fade-Uebergang analog renderer.fillBlack in game.render().

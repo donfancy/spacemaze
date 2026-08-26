@@ -107,13 +107,16 @@ export function shotsStep(maze, state, dt, opts) {
 // den Mittelpunkt, als Billboard in der Bildebene des Spielers (Ebene aus
 // lokaler Rechts-Richtung der Blickrichtung + Hochachse -- Projektile fliegen
 // fast immer nahe der Blickachse, der Restfehler ist unsichtbar).
-// opts = { cell, yaw, height, time }.
+// opts = { cell, yaw, height, params? } -- params ueberschreibt size/spin
+// (die 2026-Engine zeichnet die Sterne groesser und schneller rotierend,
+// damit sie sich von den Kollisionsfunken abheben; 1980 nutzt die Defaults).
 export function shotSegments(shot, time, opts) {
   const { cell, yaw, height } = opts;
-  const s = SHOTS.size * cell;
+  const params = { ...SHOTS, ...(opts.params ?? {}) };
+  const s = params.size * cell;
   const rx = Math.cos(yaw); // lokale Rechts-Richtung (xz) zur Blickrichtung yaw
   const rz = -Math.sin(yaw);
-  const spin = SHOTS.spin * time + shot.phase;
+  const spin = params.spin * time + shot.phase;
   const segs = [];
   for (let k = 0; k < 3; k++) {
     const a = spin + (k * Math.PI) / 3;

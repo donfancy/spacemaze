@@ -140,3 +140,15 @@ test('shotSegments: rotierender Stern aus drei Linien durch den Mittelpunkt', ()
   const later = shotSegments(shot, 0.05, opts);
   assert.notDeepEqual(segs, later, 'der Stern rotiert');
 });
+
+test('shotSegments: params ueberschreibt size/spin (2026 zeichnet groesser/schneller)', () => {
+  const shot = { x: 1, z: 2, phase: 0.5 };
+  const opts = { cell: CELL, yaw: 0, height: 2.5 };
+  const big = shotSegments(shot, 0, { ...opts, params: { size: SHOTS.size * 2 } });
+  const norm = shotSegments(shot, 0, opts);
+  const len = ([a, b]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  assert.ok(Math.abs(len(big[0]) - 2 * len(norm[0])) < 1e-9, 'doppelte Groesse');
+  // Schnellerer Spin: gleiche Zeit, anderer Drehwinkel.
+  const fast = shotSegments(shot, 0.05, { ...opts, params: { spin: SHOTS.spin * 3 } });
+  assert.notDeepEqual(fast, shotSegments(shot, 0.05, opts), 'anderer Drehwinkel');
+});

@@ -205,6 +205,8 @@ test('Playing (Kampf): Feindberuehrung setzt crash im viewState und Game Over', 
   assert.equal(g.gameOver, true);
   assert.equal(foe.alive, false, 'die Beruehrung reisst den Tanker mit');
   assert.ok(view.bursts.length >= 2, 'Crash-Explosion (zwei Splitter-Wuerfe)');
+  assert.ok(view.bursts[0].shardCount > 0,
+    'der Crash-Burst traegt die Truemmer-Spezifikation (burstShards, 2026)');
 
   // Der Shake erreicht die 2026-Kamera echt ueber roll/pitch (Oszillatoren).
   let maxRoll = 0;

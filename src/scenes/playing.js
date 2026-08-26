@@ -213,8 +213,10 @@ export function createPlaying(game) {
     game.audio?.play(crashPatch());
     const h = opts.height ?? EYE_RATIO * cell;
     const color = opts.color ?? enemyCol;
+    // shardCount/shardSize: flaechige Truemmer NUR fuer die 2026-Engine
+    // (burstShards -- 1980 zeichnet weiter nur die Linien-Splitter).
     bursts.push(
-      { born: sceneT, center: [at.x, h, at.z], seed: 11, count: 24, speed: 3.5 * cell, life: 1.2, size: 0.16 * cell, color },
+      { born: sceneT, center: [at.x, h, at.z], seed: 11, count: 24, speed: 3.5 * cell, life: 1.2, size: 0.16 * cell, color, shardCount: 9, shardSize: 0.38 * cell },
       { born: sceneT, center: [at.x, h, at.z], seed: 47, count: 16, speed: 2.5 * cell, life: 0.9, size: 0.12 * cell, color: SHOT_COLOR },
     );
     rollOsc.kick(CRASH_SHAKE_ROLL);
@@ -245,8 +247,9 @@ export function createPlaying(game) {
       game.audio?.play(boomPatch());
       bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: FLIPPER_COLOR });
     } else {
+      // Tanker-Abschuss: Funken-Splitter + flaechige Truemmer (nur 2026).
       game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: enemyCol });
+      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: enemyCol, shardCount: 6, shardSize: 0.3 * cell });
     }
   }
 
