@@ -233,27 +233,30 @@ test('Zustands-Zyklus direkt via dispatch (ohne Andocken)', () => {
   assert.equal(g.stateKey, State.STARTSCREEN);
 });
 
-test('Pfeiltasten waehlen das Level im Startscreen, begrenzt auf 1..30', () => {
+test('Pfeiltasten links/rechts waehlen das Level im Startscreen, begrenzt auf 1..30', () => {
   const g = new Game();
   assert.equal(g.level, 1);
 
-  g.handleKey('ArrowDown'); // unter Level 1 geht es nicht
+  g.handleKey('ArrowLeft'); // unter Level 1 geht es nicht
   assert.equal(g.level, 1);
 
   g.handleKey('ArrowRight');
-  g.handleKey('ArrowUp');
+  g.handleKey('ArrowRight');
   assert.equal(g.level, 3);
 
-  for (let i = 0; i < 40; i++) g.handleKey('ArrowUp'); // oben begrenzt
+  for (let i = 0; i < 40; i++) g.handleKey('ArrowRight'); // oben begrenzt
   assert.equal(g.level, 30);
   g.handleKey('ArrowLeft');
+  assert.equal(g.level, 29);
+
+  g.handleKey('ArrowUp'); // hoch/runter = Engine-Schalter, nicht Level
   assert.equal(g.level, 29);
 });
 
 test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry', () => {
   const g = new Game();
   const r = fakeRenderer();
-  for (let i = 0; i < 10; i++) g.handleKey('ArrowUp'); // Level 11
+  for (let i = 0; i < 10; i++) g.handleKey('ArrowRight'); // Level 11
   assert.equal(g.level, 11);
 
   g.dispatch(GameEvent.START);
@@ -306,8 +309,8 @@ test('gewaehltes Level bestimmt die Maze-Groesse (Level 3 -> n=13)', () => {
   const g = new Game();
   const r = fakeRenderer();
 
-  g.handleKey('ArrowUp');
-  g.handleKey('ArrowUp'); // Level 3
+  g.handleKey('ArrowRight');
+  g.handleKey('ArrowRight'); // Level 3
   g.handleKey('S');
   advance(g, r, 1.8); // Andocken -> MazeGen erzeugt das Labyrinth
   assert.equal(g.stateKey, State.MAZE_GEN);
@@ -318,7 +321,7 @@ test('Level 6 (schmale Waende, Fahrt): faehrt von selbst los, gelenkt wird mit l
   const g = new Game();
   const r = fakeRenderer();
 
-  for (let i = 0; i < 5; i++) g.handleKey('ArrowUp'); // Level 6
+  for (let i = 0; i < 5; i++) g.handleKey('ArrowRight'); // Level 6
   g.handleKey('S');
   advance(g, r, 1.8); // Andocken -> MazeGen
   assert.equal(g.stateKey, State.MAZE_GEN);
@@ -369,12 +372,12 @@ test('Pfeiltasten aendern das Level nur im Startscreen (nicht waehrend des Spiel
   g.handleKey('S');
   advance(g, r, 1.8);
   assert.equal(g.stateKey, State.MAZE_GEN);
-  g.handleKey('ArrowUp');
+  g.handleKey('ArrowRight');
   assert.equal(g.level, 1);
 
   advance(g, r, 4.5 + 2.0); // -> Falling -> Playing
   assert.equal(g.stateKey, State.PLAYING);
-  g.handleKey('ArrowUp');
+  g.handleKey('ArrowRight');
   assert.equal(g.level, 1);
 });
 

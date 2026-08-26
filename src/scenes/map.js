@@ -101,6 +101,13 @@ export function createMap(game) {
       }
     },
 
+    // Lese-Schnittstelle fuer die 2026-Engine (Stufe 3): nur die Ausblend-
+    // Stufe -- Maze, Weg, Feinde und Status liest das Backend direkt vom game.
+    viewState() {
+      if (!maze) return null;
+      return { maze, t, fade: exiting ? Math.max(0, 1 - exitT / EXIT_FADE) : 1 };
+    },
+
     onKey(key) {
       if (exiting) return; // waehrend des Ausblendens keine Eingaben mehr
       if (key === 'Q' && !game.reachedGoal) {

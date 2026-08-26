@@ -3,7 +3,7 @@
 
 import { Renderer } from './render/renderer.js';
 import { Game } from './core/game.js';
-import { parseEngine } from './core/engine.js';
+import { resolveEngine, ENGINE_2026 } from './core/engine.js';
 import { createAudioOutput } from './sound/audio.js';
 import { DebugConsole } from './debug/debugConsole.js';
 
@@ -15,13 +15,35 @@ const debugEnabled = new URLSearchParams(location.search).has('debug');
 
 // --- Rendering-Engine (PLAN2026.md): 1980 = 2D-Canvas, 2026 = Three.js ----------
 // Das 2026-Backend wird NUR bei Bedarf geladen (dynamischer Import) und wie
-// audio in game injiziert -- der Core importiert nie Three.js.
-const engine = parseEngine(location.search);
+// audio in game injiziert -- der Core importiert nie Three.js. Der Startscreen-
+// Schalter (Stufe 3) aendert game.engine LIVE: applyEngine() laedt das Backend
+// nach und blendet Canvas/Backend um; die Wahl landet in localStorage
+// (?engine= in der URL hat beim Laden Vorrang, siehe resolveEngine).
+const ENGINE_KEY = 'spacemaze.engine';
+let stored = null;
+try { stored = localStorage.getItem(ENGINE_KEY); } catch { /* privat-Modus o.ae. */ }
+const engine = resolveEngine(location.search, stored);
 let backend = null;
-if (engine === '2026') {
-  const { createBackend2026 } = await import('./render2026/backend.js');
-  backend = createBackend2026(document.body);
-  canvas.style.display = 'none'; // 1980-Canvas schlaeft, solange 2026 zeichnet
+let backendLoading = null;
+
+// Aktiv ist 2026 nur mit fertig geladenem Backend -- bis dahin zeichnet 1980
+// weiter (game.render faellt von selbst zurueck).
+function is2026Active(g) {
+  return g.engine === ENGINE_2026 && backend !== null;
+}
+
+function applyEngine(g) {
+  if (g.engine === ENGINE_2026 && !backend && !backendLoading) {
+    backendLoading = import('./render2026/backend.js').then(({ createBackend2026 }) => {
+      backend = createBackend2026(document.body);
+      backend.resize(window.innerWidth, window.innerHeight, Math.min(window.devicePixelRatio || 1, 2));
+      g.renderBackend = backend;
+      applyEngine(g); // jetzt wirklich umblenden
+    });
+  }
+  const active = is2026Active(g);
+  canvas.style.display = active ? 'none' : '';
+  backend?.setVisible(active);
 }
 
 // --- Canvas-Groesse an Fenster + Pixeldichte anpassen ---------------------------
@@ -36,6 +58,12 @@ resize();
 // --- Spiel + Eingabe ------------------------------------------------------------
 const audio = createAudioOutput();
 const game = new Game({ debug: debugEnabled ? debug : null, audio, engine, renderBackend: backend });
+let lastEngine = game.engine;
+applyEngine(game); // initiale Wahl anwenden (laedt ggf. das 2026-Backend)
+
+// Debug-Haken fuer die CDP-Sichtpruefung (PLAN2026.md): headless laeuft die
+// Uhr gedehnt, die Test-Skripte pollen deshalb Zustand + Spielzeit.
+window.spacemaze = game;
 
 // Einzelzeichen (Buchstaben) normalisieren wir auf Grossbuchstaben.
 const normKey = (e) => (e.key.length === 1 ? e.key.toUpperCase() : e.key);
@@ -89,7 +117,15 @@ function frame(now) {
 
   game.update(dt);
 
-  if (!backend) renderer.beginFrame(); // 2026 zeichnet auf dem eigenen Canvas
+  // Live-Engine-Schalter (Startscreen, Stufe 3): Wahl gemerkt + umgeblendet.
+  if (game.engine !== lastEngine) {
+    lastEngine = game.engine;
+    try { localStorage.setItem(ENGINE_KEY, game.engine); } catch { /* egal */ }
+    applyEngine(game);
+  }
+
+  const active2026 = is2026Active(game);
+  if (!active2026) renderer.beginFrame(); // 2026 zeichnet auf dem eigenen Canvas
   game.render(renderer);
 
   // FPS gemittelt ueber ~0,5s.
@@ -106,7 +142,7 @@ function frame(now) {
     debug.set('FPS', fps);
     debug.set('TRANS', game.transition.active ? game.transition.toState : '-');
     debug.set('TIME', game.time.toFixed(1));
-    if (!backend) renderDebug(); // Debug-Overlay lebt auf dem 1980-Canvas
+    if (!active2026) renderDebug(); // Debug-Overlay lebt auf dem 1980-Canvas
   }
 
   requestAnimationFrame(frame);

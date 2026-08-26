@@ -5,7 +5,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseEngine, ENGINES, ENGINE_1980, ENGINE_2026 } from '../src/core/engine.js';
+import {
+  parseEngine, resolveEngine, otherEngine, ENGINES, ENGINE_1980, ENGINE_2026,
+} from '../src/core/engine.js';
 import { Game, GameEvent } from '../src/core/game.js';
 import { State } from '../src/core/states.js';
 
@@ -143,6 +145,101 @@ test('Playing (Fahrt, Level 6): viewState mit drive/roll/pitch und Auftreffpunkt
     maxRoll = Math.max(maxRoll, Math.abs(g.current.viewState().roll));
   }
   assert.ok(maxRoll > 1e-4, 'rollOsc/bank erreichen die 2026-Kamera');
+});
+
+// Stufe 3: Vorrang-Regel des Schalters -- URL vor gemerkter Wahl vor Default.
+test('resolveEngine: URL-Parameter vor localStorage vor Default', () => {
+  assert.equal(resolveEngine('', null), ENGINE_1980);
+  assert.equal(resolveEngine('', ENGINE_2026), ENGINE_2026);
+  assert.equal(resolveEngine('?engine=1980', ENGINE_2026), ENGINE_1980);
+  assert.equal(resolveEngine('?engine=2026', ENGINE_1980), ENGINE_2026);
+  assert.equal(resolveEngine('?engine=Quatsch', 'Unsinn'), ENGINE_1980);
+  assert.equal(otherEngine(ENGINE_1980), ENGINE_2026);
+  assert.equal(otherEngine(ENGINE_2026), ENGINE_1980);
+});
+
+// Stufe 3: Startscreen-Tasten -- links/rechts Level, hoch/runter Engine.
+test('Startscreen: ArrowLeft/Right waehlen das Level, ArrowUp/Down die Engine', () => {
+  const g = new Game();
+  assert.equal(g.stateKey, State.STARTSCREEN);
+  const level = g.level;
+  g.handleKey('ArrowRight');
+  assert.equal(g.level, level + 1);
+  g.handleKey('ArrowLeft');
+  assert.equal(g.level, level);
+  assert.equal(g.engine, ENGINE_1980);
+  g.handleKey('ArrowUp');
+  assert.equal(g.engine, ENGINE_2026, 'hoch schaltet auf 2026');
+  g.handleKey('ArrowUp');
+  assert.equal(g.engine, ENGINE_2026, 'nochmal hoch bleibt 2026');
+  g.handleKey('ArrowDown');
+  assert.equal(g.engine, ENGINE_1980, 'runter schaltet auf 1980');
+  assert.equal(g.level, level, 'der Schalter laesst das Level in Ruhe');
+});
+
+// Stufe 3: Lese-Schnittstellen der Zyklus-Szenen fuer die 2026-Engine.
+test('Startscreen: viewState liefert Orbit-Pose und Dock-Fortschritt', () => {
+  const g = new Game();
+  g.update(0.5);
+  let v = g.current.viewState();
+  assert.equal(v.phase, 'orbiting');
+  assert.ok(v.pose.position.every(Number.isFinite));
+  assert.ok(Number.isFinite(v.pose.yaw) && Number.isFinite(v.pose.pitch));
+  assert.equal(v.color, null, 'im Orbit gilt die Grundfarbe');
+
+  g.handleKey('S');
+  g.update(0.4);
+  v = g.current.viewState();
+  assert.equal(v.phase, 'docking');
+  assert.ok(v.p > 0 && v.p < 1, 'Andock-Flug laeuft');
+  assert.ok(typeof v.color === 'string', 'Blend-Farbe Richtung Level-Thema');
+});
+
+test('MazeGen: viewState liefert die Wachstums-Kurven', () => {
+  const g = new Game();
+  g.dispatch(GameEvent.START);
+  advance(g, 0.8); // Fade -> MAZE_GEN
+  assert.equal(g.stateKey, State.MAZE_GEN);
+  g.update(0.5);
+  const v = g.current.viewState();
+  assert.equal(v.maze, g.maze);
+  assert.ok(v.markerFade > 0, 'S/G blenden ein');
+  assert.ok(v.growCount >= 0 && v.growCount <= g.maze.order.length);
+  advance(g, 1.5); // mitten im Wachstum
+  const v2 = g.current.viewState();
+  assert.ok(v2.growCount > v.growCount, 'die Kontur frisst sich hinein');
+  assert.ok(v2.growT > 0 && v2.growT < 1);
+});
+
+test('Falling/Rising/Map: viewState traegt Schwenk-Fortschritt und Ziellage', () => {
+  const g = new Game();
+  g.dispatch(GameEvent.START);
+  advance(g, 0.8 + 4.4); // -> FALLING (MazeGen 4.3s + Reserve)
+  assert.equal(g.stateKey, State.FALLING);
+  g.update(0.5);
+  const vf = g.current.viewState();
+  assert.equal(vf.maze, g.maze);
+  assert.ok(vf.e > 0 && vf.e < 1, 'Schwenk laeuft (geeaste Kurve)');
+  assert.ok([vf.target.px, vf.target.pz, vf.target.yaw].every(Number.isFinite));
+  assert.equal(vf.resume, false);
+
+  advance(g, 2.0); // -> PLAYING
+  assert.equal(g.stateKey, State.PLAYING);
+  g.handleKey('Q'); // Abheben (Level 1: sofort)
+  assert.equal(g.stateKey, State.RISING);
+  g.update(0.5);
+  const vr = g.current.viewState();
+  assert.equal(vr.origin.px, g.playerState.px, 'Rueckschwenk startet an der Spielerlage');
+  assert.ok(vr.e > 0 && vr.e < 1);
+
+  advance(g, 1.5); // -> MAP
+  assert.equal(g.stateKey, State.MAP);
+  let vm = g.current.viewState();
+  assert.equal(vm.fade, 1, 'Karte steht voll da');
+  g.handleKey('X');
+  g.update(0.45);
+  vm = g.current.viewState();
+  assert.ok(vm.fade < 1 && vm.fade > 0, 'Karten-Exit blendet aus');
 });
 
 test('Game: Backend sieht auch Szenenwechsel und Transition-Zustand', () => {

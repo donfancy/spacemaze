@@ -37,6 +37,7 @@ export function createFalling(game) {
   let t = 0;
   let startPose = null;
   let endPose = null;
+  let target = null; // Ego-Ziellage in lokalen Flaechen-Koordinaten (fuer 2026)
 
   return {
     enter() {
@@ -52,11 +53,12 @@ export function createFalling(game) {
       startPose = mapPose(face, camera.fov); // Kartensicht
       if (game.resume && game.playerState) {
         const ps = game.playerState; // Fortsetzung: zurueck zur Spielerlage
-        endPose = egoPose(face, ps.px, ps.pz, ps.yaw, cell);
+        target = { px: ps.px, pz: ps.pz, yaw: ps.yaw };
       } else {
         const [cx, cz] = cellCenter(maze, maze.start[0], maze.start[1], unitSize(maze));
-        endPose = egoPose(face, cx, cz, startFacingYaw(maze), cell); // Ego auf S
+        target = { px: cx, pz: cz, yaw: startFacingYaw(maze) }; // Ego auf S
       }
+      endPose = egoPose(face, target.px, target.pz, target.yaw, cell);
       game.audio?.play(fallPatch(DURATION)); // Whoosh endet genau mit der Landung
     },
 
@@ -81,6 +83,14 @@ export function createFalling(game) {
       drawEnemyMarkers(renderer, spinnerMarkers(game.spinners), face, camera, cell, 1 - e, spinnerColor(game.level));
       drawEnemyMarkers(renderer, flipperMarkers(game.flippers), face, camera, cell, 1 - e, NEON_MAGENTA);
       drawEnemyMarkers(renderer, pulsarMarkers(game.pulsars), face, camera, cell, 1 - e, ARCADE_YELLOW);
+    },
+
+    // Lese-Schnittstelle fuer die 2026-Engine (Stufe 3): der Schwenk laeuft
+    // dort mit DERSELBEN Zeitkurve (e bereits geeased) von der Draufsicht zur
+    // Ego-Ziellage `target` (lokale Flaechen-Koordinaten wie playing).
+    viewState() {
+      if (!maze) return null;
+      return { maze, cell, e: easeInOut(t / DURATION), target, resume: game.resume };
     },
   };
 }

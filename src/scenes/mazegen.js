@@ -111,5 +111,20 @@ export function createMazeGen(game) {
         drawEnemyMarkers(renderer, pulsarMarkers(game.pulsars), face, camera, cell, foeFade, ARCADE_YELLOW);
       }
     },
+
+    // Lese-Schnittstelle fuer die 2026-Engine (Stufe 3): dieselben Zeitkurven
+    // wie die 1980-Zeichnung -- growCount ist die Zahl der bereits gewachsenen
+    // Zellen (Index in maze.order), daraus baut das Backend die Teil-Kontur.
+    viewState() {
+      if (!maze) return null;
+      const growT = clamp01((t - MARKER_TIME) / GROW_TIME);
+      return {
+        maze,
+        growT,
+        growCount: Math.round(growT * maze.order.length),
+        markerFade: clamp01(t / MARKER_TIME),
+        foeFade: clamp01((t - MARKER_TIME - GROW_TIME) / FOE_TIME),
+      };
+    },
   };
 }

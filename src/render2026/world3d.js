@@ -19,7 +19,7 @@ import { createRng } from '../util/rng.js';
 import {
   PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_RED, ARCADE_YELLOW, NEON_MAGENTA,
 } from '../render/colors.js';
-import { WALL_RATIO } from '../scenes/mazeView.js';
+import { WALL_RATIO, compassUnitPoints } from '../scenes/mazeView.js';
 
 export const UNITS_PER_CELL = 5;        // 3D-Einheiten pro Gangbreite
 export const FOG_DENSITY = 0.028;       // pro 3D-Einheit (Prototyp-Wert; die
@@ -55,6 +55,7 @@ export function buildWorld(maze) {
   buildBeacon(world, maze);
   buildMirror(world);
   buildFloodlights(world, maze);
+  buildMarkers(world, maze);
 
   // Licht: Himmel/Boden-Schimmer + dezenter "Scheinwerfer" an der Kamera.
   // FALLE: ein Punktlicht mit decay=2 explodiert an nahen Waenden (1/d^2)
@@ -79,10 +80,13 @@ export function buildWorld(maze) {
 export function applyTheme(world, hex) {
   const col = new THREE.Color(hex);
   world.lineMat.color.copy(col).multiplyScalar(2.2);
+  world.outlineMat.color.copy(col).multiplyScalar(2.2);
   world.mirrorLineMat.color.copy(col).multiplyScalar(0.85);
   world.gridMat.color.copy(col).multiplyScalar(0.3);
   world.wallGridMat.color.copy(col).multiplyScalar(0.3);
   world.headlight.color.copy(col);
+  world.trailMat.color.copy(col).multiplyScalar(0.9);
+  for (const { mat } of world.markerMats) mat.color.copy(col).multiplyScalar(2.2);
 }
 
 // Welt wegwerfen (Levelwechsel): GPU-Ressourcen freigeben, sonst leckt jedes
@@ -103,9 +107,17 @@ export function disposeWorld(world) {
 }
 
 // Wandflaechen + Leuchtkanten aus der 2D-Kontur der puren Geometrie-Module.
+// Alles mit HOEHE (Flaechen, Wandkronen, Pfosten) liegt in world.wallGroup:
+// die Schwenks (Stufe 3) lassen die Waende darueber wachsen/schrumpfen
+// (setWallHeight skaliert die Gruppe in y). Die BODEN-Kontur bleibt getrennt
+// (world.outlineLines, feste Hoehe knapp ueber dem Boden) -- sie ist die
+// "flache Karte", auf der die Waende aufwachsen.
 function buildWallsAndLines(world, maze) {
   const { H, scene, u } = world;
   const segs = mergeCollinear(corridorOutline(maze));
+
+  world.wallGroup = new THREE.Group();
+  scene.add(world.wallGroup);
 
   // Flaechen: pro Kontur-Segment ein senkrechtes Quad (Boden bis Wandkrone).
   const pos = [], norm = [], idx = [];
@@ -131,23 +143,48 @@ function buildWallsAndLines(world, maze) {
     // Linien sauber gewinnen (kein Z-Fighting).
     polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
   });
-  scene.add(new THREE.Mesh(wallGeo, world.wallMat));
+  world.wallGroup.add(new THREE.Mesh(wallGeo, world.wallMat));
 
-  // Leuchtkanten: Ober-/Unterkante jedes Wandzugs + senkrechte Eck-Pfosten.
+  world.lineMat = new THREE.LineBasicMaterial({ color: hdr(PHOSPHOR_GREEN) });
+
+  // Wandkronen + senkrechte Eck-Pfosten (wachsen mit der Wandhoehe mit).
   const lp = [];
   const corners = new Map(); // "x,y" -> [ux, uz], Ecken nur einmal
+  const op = []; // Boden-Kontur (feste Hoehe, ausserhalb der Gruppe)
   for (const [[x1, y1], [x2, y2]] of segs) {
     const ax = u(x1), az = u(y1), bx = u(x2), bz = u(y2);
     lp.push(ax, H, az, bx, H, bz);          // Wandkrone
-    lp.push(ax, 0.05, az, bx, 0.05, bz);    // Bodenlinie (knapp ueber dem Boden)
+    // Bodenlinie: knapp UEBER dem Boden-Raster (0.04) -- die Kontur liegt auf
+    // denselben Zellgrenzen, mit zu wenig Abstand flimmern beide (Z-Fighting
+    // in der Draufsicht, Sichtpruefungs-Befund).
+    op.push(ax, 0.1, az, bx, 0.1, bz);
     corners.set(x1 + ',' + y1, [ax, az]);
     corners.set(x2 + ',' + y2, [bx, bz]);
   }
   for (const [, [cx, cz]] of corners) lp.push(cx, 0, cz, cx, H, cz);
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
-  world.lineMat = new THREE.LineBasicMaterial({ color: hdr(PHOSPHOR_GREEN) });
-  scene.add(new THREE.LineSegments(lineGeo, world.lineMat));
+  world.wallGroup.add(new THREE.LineSegments(lineGeo, world.lineMat));
+
+  // Eigenes Material: die Karte blendet beim Verlassen die Kontur aus,
+  // waehrend der Rahmen (lineMat) stehen bleibt.
+  world.outlineMat = new THREE.LineBasicMaterial({
+    color: hdr(PHOSPHOR_GREEN), transparent: true, opacity: 1,
+  });
+  const outlineGeo = new THREE.BufferGeometry();
+  outlineGeo.setAttribute('position', new THREE.Float32BufferAttribute(op, 3));
+  world.outlineLines = new THREE.LineSegments(outlineGeo, world.outlineMat);
+  scene.add(world.outlineLines);
+
+  // Grid-Rahmen (die "Wuerfelflaeche"): steht auf der Karte und waehrend des
+  // Maze-Wachstums immer -- deckungsgleich mit dem Andock-Quadrat.
+  const T = world.total;
+  const bp = [0, 0.1, 0, T, 0.1, 0, T, 0.1, 0, T, 0.1, T,
+    T, 0.1, T, 0, 0.1, T, 0, 0.1, T, 0, 0.1, 0];
+  const borderGeo = new THREE.BufferGeometry();
+  borderGeo.setAttribute('position', new THREE.Float32BufferAttribute(bp, 3));
+  world.borderLines = new THREE.LineSegments(borderGeo, world.lineMat);
+  scene.add(world.borderLines);
 
   // Zellgrenzen-Pfosten AUF den Wandflaechen (dezent, ohne HDR -- wie das
   // Boden-Raster): das 2026-Pendant zu den 1980-Pfosten an jeder Zellgrenze.
@@ -171,11 +208,24 @@ function buildWallsAndLines(world, maze) {
     color: new THREE.Color(PHOSPHOR_GREEN).multiplyScalar(0.3),
     transparent: true, opacity: 0.8,
   });
-  scene.add(new THREE.LineSegments(wallGridGeo, world.wallGridMat));
+  world.wallGroup.add(new THREE.LineSegments(wallGridGeo, world.wallGridMat));
 
   // Geometrien fuers Spiegelbild aufheben (buildMirror).
   world.wallGeo = wallGeo;
   world.lineGeo = lineGeo;
+  world.outlineGeo = outlineGeo;
+}
+
+// Wandhoehe 0..1 (Anteil der vollen Hoehe): die Schwenks lassen die Waende
+// aufwachsen (Reinfallen) bzw. flach schrumpfen (Rueckschwenk); auf der Karte
+// und waehrend des Maze-Wachstums sind sie ganz flach (nur die Boden-Kontur).
+export function setWallHeight(world, h) {
+  const on = h > 0.001;
+  world.wallGroup.visible = on;
+  world.mirrorWallGroup.visible = on;
+  const s = Math.max(h, 0.001);
+  world.wallGroup.scale.y = s;
+  world.mirrorWallGroup.scale.y = s;
 }
 
 // Boden: halbtransparente dunkle Flaeche, durch die das SPIEGELBILD der Welt
@@ -205,25 +255,31 @@ function buildFloor(world, maze) {
     transparent: true, opacity: 0.8,
   });
   scene.add(new THREE.LineSegments(gridGeo, world.gridMat));
+
+  // Material fuer den abgelaufenen Weg (die Linie selbst baut backend.js aus
+  // game.trail); halbgedimmt wie die 1980-Weglinie, Farbe folgt dem Thema.
+  world.trailMat = new THREE.LineBasicMaterial({
+    color: new THREE.Color(PHOSPHOR_GREEN).multiplyScalar(0.9),
+    transparent: true, opacity: 0.5,
+  });
 }
 
-// Sternenhimmel + Nebel-Sprites. Deterministisch aus maze.seed (wie im Spiel),
-// Flaechen-Gleichverteilung auf der Halbkugel (el = asin(u)).
-// Drei Punktwolken mit Phasenversatz -> unabhaengiges Funkeln in backend.js.
-function buildSky(world, maze) {
-  const { scene, total } = world;
-  const rng = createRng(maze.seed);
+// Sternenhimmel: drei Punktwolken mit Phasenversatz -> unabhaengiges Funkeln
+// in backend.js. Deterministisch aus `seed`, Flaechen-Gleichverteilung
+// (el = asin(u); `hemisphere` false = ganze Kugel, fuer den Startscreen-Orbit).
+// Auch der Startscreen (startscreen3d.js) baut seinen Himmel hiermit.
+export function buildStarField(scene, { seed, center = [0, 0], hemisphere = true }) {
+  const rng = createRng(seed);
   const R = 600;
-  const cx = total / 2, cz = total / 2;
+  const [cx, cz] = center;
   const tints = [PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_YELLOW, NEON_MAGENTA, ARCADE_RED];
 
-  world.starGroups = [];
-  world.starGeos = [];
+  const mats = [], geos = [];
   for (let g = 0; g < 3; g++) {
     const pts = [], cols = [];
     for (let i = 0; i < 2000; i++) {
       const az = rng() * Math.PI * 2;
-      const el = Math.asin(rng());
+      const el = Math.asin(hemisphere ? rng() : rng() * 2 - 1);
       pts.push(
         cx + R * Math.cos(el) * Math.cos(az),
         R * Math.sin(el),
@@ -244,11 +300,15 @@ function buildSky(world, maze) {
       blending: THREE.AdditiveBlending, fog: false,
     });
     scene.add(new THREE.Points(geo, mat));
-    world.starGroups.push(mat);
-    world.starGeos.push(geo);
+    mats.push(mat);
+    geos.push(geo);
   }
+  return { mats, geos };
+}
 
-  // Psychedelischer Weltraum-Dunst: grosse additive Glow-Sprites am Horizont.
+// Psychedelischer Weltraum-Dunst: grosse additive Glow-Sprites am Horizont.
+export function buildDust(scene, center = [0, 0]) {
+  const [cx, cz] = center;
   const tex = glowTexture();
   const clouds = [
     { hex: NEON_MAGENTA, az: 0.7, el: 0.18, s: 700, o: 0.07 },
@@ -269,6 +329,16 @@ function buildSky(world, maze) {
     sp.scale.set(s, s, 1);
     scene.add(sp);
   }
+}
+
+function buildSky(world, maze) {
+  const { scene, total } = world;
+  const { mats, geos } = buildStarField(scene, {
+    seed: maze.seed, center: [total / 2, total / 2], hemisphere: true,
+  });
+  world.starGroups = mats;
+  world.starGeos = geos;
+  buildDust(scene, [total / 2, total / 2]);
 }
 
 // Weicher radialer Glow als Canvas-Textur (Render-Schicht, kein Spielzustand).
@@ -332,11 +402,17 @@ function buildMirror(world) {
   const g = new THREE.Group();
   g.scale.y = -1; // spiegelt alle Kinder an der Bodenebene
 
-  g.add(new THREE.Mesh(world.wallGeo, world.wallMat)); // DoubleSide vertraegt die Spiegelung
   world.mirrorLineMat = new THREE.LineBasicMaterial({
     color: new THREE.Color(PHOSPHOR_GREEN).multiplyScalar(0.85),
   });
-  g.add(new THREE.LineSegments(world.lineGeo, world.mirrorLineMat));
+  // Alles mit Hoehe in eine eigene Untergruppe: setWallHeight skaliert sie
+  // synchron zur echten Wandgruppe (die Schwenks wachsen im Spiegel mit).
+  const mw = new THREE.Group();
+  mw.add(new THREE.Mesh(world.wallGeo, world.wallMat)); // DoubleSide vertraegt die Spiegelung
+  mw.add(new THREE.LineSegments(world.lineGeo, world.mirrorLineMat));
+  g.add(mw);
+  world.mirrorWallGroup = mw;
+  g.add(new THREE.LineSegments(world.outlineGeo, world.mirrorLineMat));
 
   world.beaconMirrorMat = new THREE.LineBasicMaterial({
     color: new THREE.Color(ARCADE_YELLOW), transparent: true, opacity: 0.5,
@@ -368,6 +444,56 @@ function buildFloodlights(world, maze) {
     light.position.set(u(cells[i][0] + 0.5), H + 4, u(cells[i][1] + 0.5));
     scene.add(light);
     world.floods.push(light);
+  }
+}
+
+// Buchstaben als Sprite (Canvas-Textur): S/G-Marker und Himmelsrichtungen der
+// Kartensicht. Sprites schauen immer zur Kamera -- lesbar in der Draufsicht
+// UND waehrend der Schwenks. Die Farbe kommt per applyTheme (HDR -> Bloom-
+// Gluehen wie die 1980-Textschrift), `base` ist die Grund-Deckkraft
+// (Kompass gedimmt wie 1980); setMarkerFade blendet alle gemeinsam.
+function textSprite(world, text, x, z, size, base) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.font = 'bold 96px "SF Mono", Menlo, Consolas, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(text, 64, 70);
+  const mat = new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(c), color: hdr(PHOSPHOR_GREEN),
+    transparent: true, opacity: base, depthWrite: false, fog: false,
+  });
+  const sp = new THREE.Sprite(mat);
+  sp.position.set(x, 0.6 * size, z);
+  sp.scale.set(size, size, 1);
+  world.scene.add(sp);
+  world.markerMats.push({ mat, base });
+  return sp;
+}
+
+// S/G-Marker in den Start-/Zielkammern + N/W/E/S am Kartenrand (dieselben
+// Punkte wie 1980: compassUnitPoints). Groessen folgen Gangbreite bzw.
+// Kartenkante -- wie die 1980-Regel (Marker passt ins Raster).
+function buildMarkers(world, maze) {
+  const { u, k, total, metric } = world;
+  world.markerMats = [];
+  const s = 0.9 * UNITS_PER_CELL;
+  textSprite(world, 'S', u(maze.start[0] + 0.5), u(maze.start[1] + 0.5), s, 1);
+  textSprite(world, 'G', u(maze.goal[0] + 0.5), u(maze.goal[1] + 0.5), s, 1);
+  const points = compassUnitPoints(maze.n, metric);
+  const cs = Math.max(0.045 * total, 0.6 * UNITS_PER_CELL);
+  for (const [label, [ux, uy]] of Object.entries(points)) {
+    textSprite(world, label, ux * k, uy * k, cs, 0.7);
+  }
+}
+
+// Karten-Beschriftung ein-/ausblenden (Schwenks, Maze-Wachstum, Karten-Exit).
+export function setMarkerFade(world, fade) {
+  for (const { mat, base } of world.markerMats) {
+    mat.opacity = base * fade;
+    mat.visible = fade > 0.01;
   }
 }
 

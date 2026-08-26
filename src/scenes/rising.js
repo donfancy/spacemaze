@@ -41,6 +41,7 @@ export function createRising(game) {
   let duration = DURATION;
   let startPose = null;
   let endPose = null;
+  let origin = null; // Ego-Startlage in lokalen Flaechen-Koordinaten (fuer 2026)
 
   return {
     enter() {
@@ -51,6 +52,7 @@ export function createRising(game) {
       cell = cellSize(maze);
       footprints = faceFootprints(maze, face);
       const ps = game.playerState ?? { px: 0, pz: 0, yaw: 0 };
+      origin = { px: ps.px, pz: ps.pz, yaw: ps.yaw };
       startPose = egoPose(face, ps.px, ps.pz, ps.yaw, cell); // Ego (Spielerlage)
       endPose = mapPose(face, camera.fov);                   // Kartensicht
       game.audio?.play(risePatch(duration)); // steigender Schweb-Klang bis zur Karte
@@ -103,6 +105,13 @@ export function createRising(game) {
 
     exit() {
       game.viewRoll = 0; // die Rest-Verdrehung ist ausgedreht
+    },
+
+    // Lese-Schnittstelle fuer die 2026-Engine (Stufe 3): Rueckschwenk mit
+    // derselben Zeitkurve von der Ego-Startlage `origin` zur Draufsicht.
+    viewState() {
+      if (!maze) return null;
+      return { maze, cell, e: easeInOut(t / duration), origin, gameOver: game.gameOver };
     },
   };
 }
