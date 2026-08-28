@@ -12,6 +12,22 @@ import { OPEN } from './maze.js';
 import { corridorOutline, mergeCollinear } from './mazeGeometry.js';
 import { mazeMetric } from './metric.js';
 
+// Die gemergten 2D-Konturzuege pro Maze cachen: die Schwenks (falling/
+// rising) rufen mazeWalls mit ANIMIERTER Hoehe jeden Frame -- der teure
+// Teil (O(n^2)-Zellenscan + mergeCollinear) haengt aber nur am Maze,
+// nicht an der Hoehe. Das Grid ist nach generateMaze unveraenderlich
+// (das Wachstum spielt maze.order separat ab), der Cache damit sicher;
+// WeakMap laesst verworfene Mazes normal wegraeumen.
+const mergedOutlines = new WeakMap();
+function mergedOutline(maze) {
+  let segs = mergedOutlines.get(maze);
+  if (!segs) {
+    segs = mergeCollinear(corridorOutline(maze));
+    mergedOutlines.set(maze, segs);
+  }
+  return segs;
+}
+
 // Aufragende Wireframe-Waende aus den Korridor-Konturen. Kollineare Wandzuege
 // sind zu LANGEN Unter-/Oberkanten zusammengefasst (weniger Kanten fuer den
 // Occlusion-Pass, der mit Kanten x Verdecker skaliert); die senkrechten
@@ -24,7 +40,7 @@ export function mazeWalls(maze, opts = {}) {
   const height = opts.height ?? 1;
   const { toUnits } = mazeMetric(maze);
   const walls = [];
-  for (const [[x1, y1], [x2, y2]] of mergeCollinear(corridorOutline(maze))) {
+  for (const [[x1, y1], [x2, y2]] of mergedOutline(maze)) {
     const ax = toUnits(x1) * unit, az = toUnits(y1) * unit;
     const bx = toUnits(x2) * unit, bz = toUnits(y2) * unit;
     walls.push([[ax, 0, az], [bx, 0, bz]], [[ax, height, az], [bx, height, bz]]);
@@ -50,7 +66,7 @@ export function mazeWalls(maze, opts = {}) {
 export function wallFootprints(maze, opts = {}) {
   const unit = opts.unit ?? 1;
   const { toUnits } = mazeMetric(maze);
-  return mergeCollinear(corridorOutline(maze)).map(([[x1, y1], [x2, y2]]) => [
+  return mergedOutline(maze).map(([[x1, y1], [x2, y2]]) => [
     [toUnits(x1) * unit, 0, toUnits(y1) * unit],
     [toUnits(x2) * unit, 0, toUnits(y2) * unit],
   ]);

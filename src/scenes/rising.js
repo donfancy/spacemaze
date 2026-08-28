@@ -80,13 +80,15 @@ export function createRising(game) {
       // Nach dem Crash beginnt der Schwenk voll ZERSCHERBT (nahtlos zum
       // Zerbersten in playing) -- waehrend es hinausschleudert, klingt das
       // Chaos quadratisch ab und die Linien sortieren sich wieder ein:
-      // die Karte kommt sauber an.
+      // die Karte kommt sauber an. Das Zentrum ist der Einschlagpunkt aus
+      // playing (game.crashScreen) -- mit derselben Mitte behalten die
+      // Scherben am Uebergabe-Frame ihre Flugbahnen.
       const shatter = game.gameOver ? (1 - e) * (1 - e) : 0;
       if (shatter > 0.001) {
         renderer.pushShatter({
           amount: shatter,
-          cx: renderer.width / 2,
-          cy: renderer.height / 2,
+          cx: game.crashScreen?.cx ?? renderer.width / 2,
+          cy: game.crashScreen?.cy ?? renderer.height / 2,
           scale: SHATTER.scale * Math.min(renderer.width, renderer.height),
         });
       }
@@ -104,7 +106,8 @@ export function createRising(game) {
     },
 
     exit() {
-      game.viewRoll = 0; // die Rest-Verdrehung ist ausgedreht
+      game.viewRoll = 0;       // die Rest-Verdrehung ist ausgedreht
+      game.crashScreen = null; // der Scherben-Handoff ist verbraucht
     },
 
     // Lese-Schnittstelle fuer die 2026-Engine (Stufe 3): Rueckschwenk mit

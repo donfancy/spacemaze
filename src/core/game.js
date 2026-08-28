@@ -47,6 +47,8 @@ export class Game {
     this.gameOver = false;    // Feindberuehrung: Karte zeigt GAME OVER, Q startet den Level neu
     this.viewRoll = 0;        // Rest-Verdrehung der Blickachse beim Abheben (Pulsar-
                               // Rotation, ab 26) -- der Rueckschwenk dreht sie aus
+    this.crashScreen = null;  // Einschlagpunkt am Bildschirm ({cx,cy}) beim Crash --
+                              // rising haelt damit die Scherben-Flugbahnen nahtlos
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.
     this.scenes = {

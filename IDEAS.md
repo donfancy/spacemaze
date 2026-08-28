@@ -34,3 +34,26 @@ Danach, falls immer noch noetig: GC-Druck senken (pro Frame entstehen viele
 kurzlebige Arrays in occludeEdge/faceSegments — Puffer wiederverwenden);
 Wellen-Strokes wie die Strahlen buendeln; Glow-Kosten am dpr festmachen
 (shadowBlur skaliert mit Pixelflaeche).
+
+## Aufgeschobene Punkte aus dem Gesamt-Review (28.8.2026, REVIEW.md A7)
+
+Beim Review notiert, bewusst NICHT umgesetzt (erst bei gemessenem Bedarf):
+
+- **Tanker als InstancedMesh (2026):** groesster Draw-Call-Posten der
+  Ego-Ansicht -- 4 Calls pro Tanker (Body + Kanten, x2 Spiegel), Level 15
+  mit 14 Tankern = 56 Calls nur fuer Tanker. Puls/Drehen/Schweben als
+  per-Instanz-Matrix: ein Call pro Material statt pro Feind. Gehoert in
+  den Stufe-6-Performance-Pass (Draw-Call-Zaehler aus proto2026 ernten).
+- **GC-Kleinvieh 1980 (kein CPU-Problem, Messwerte oben sind gut):**
+  occludeEdge allokiert eine invEAt-Closure + 2-4 Arrays pro Kante/Frame;
+  playing.render klont pro Frame vier Feindlisten per filter; die
+  Stern-Schleife erzeugt ~500 Kleinst-Arrays + eine Map pro Frame;
+  `dirs`-Objekt pro update. Erst anfassen, wenn GC-Pausen messbar sind.
+- **updateTrail (2026) tauscht die Geometrie bei jedem neuen Wegpunkt** --
+  mit Max-Kapazitaet (Weglaenge waechst monoton) + setDrawRange loesbar,
+  lohnt erst bei sehr langen Wegen.
+
+Bereits umgesetzt aus dem Review: mergedOutline-Cache (Schwenks bauten
+die Wand-Geometrie jeden Frame komplett neu -- jetzt 0.33 ms/Frame bei
+n=51 statt Vollscan), makeBuffer im Backend (kein Material-/Geometrie-
+Churn), viewState 1x pro Frame, Growth-Puffer waechst statt zu tauschen.

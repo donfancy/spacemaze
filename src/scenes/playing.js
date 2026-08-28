@@ -198,6 +198,7 @@ export function createPlaying(game) {
   let burstSeq = 0;       // laufender Splitter-Seed (unabhaengig von gerade lebenden Bursts)
   let crash = false;      // Feindberuehrung: Explosion laeuft, dann Game Over
   let crashT = 0;
+  let crashScreen = null; // Einschlag am Bildschirm (fuer den Shatter-Handoff an rising)
   let crashPos = null;    // Einschlag {x,z} -- Zentrum des Bild-Zerberstens
 
   // Feindberuehrung: krachende Explosion an `at` {x,z}, dann schleudert es den
@@ -381,6 +382,7 @@ export function createPlaying(game) {
       burstSeq = 0;
       crash = false;
       crashT = 0;
+      crashScreen = null;
       game.gameOver = false;
       if (game.resume && game.playerState) {
         // Fortsetzung von der Karte: Lage und abgelaufener Weg bleiben erhalten.
@@ -408,6 +410,10 @@ export function createPlaying(game) {
       // Weg normalisiert an den Rueckschwenk uebergeben: der dreht sie sanft
       // aus, statt hart auf "aufrecht" zu springen.
       game.viewRoll = ((gyro.roll + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+      // Einschlag-Bildschirmpunkt an den Rueckschwenk uebergeben: der
+      // startet voll zerscherbt, und mit derselben Mitte behalten alle
+      // Scherben ihre Flugbahn (sonst ruckte die Scherbenlage am Uebergang).
+      game.crashScreen = crash ? crashScreen : null;
       game.audio?.engine(null); // Motor-Klang ausblenden (die Karte ist still)
     },
 
@@ -610,6 +616,7 @@ export function createPlaying(game) {
         // Kamera-Basis steht vom Vorframe; near mit cell skalieren (der
         // Einschlag ist direkt vor der Kamera -- Near-Plane-Regel).
         const c = renderer.worldToScreen(world, camera, NEAR_RATIO * cell);
+        crashScreen = c ? { cx: c.x, cy: c.y } : crashScreen;
         renderer.pushShatter({
           amount: 1 - (1 - p) * (1 - p), // harter Stoss, dann treibendes Auseinanderfliegen
           cx: c ? c.x : renderer.width / 2,
