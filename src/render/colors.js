@@ -25,6 +25,31 @@ export function toHex(rgb) {
   return `#${ch(rgb[0])}${ch(rgb[1])}${ch(rgb[2])}`;
 }
 
+// Luminanz (Rec.-709-Gewichte) einer '#rrggbb'-Farbe in LINEAR-sRGB, 0..1 --
+// exakt so sieht sie der Bloom-Pass der 2026-Engine (THREE.Color wandelt
+// hex-Farben in den linearen Arbeitsfarbraum): Phosphor-Gruen ~0.745,
+// Tempest-Blau ~0.227.
+export function linearLuminance(hex) {
+  const [r, g, b] = parseHex(hex).map((v) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// Der LUMINANZ-NORMIERTE Glow-Boost der 2026-Diagramm-Ansichten (Karte/
+// MazeGen; Boris' "Overglow ab Level 11"-Fix): der Bloom-Schwellwert
+// arbeitet auf Luminanz -- Phosphor-Gruen (lum ~0.81) landet mit dem festen
+// Ego-Boost weit darueber und ueberglueht die dichte Karte, Blau kaum.
+// mix 0 = Ego (voller `ego`-Boost), mix 1 = Diagramm (Ziel-Luminanz
+// `targetLum` knapp ueberm Schwellwert, gedeckelt durch `maxBoost` --
+// dunkle Farben brauchen mehr Boost). Pur und testbar; das Backend
+// reicht seine Konstanten (EGO_BOOST usw.) herein.
+export function diagramBoost(hex, mix, { ego, targetLum, maxBoost = ego }) {
+  const lum = Math.max(linearLuminance(hex), 1e-3);
+  return ego + (Math.min(maxBoost, targetLum / lum) - ego) * mix;
+}
+
 // Linear zwischen zwei '#rrggbb'-Farben; t wird auf [0,1] geklemmt.
 export function mixColors(a, b, t) {
   const k = Math.min(1, Math.max(0, t));

@@ -31,7 +31,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { State } from '../core/states.js';
 import { playHint, mapHint, gameOverColor } from '../core/hud.js';
 import { levelColor, levelConfig, enemyColor, spinnerColor } from '../core/levels.js';
-import { PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA } from '../render/colors.js';
+import { PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA, diagramBoost } from '../render/colors.js';
 import { EYE_RATIO, cellSize } from '../scenes/mazeView.js';
 import { burstSegments, burstShards } from '../world/burst.js';
 import { ENEMY } from '../world/enemies.js';
@@ -155,16 +155,17 @@ const FIREWORK_HEIGHT = 8;      // maximale Strahlhoehe (Gangbreiten, wie 1980)
 const FIREWORK_HDR = 2.4;       // Strahlen bloomen in ihrer Arcade-Farbe
 
 // Karten-Glow (Boris' Punkt "Overglow ab Level 11"): der Bloom-Schwellwert
-// (0.85) arbeitet auf LUMINANZ -- Phosphor-Gruen (lum ~0.81) landet mit dem
-// festen HDR-Boost x2.2 weit darueber und ueberglueht die dichte Karte,
-// Tempest-Blau (lum ~0.48) nur knapp. In den DIAGRAMM-Ansichten wird der
-// Boost deshalb LUMINANZ-NORMIERT (Ziel knapp ueberm Schwellwert), die
-// Schwenks blenden zum vollen Ego-Boost; die Ego-Ansicht bleibt unveraendert.
+// (0.85) arbeitet auf LUMINANZ im linearen Farbraum -- Phosphor-Gruen
+// (linear ~0.745) landet mit dem festen HDR-Boost x2.2 weit darueber und
+// ueberglueht die dichte Karte, Tempest-Blau (linear ~0.227) bleibt am
+// Ego-Deckel. In den DIAGRAMM-Ansichten wird der Boost deshalb LUMINANZ-
+// NORMIERT (Ziel knapp ueberm Schwellwert), die Schwenks blenden zum vollen
+// Ego-Boost; die Ego-Ansicht bleibt unveraendert.
 const DIAGRAM_LINE_LUM = 1.0;   // Ziel-Luminanz der Karten-Linien
 const DIAGRAM_MARKER_LUM = 1.0; // Buchstaben: ueberall ein LEICHTER Glow
                                 // (1.15 machte um S/G runde Bloom-Flecken)
 const MARKER_BOOST_MAX = 3.0;   // Deckel fuer dunkle Farben (Blau braucht mehr Boost)
-const luminance = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+// Die Normierungs-Formel selbst (diagramBoost) lebt pur in render/colors.js.
 
 // Leuchtfeuer in der Draufsicht: BLASSE Lichtsaeule am Ziel (Boris' Punkt 4,
 // 26.8.2026 -- "macht alles verstehbarer"), die Schwenks blenden von dort
@@ -388,12 +389,12 @@ export function createBackend2026(container = document.body) {
     if (world.glowKey === key) return;
     world.glowKey = key;
     const col = new THREE.Color(themeHex);
-    const lum = Math.max(luminance(col), 1e-3);
-    const lineBoost = EGO_BOOST + (Math.min(EGO_BOOST, DIAGRAM_LINE_LUM / lum) - EGO_BOOST) * mix;
+    const lineBoost = diagramBoost(themeHex, mix,
+      { ego: EGO_BOOST, targetLum: DIAGRAM_LINE_LUM });
     world.lineMat.color.copy(col).multiplyScalar(lineBoost);
     world.outlineMat.color.copy(col).multiplyScalar(lineBoost);
-    const markerBoost = EGO_BOOST
-      + (Math.min(MARKER_BOOST_MAX, DIAGRAM_MARKER_LUM / lum) - EGO_BOOST) * mix;
+    const markerBoost = diagramBoost(themeHex, mix,
+      { ego: EGO_BOOST, targetLum: DIAGRAM_MARKER_LUM, maxBoost: MARKER_BOOST_MAX });
     for (const { mat } of world.markerMats) mat.color.copy(col).multiplyScalar(markerBoost);
   }
 
