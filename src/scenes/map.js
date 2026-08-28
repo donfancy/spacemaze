@@ -6,6 +6,7 @@
 // mit dem rueckwaertigen Andock-Flug (game.undock).
 
 import { GameEvent } from '../core/states.js';
+import { mapHint, gameOverColor } from '../core/hud.js';
 import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
@@ -77,24 +78,21 @@ export function createMap(game) {
       drawEnemyMarkers(renderer, flipperMarkers(game.flippers), face, camera, cell, fade, NEON_MAGENTA); // magenta Kreuze
       drawEnemyMarkers(renderer, pulsarMarkers(game.pulsars), face, camera, cell, fade, ARCADE_YELLOW); // Pulsar-Kreuze
 
-      // Nach der Feindberuehrung: GAME OVER pulsiert in der FARBE zwischen
-      // Feind-Rot und Weiss, bei voller Deckkraft -- blosses Helligkeits-
-      // Pulsieren wirkte ueber den Labyrinth-Linien wie durchgestrichen.
+      // Nach der Feindberuehrung: GAME OVER pulsiert in der FARBE (core/hud.js)
+      // zwischen Feind-Rot und Weiss, bei voller Deckkraft -- blosses
+      // Helligkeits-Pulsieren wirkte ueber den Labyrinth-Linien durchgestrichen.
       if (game.gameOver && fade > 0.01) {
-        const k = 0.5 + 0.5 * Math.sin(2 * Math.PI * 1.2 * t); // 0=rot, 1=weiss
-        const ch = (v) => Math.round(v + (255 - v) * k).toString(16).padStart(2, '0');
         renderer.drawText('GAME OVER', {
           x: renderer.width / 2, y: renderer.height * 0.16,
           size: Math.min(52, renderer.height * 0.08),
           align: 'center', baseline: 'middle',
-          color: `#ff${ch(0x3b)}${ch(0x30)}`, intensity: fade,
+          color: gameOverColor(t), intensity: fade,
         });
       }
 
       // Klein unten rechts (wie die Steuerungszeile in der Ego-Ansicht).
       if (fade > 0.01) {
-        const hint = game.reachedGoal ? 'X EXIT' : game.gameOver ? 'Q RETRY  X EXIT' : 'Q RETURN  X EXIT';
-        renderer.drawText(hint, {
+        renderer.drawText(mapHint(game), {
           x: renderer.width - 24, y: renderer.height - 20, size: 13,
           align: 'right', baseline: 'bottom', intensity: 0.5 * fade,
         });

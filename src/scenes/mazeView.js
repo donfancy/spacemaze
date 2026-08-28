@@ -17,6 +17,7 @@ import {
   faceLocalToWorld, faceDir, faceDockPose, mapGridToFace, mapUnitsToFace, gridBorderOnFace,
 } from '../world/cubeFaces.js';
 import { projectOccluders, occludeEdge } from '../render/occlusion.js';
+import { TANKER_RED } from '../render/colors.js';
 
 export const CUBE_SIZE = 2.4;   // Kantenlaenge des Wuerfels (= Bildflaeche)
 export const WALL_RATIO = 1.2;  // Wandhoehe in Zellen
@@ -149,7 +150,7 @@ const TRAIL_DIM = 0.5; // Weglinie zu 50% gedimmt (gegen Rahmen/Waende absetzen)
 // LEBENDEN Feinde (abgeschossene verschwinden auch von der Karte). Genutzt von
 // der Karte selbst und den Schwenks (dort mit ein-/ausblendender Intensitaet).
 // `color` erlaubt andere Feindarten (Spinner-Gruen); Standard ist Rauten-Rot.
-const ENEMY_MARK_COLOR = '#ff3b30';   // Feind-Rot wie in der Ego-Ansicht
+const ENEMY_MARK_COLOR = TANKER_RED;  // Feind-Rot wie in der Ego-Ansicht (colors.js)
 const ENEMY_MARK_RATIO = 0.22;        // Kreuz-Halbarm (Anteil der Gangbreite)
 
 export function drawEnemyMarkers(renderer, enemies, face, camera, cell, intensity, color = ENEMY_MARK_COLOR) {

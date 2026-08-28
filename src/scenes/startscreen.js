@@ -27,9 +27,12 @@ import { cubeMesh } from '../world/shapes.js';
 import { orbitCamera, dockPose, orbitTimeFacing } from '../world/cameraPaths.js';
 import { classifyEdges } from '../world/visibility.js';
 import { pickDockFace, faceDockPose, SIDE_FACES } from '../world/cubeFaces.js';
+import { CUBE_SIZE } from './mazeView.js';
 
-const CUBE_SIZE = 2.4;
 const HIDDEN_DIM = 0.3;     // Grunddimmung verdeckter Kanten
+// "PRESS S TO START"-Blinken: Periode/Anteil sichtbar -- EINE Formel fuer
+// render() und viewState(), sonst blinken 1980 und 2026 asynchron.
+const blinkOn = (t) => (t % 1.1) < 0.72;
 const DOCK_DURATION = 1.6;  // Sekunden fuer das Andocken
 const UNDOCK_DURATION = DOCK_DURATION; // Rueckflug symmetrisch gleich lang
 // Hoehe leicht begrenzt (max ~31 Grad), damit immer eine SEITENflaeche zugewandt
@@ -171,7 +174,7 @@ export function createStartscreen(game) {
         align: 'center', baseline: 'middle', intensity: active(ENGINE_2026),
       });
 
-      if ((t % 1.1) < 0.72) {
+      if (blinkOn(t)) {
         renderer.drawText('PRESS S TO START', {
           x: w / 2,
           y: h - Math.max(48, h * 0.14),
@@ -219,7 +222,7 @@ export function createStartscreen(game) {
     // Phase, Flug-Fortschritt, Kanten-Dimmung und Blend-Farbe -- dieselbe
     // Quelle wie die 1980-Zeichnung (look()). blink steuert "PRESS S".
     viewState() {
-      return { ...look(), t, blink: (t % 1.1) < 0.72 };
+      return { ...look(), t, blink: blinkOn(t) };
     },
   };
 }

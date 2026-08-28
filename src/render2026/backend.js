@@ -29,6 +29,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { State } from '../core/states.js';
+import { playHint, mapHint, gameOverColor } from '../core/hud.js';
 import { levelColor, levelConfig, enemyColor, spinnerColor } from '../core/levels.js';
 import { PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA } from '../render/colors.js';
 import { EYE_RATIO, cellSize } from '../scenes/mazeView.js';
@@ -44,7 +45,7 @@ import { flipperMarkers, flipperSegments, flipperTriangles } from '../world/flip
 import { pulsarMarkers, pulsarSegments } from '../world/pulsars.js';
 import {
   buildWorld, applyTheme, disposeWorld, hdr, setWallHeight, setMarkerFade,
-  UNITS_PER_CELL, FOG_DENSITY, HEADLIGHT_INTENSITY,
+  UNITS_PER_CELL, FOG_DENSITY, HEADLIGHT_INTENSITY, EGO_BOOST, MIRROR_LINE_DIM,
 } from './world3d.js';
 import { buildStartscreenScene } from './startscreen3d.js';
 
@@ -133,7 +134,8 @@ const CRASH_LIGHT_CAP = 60;     // Deckel: Intensitaet <= CAP * Kamera-Abstand^2
 // und das Ziel-FEUERWERK (fireworkBeams, Masse wie in playing.js).
 const FOE_LINE_HDR = 2.6;       // Feind-Konturen gluehen etwas staerker (Gefahr)
 const FOE_SHOT_FLICKER = 12;    // Farb-Schaltrate der Spinner-Schuesse (Hz, wie 1980)
-const MIRROR_LINE_DIM = 0.85;   // Spiegel-Konturen ohne HDR (Regel: kein Bloom im Spiegel)
+// MIRROR_LINE_DIM und EGO_BOOST kommen aus world3d.js -- eine Quelle fuer
+// beide Engines-Haelften, sonst driftet die setLineGlow-Normierung.
 const MIRROR_SHOT_OPACITY = 0.35; // Spiegel-Schuesse/-Feuerwerk: vertexColors sind
                                 // HDR-geboostet, die Opazitaet dimmt sie stattdessen
 const FLIPPER_FILL_DIM = 0.3;   // Flaechen-Fuellung des Flipper-X (dunkler Koerper,
@@ -158,7 +160,6 @@ const FIREWORK_HDR = 2.4;       // Strahlen bloomen in ihrer Arcade-Farbe
 // Tempest-Blau (lum ~0.48) nur knapp. In den DIAGRAMM-Ansichten wird der
 // Boost deshalb LUMINANZ-NORMIERT (Ziel knapp ueberm Schwellwert), die
 // Schwenks blenden zum vollen Ego-Boost; die Ego-Ansicht bleibt unveraendert.
-const EGO_BOOST = 2.2;          // der bisherige feste HDR-Boost (applyTheme)
 const DIAGRAM_LINE_LUM = 1.0;   // Ziel-Luminanz der Karten-Linien
 const DIAGRAM_MARKER_LUM = 1.0; // Buchstaben: ueberall ein LEICHTER Glow
                                 // (1.15 machte um S/G runde Bloom-Flecken)
@@ -1321,25 +1322,22 @@ export function createBackend2026(container = document.body) {
         const view = game.current.viewState?.();
         if (view?.crash) return '';
         if (view?.reached) return 'YOU MADE IT';
-        // Die Lenk-Tasten folgen der Blick-Verdrehung (Pulsar-Rotation,
-        // wie die 1980-Steuerzeile): bei 90/270 Grad lenkt runter/rauf.
-        const steerKeys = ['LEFT/RIGHT', 'DOWN/UP', 'RIGHT/LEFT', 'UP/DOWN'][view?.orient ?? 0];
-        const steer = view?.drive ? steerKeys + ' STEER' : 'ARROWS MOVE';
-        return 'FIND THE EXIT · ' + steer
-          + (view?.shoot ? ' · SPACE FIRE' : '') + ' · Q MAP';
+        // Steuer-Zeile aus core/hud.js -- Wortlaut und Lenk-Tasten-Mapping
+        // (Pulsar-Rotation) identisch mit der 1980-Engine.
+        return 'FIND THE EXIT - ' + playHint(view ?? {});
       }
-      case State.MAP: {
-        if (game.current.viewState?.()?.fade < 0.99) return '';
-        if (game.reachedGoal) return 'YOU MADE IT · X LAUNCH';
-        return game.gameOver ? 'Q RETRY · X LAUNCH' : 'Q RESUME · X LAUNCH';
-      }
+      case State.MAP:
+        return mapHint(game); // Wortlaut wie 1980; blendet per Opacity mit aus
       default:
         return '';
     }
   }
 
   function updateOverlays(game) {
+    const mapView = game.stateKey === State.MAP ? game.current.viewState?.() : null;
     setText(label, labelText(game));
+    // Der Karten-Hinweis blendet mit der Karte aus (wie 1980: intensity*fade).
+    label.style.opacity = mapView ? String(mapView.fade) : '1';
 
     // Startscreen-Texte (nur waehrend des Umtanzens, wie 1980).
     const onStart = game.stateKey === State.STARTSCREEN;
@@ -1357,14 +1355,11 @@ export function createBackend2026(container = document.body) {
       setHtml(switchLine, '');
     }
 
-    // GAME OVER auf der Karte: Farb-Puls rot<->weiss (wie 1980 -- Helligkeits-
-    // Pulsieren wirkte ueber den Linien "durchgestrichen").
-    const mapView = game.stateKey === State.MAP ? game.current.viewState?.() : null;
+    // GAME OVER auf der Karte: Farb-Puls rot<->weiss aus core/hud.js
+    // (wie 1980 -- Helligkeits-Pulsieren wirkte "durchgestrichen").
     if (mapView && game.gameOver && mapView.fade > 0.01) {
       setText(headline, 'GAME OVER');
-      const kP = 0.5 + 0.5 * Math.sin(2 * Math.PI * 1.2 * mapView.t);
-      const ch = (v) => Math.round(v + (255 - v) * kP);
-      headline.style.color = `rgb(255,${ch(0x3b)},${ch(0x30)})`;
+      headline.style.color = gameOverColor(mapView.t);
       headline.style.opacity = String(mapView.fade);
       headline.style.textShadow = '0 0 14px rgba(255,60,50,.7)';
     } else {

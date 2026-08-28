@@ -19,9 +19,9 @@ import { flipperMarkers } from '../world/flippers.js';
 import { pulsarMarkers } from '../world/pulsars.js';
 import { NEON_MAGENTA, ARCADE_YELLOW } from '../render/colors.js';
 import { gnawPatch } from '../sound/patches.js';
-import { cellSize, drawCompassLabels, drawFaceMarker, drawEnemyMarkers } from './mazeView.js';
-
-const CUBE_SIZE = 2.4;
+import {
+  CUBE_SIZE, cellSize, drawCompassLabels, drawFaceMarker, drawEnemyMarkers,
+} from './mazeView.js';
 
 const MARKER_TIME = 0.7;  // Sekunden: S/G blenden ein
 const GROW_TIME = 2.6;    // Sekunden: Labyrinth waechst

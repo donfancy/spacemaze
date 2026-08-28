@@ -1,0 +1,52 @@
+// Tests fuer die geteilten HUD-Texte/-Farben (core/hud.js) und die
+// Steuer-Zeilen-Invariante: die angezeigten Lenk-Tasten (steerHintKeys)
+// muessen exakt die Inverse des gyroTurn-Mappings sein -- ein
+// Vorzeichenfehler dort waere in Level 26-30 spielverwirrend und faellt
+// visuell kaum auf.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { playHint, mapHint, gameOverColor } from '../src/core/hud.js';
+import { gyroTurn, steerHintKeys } from '../src/world/gyro.js';
+import { TANKER_RED } from '../src/render/colors.js';
+
+test('steerHintKeys ist die Inverse von gyroTurn (alle vier Stellungen)', () => {
+  for (let orient = 0; orient < 4; orient++) {
+    const [leftKey, rightKey] = steerHintKeys(orient).toLowerCase().split('/');
+    assert.equal(gyroTurn(orient, { [leftKey]: true }), 1,
+      `orient ${orient}: die erste angezeigte Taste (${leftKey}) lenkt links`);
+    assert.equal(gyroTurn(orient, { [rightKey]: true }), -1,
+      `orient ${orient}: die zweite angezeigte Taste (${rightKey}) lenkt rechts`);
+  }
+  assert.equal(steerHintKeys(0), 'LEFT/RIGHT');
+  assert.equal(steerHintKeys(1), 'DOWN/UP', 'bei 90 Grad erscheint Welt-links unten');
+  assert.equal(steerHintKeys(2), 'RIGHT/LEFT');
+  assert.equal(steerHintKeys(3), 'UP/DOWN');
+  assert.equal(steerHintKeys(undefined), 'LEFT/RIGHT', 'ohne orient: aufrecht');
+});
+
+test('playHint: Steuer-Zeile je Modus, Wortlaut der 1980-Version', () => {
+  assert.equal(playHint({}), 'ARROWS MOVE - Q MAP');
+  assert.equal(playHint({ drive: true }), 'LEFT/RIGHT STEER - Q MAP');
+  assert.equal(playHint({ drive: true, shoot: true }),
+    'LEFT/RIGHT STEER - SPACE FIRE - Q MAP');
+  assert.equal(playHint({ drive: true, shoot: true, orient: 1 }),
+    'DOWN/UP STEER - SPACE FIRE - Q MAP');
+});
+
+test('mapHint: Q nur solange das Ziel offen ist, nach Game Over Retry', () => {
+  assert.equal(mapHint({}), 'Q RETURN  X EXIT');
+  assert.equal(mapHint({ gameOver: true }), 'Q RETRY  X EXIT');
+  assert.equal(mapHint({ reachedGoal: true }), 'X EXIT');
+});
+
+test('gameOverColor pulsiert zwischen Feind-Rot und Weiss (1.2 Hz)', () => {
+  // Bei sin=-1 (t = 0.75 Perioden) reines Feind-Rot, bei sin=+1 reines Weiss.
+  const period = 1 / 1.2;
+  assert.equal(gameOverColor(0.75 * period), TANKER_RED);
+  assert.equal(gameOverColor(0.25 * period), '#ffffff');
+  // Rot-Kanal ist immer voll (TANKER_RED beginnt mit ff).
+  for (const t of [0, 0.1, 0.2, 0.3, 0.4]) {
+    assert.match(gameOverColor(t), /^#ff[0-9a-f]{4}$/);
+  }
+});

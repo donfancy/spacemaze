@@ -30,6 +30,7 @@
 // Einrasten).
 
 import { GameEvent } from '../core/states.js';
+import { playHint } from '../core/hud.js';
 import { createCamera } from '../math/camera.js';
 import { createOscillator } from '../math/oscillator.js';
 import { generateMaze } from '../world/maze.js';
@@ -872,12 +873,9 @@ export function createPlaying(game) {
         x: 24, y: 24, size: Math.min(20, h * 0.03),
         align: 'left', baseline: 'top', intensity: 0.7,
       });
-      // Die Steuer-Zeile folgt der Blick-Verdrehung (erst Lenk-links-Taste,
-      // dann Lenk-rechts): bei 90/270 Grad lenkt man mit runter/rauf.
-      const steerKeys = ['LEFT/RIGHT', 'DOWN/UP', 'RIGHT/LEFT', 'UP/DOWN'][gyro.orient];
-      const hint = shoot ? steerKeys + ' STEER - SPACE FIRE - Q MAP'
-        : drive ? steerKeys + ' STEER - Q MAP' : 'ARROWS MOVE - Q MAP';
-      renderer.drawText(hint, {
+      // Die Steuer-Zeile (core/hud.js, geteilt mit 2026) folgt der Blick-
+      // Verdrehung: bei 90/270 Grad lenkt man mit runter/rauf.
+      renderer.drawText(playHint({ drive, shoot, orient: gyro.orient }), {
         x: w - 24, y: h - 20, size: 13,
         align: 'right', baseline: 'bottom', intensity: 0.5,
       });

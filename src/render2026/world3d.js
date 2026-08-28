@@ -28,9 +28,18 @@ export const HEADLIGHT_INTENSITY = 12;  // Kamera-Scheinwerfer (Draufsicht: 0)
 const MIRROR_DIM = 0.7;                 // Deck-Opazitaet des Bodens (Spiegel-Staerke)
 const FOG_COLOR = 0x0d0618;
 
+// Fester HDR-Boost der Ego-Leuchtkanten (applyTheme) -- backend.js rechnet
+// seine Karten-Glow-Normierung (setLineGlow) explizit GEGEN diesen Wert:
+// beide muessen synchron bleiben, darum lebt er nur hier und wird importiert.
+export const EGO_BOOST = 2.2;
+
+// Spiegel-Konturen ohne HDR (Regel: kein Bloom im Spiegelbild, wirkt
+// matt-reflektiert) -- gilt auch fuer die Spiegel-Kopien in backend.js.
+export const MIRROR_LINE_DIM = 0.85;
+
 // HDR-Farbe: ueber Weiss hinaus verstaerkt, damit der Bloom-Schwellwert (0.85)
 // sie aufnimmt -- alles unter ~1.0 bleibt matt, alles darueber glueht.
-export function hdr(hex, boost = 2.2) {
+export function hdr(hex, boost = EGO_BOOST) {
   return new THREE.Color(hex).multiplyScalar(boost);
 }
 
@@ -102,14 +111,14 @@ export function buildWorld(maze, opts = {}) {
 // Kanten bewusst OHNE HDR -- kein Bloom im Spiegelbild, wirkt matt-reflektiert).
 export function applyTheme(world, hex) {
   const col = new THREE.Color(hex);
-  world.lineMat.color.copy(col).multiplyScalar(2.2);
-  world.outlineMat.color.copy(col).multiplyScalar(2.2);
-  world.mirrorLineMat.color.copy(col).multiplyScalar(0.85);
+  world.lineMat.color.copy(col).multiplyScalar(EGO_BOOST);
+  world.outlineMat.color.copy(col).multiplyScalar(EGO_BOOST);
+  world.mirrorLineMat.color.copy(col).multiplyScalar(MIRROR_LINE_DIM);
   world.gridMat.color.copy(col).multiplyScalar(0.3);
   world.wallGridMat.color.copy(col).multiplyScalar(0.3);
   world.headlight.color.copy(col);
   world.trailMat.color.copy(col).multiplyScalar(0.9);
-  for (const { mat } of world.markerMats) mat.color.copy(col).multiplyScalar(2.2);
+  for (const { mat } of world.markerMats) mat.color.copy(col).multiplyScalar(EGO_BOOST);
 }
 
 // Welt wegwerfen (Levelwechsel): GPU-Ressourcen freigeben, sonst leckt jedes

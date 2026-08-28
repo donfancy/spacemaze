@@ -76,3 +76,11 @@ export function gyroTurn(orient, keys) {
   const k = orient & 3;
   return (keys[LEFT_KEY[k]] ? 1 : 0) - (keys[LEFT_KEY[(k + 2) % 4]] ? 1 : 0);
 }
+
+// Anzeige der Lenk-Tasten fuer die Steuer-Zeile (erst Lenk-links, dann
+// Lenk-rechts, z.B. 'DOWN/UP' bei 90 Grad) -- direkt aus LEFT_KEY
+// abgeleitet und damit garantiert die Inverse des gyroTurn-Mappings.
+export function steerHintKeys(orient) {
+  const k = (orient ?? 0) & 3;
+  return LEFT_KEY[k].toUpperCase() + '/' + LEFT_KEY[(k + 2) % 4].toUpperCase();
+}

@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { PHOSPHOR_GREEN, TEMPEST_BLUE, NEON_MAGENTA } from '../render/colors.js';
 import { hdr, buildStarField, buildDust } from './world3d.js';
 
-const CUBE_SIZE = 2.4;    // wie scenes/startscreen.js
+import { CUBE_SIZE } from '../scenes/mazeView.js'; // eine Quelle fuer beide Engines
 const STAR_SEED = 1980;   // fester Himmel (kein Maze-Seed auf dem Startscreen)
 
 export function buildStartscreenScene() {
