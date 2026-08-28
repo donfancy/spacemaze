@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 346 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 369 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -47,19 +47,30 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Ergebnisse im Antworttext zusammenfassen; visuell prüft er im Browser.
 
 ## Architektur-Kurzüberblick
-- `src/math/` — vec3, camera (6-DOF + optionale freie Basis), projection
+- `src/math/` — vec3, camera (yaw/pitch + optionale freie Basis; BEWUSST ohne
+  roll — Hidden-Lines-Regel 4, Roll läuft nur als Bildraum-Sway), projection
 - `src/world/` — maze (Generator), mazeGeometry, metric (Achsen-Metrik), mazeWorld,
   drive (Fahr-Dynamik), walk (Geh-Kinetik mit Rampen), waves (Kollisionswellen),
   goal (Ziel-Zone + Leuchtfeuer), cubeFaces, shapes, visibility, enemies/spinners/
-  flippers/pulsars (Feinde), gyro (Blickachsen-Rotation ab 26), shots, stars
+  flippers/pulsars (Feinde), foePlacement (GEMEINSAME Feind-Platzierung:
+  corridorCandidates/straightRuns/openSpan + Querschnitts-Kinematik der
+  Flipper/Pulsare), gyro (Blickachsen-Rotation ab 26), shots, stars
 - `src/render/` — renderer.js (EINZIGER Canvas-Teil), projection.js, occlusion.js
 - `src/sound/` — patches.js (Klaenge als reine Daten, testbar), audio.js
   (EINZIGER Web-Audio-Teil, analog renderer.js)
-- `src/core/` — states.js (Zustands-Automat), game.js (Orchestrierung)
+- `src/core/` — states.js (Zustands-Automat), game.js (Orchestrierung; dispatch
+  ist IMMER nahtlos — der frühe Fade-über-Schwarz ist entfernt), hud.js
+  (geteilte HUD-Texte/-Farben BEIDER Engines, 1980-Wording ist die Referenz)
 - `src/scenes/` — startscreen, mazegen, falling, playing, rising, map + mazeView.js
   (gemeinsamer Flächen-Renderer)
 
 ## Stand & wichtige technische Punkte
+- **Gesamt-Review 28.8.2026 (REVIEW.md) umgesetzt:** Flipper-Wand-Bug +
+  Paar-Spawn gefixt, world/foePlacement.js + core/hud.js + makeBuffer
+  (backend.js) gegen Dreifach-/Achtfach-Duplikate, toter Fade-Pfad raus,
+  Schwenk-Wand-Cache (mergedOutline), backend.dispose() + Welt-Freigabe am
+  Startscreen, tote Exporte entfernt, 369 Tests. Aufgeschobenes: IDEAS.md
+  (Perf) und PLAN2026.md Stufe 6 (proto-Abschied, playing-Zerlegung).
 - **Der komplette Zyklus läuft**: Startscreen (Level-Auswahl per Pfeiltasten) →
   andocken → Labyrinth wächst → Reinfallen → Ego-Begehung (Tank-Steuerung,
   Hidden Lines) → Q/20s → Rückschwenk → Karte mit Weg. Auf der Karte: solange

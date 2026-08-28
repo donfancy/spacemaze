@@ -1,5 +1,17 @@
 # Code-Review SpaceMaze — Gesamtbestand (28.8.2026)
 
+> **STATUS (28.8.2026, Abend): UMGESETZT** — alle A-Punkte und die B-Liste
+> sind abgearbeitet (Etappen-Commits, 369 Tests gruen, CDP-Smoke-Test beider
+> Engines ok). Bewusst aufgeschoben/entschieden:
+> - A6 Tanker-InstancedMesh + GC-Kleinvieh → IDEAS.md (Stufe-6-Pass).
+> - A12 proto2026-Abschied + A13 playing.js-Restzerlegung → PLAN2026.md Stufe 6.
+> - A9 Fade: ENTFERNT (Boris). A6.3 HUD-Wording: 1980 ist die Referenz (Boris).
+> - B48 (unitSize/cellSize aus scenes/mazeView in core importiert): bewusst
+>   gelassen — core haengt wegen der Szenen-Factories ohnehin an scenes, ein
+>   Umzug waere Churn ohne Verhaltensgewinn.
+> - vec3()/add/scale/length bleiben als Bibliotheks-Repertoire (kommentiert).
+> Das Dokument darunter ist der Original-Befund (historisch).
+
 Review ueber beide Engines (1980 + 2026), Core, World, Sound, Tests.
 Fuenf parallele Review-Paesse (Mathe/World-Basis, Feind-Module, Render+Szenen
 klassisch, 2026-Engine, Core/Sound/Testabdeckung), kritische Funde am Code
