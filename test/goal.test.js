@@ -62,7 +62,7 @@ test('goalBeamFeet: jeder Strahl bleibt zu jeder Zeit auf seiner Kante', () => {
     ([x, z]) => x === zone.x0 && z >= zone.z0 && z <= zone.z1,
   ];
   for (const time of [0, 0.37, 1.2, 5, 42.7]) {
-    const feet = goalBeamFeet(zone, { perEdge: 2, time });
+    const feet = goalBeamFeet(zone, { perEdge: 3, time });
     assert.equal(feet.length, 4 * 3, '4 Kanten x 3 Strahlen');
     feet.forEach((foot, i) => {
       const e = Math.floor(i / 3);
@@ -73,15 +73,15 @@ test('goalBeamFeet: jeder Strahl bleibt zu jeder Zeit auf seiner Kante', () => {
 
 test('goalBeamFeet: Strahlen wandern ueber die Zeit, unabhaengig voneinander', () => {
   const zone = { x0: 0, x1: 4, z0: 0, z1: 4 };
-  const a = goalBeamFeet(zone, { perEdge: 2, time: 0.2, rate: 1 });
-  const b = goalBeamFeet(zone, { perEdge: 2, time: 0.7, rate: 1 });
+  const a = goalBeamFeet(zone, { perEdge: 3, time: 0.2, rate: 1 });
+  const b = goalBeamFeet(zone, { perEdge: 3, time: 0.7, rate: 1 });
   const moved = a.filter(([x, z], i) => Math.hypot(x - b[i][0], z - b[i][1]) > 1e-3);
   assert.ok(moved.length >= a.length / 2, `die meisten Strahlen bewegen sich (${moved.length}/${a.length})`);
   // Unabhaengig: nicht alle Strahlen einer Kante am selben Punkt.
   const edge0 = a.slice(0, 3).map(([x]) => x.toFixed(4));
   assert.ok(new Set(edge0).size > 1, 'Strahlen einer Kante an verschiedenen Positionen');
   // Deterministisch: gleiche Zeit -> gleiche Fuesse.
-  assert.deepEqual(a, goalBeamFeet(zone, { perEdge: 2, time: 0.2, rate: 1 }));
+  assert.deepEqual(a, goalBeamFeet(zone, { perEdge: 3, time: 0.2, rate: 1 }));
 });
 
 test('beamWander: bleibt in [0,1] und gleitet innerhalb eines Takts monoton', () => {

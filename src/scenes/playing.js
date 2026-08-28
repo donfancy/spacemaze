@@ -87,7 +87,7 @@ const TRAIL_DIST_RATIO = 0.2; // Weg-Aufzeichnung: Mindestdistanz in Zellen
 // weiss auf und erloeschen.
 const GOAL_INSET_RATIO = 0.25;   // Einrueckung pro Seite (Anteil der Feldgroesse)
 const BEAM_HEIGHT_RATIO = 60;    // Strahlhoehe in Zellen (quasi unendlich)
-const BEAM_PER_EDGE = 2;         // Zwischenstrahlen pro Quadratkante (+ 4 Ecken)
+const BEAM_PER_EDGE = 3;         // Strahlen pro Quadratkante (12 gesamt)
 const BEAM_MAX_INT = 0.7;        // hellster Flacker-Wert der Strahlen
 const BEAM_WANDER_RATE = 0.7;    // Wander-Stuetzstellen pro Sekunde
 const GOAL_MARKER_INT = 0.9;     // Intensitaet des Boden-Quadrats
@@ -127,8 +127,6 @@ const FLASH_GLOW = 16;        // Glow des Blitzes (Standard: 8)
 const BRAKE_HOLD = 0.2;       // s Stillstand nach dem Bremsen (Q), bevor es abhebt
 
 // Kampf-Levels (ab Level 11): Feinde, Schiessen, Game Over.
-const FLIPPER_COLOR = NEON_MAGENTA; // X-Flipper (ab Level 21)
-const PULSAR_COLOR = ARCADE_YELLOW; // Pulsare (ab Level 26)
 const SHOT_COLOR = '#ffffff';    // Projektile und Verpuffen
 const FOE_SHOT_FLICKER = 12;     // Farb-Schaltrate der Spinner-Schuesse (Hz)
 const ENEMY_GLOW = 12;           // Rauten gluehen etwas staerker (Gefahr)
@@ -250,7 +248,7 @@ export function createPlaying(game) {
       bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 10, speed: 1.8 * cell, life: 0.4, size: 0.08 * cell, color: SHOT_COLOR });
     } else if (ev.type === 'flipper') {
       game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: burstSeq++, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: FLIPPER_COLOR, shardCount: 6, shardSize: 0.3 * cell });
+      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: burstSeq++, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: NEON_MAGENTA, shardCount: 6, shardSize: 0.3 * cell });
     } else {
       // Tanker-Abschuss: Funken-Splitter + flaechige Truemmer (nur 2026).
       game.audio?.play(boomPatch());
@@ -538,7 +536,7 @@ export function createPlaying(game) {
         const hit = flipperPlayerHit(flippers, px, pz, RADIUS_RATIO * cell, cell,
           { px: prevX, pz: prevZ });
         if (hit && !reached) {
-          startCrash(hit, { kill: hit.flipper, color: FLIPPER_COLOR });
+          startCrash(hit, { kill: hit.flipper, color: NEON_MAGENTA });
           return;
         }
       }
@@ -604,6 +602,10 @@ export function createPlaying(game) {
     },
 
     render(renderer) {
+      // Near-Plane einmal pro Frame -- MIT der Zellgroesse skaliert
+      // (Near-Plane-Regel), alle Zeichner unten nutzen denselben Wert.
+      const near = NEAR_RATIO * cell;
+
       // Spieler-Crash: das GANZE Bild zerbirst -- alle Linien fliegen als
       // Scherben vom Einschlag weg (render/shatter.js), waehrend Explosion
       // und Kamera-Schuetteln laufen; der schnelle Rueckschwenk setzt die
@@ -615,7 +617,7 @@ export function createPlaying(game) {
         const world = faceLocalToWorld(crashPos.x, EYE_RATIO * cell, crashPos.z, face, CUBE_SIZE);
         // Kamera-Basis steht vom Vorframe; near mit cell skalieren (der
         // Einschlag ist direkt vor der Kamera -- Near-Plane-Regel).
-        const c = renderer.worldToScreen(world, camera, NEAR_RATIO * cell);
+        const c = renderer.worldToScreen(world, camera, near);
         crashScreen = c ? { cx: c.x, cy: c.y } : crashScreen;
         renderer.pushShatter({
           amount: 1 - (1 - p) * (1 - p), // harter Stoss, dann treibendes Auseinanderfliegen
@@ -635,7 +637,7 @@ export function createPlaying(game) {
         renderer.pushSway(swayTransform(bank + rollOsc.x + gyro.roll, pitchOsc.x, { height: renderer.height, fov: camera.fov }));
       }
       const pose = egoPose(face, px, pz, yaw, cell);
-      const view = renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near: NEAR_RATIO * cell });
+      const view = renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near });
 
       // Sternenhimmel (ab Level 4): weltfeste Sterne in der Level-Farbe --
       // beim Drehen zieht der Himmel vorbei, das macht jede Drehung
@@ -673,7 +675,6 @@ export function createPlaying(game) {
       // Ziel-Leuchtfeuer. Boden-Quadrat: normale Kanten-Verdeckung, aber
       // verdeckt doppelt so hell wie Wandkanten. Near-Plane wie bei den
       // Waenden skalieren (man faehrt direkt darueber).
-      const goalNear = NEAR_RATIO * cell;
       renderFaceOverlay(renderer, goalSegs, camera, view, { intensity: GOAL_MARKER_INT, dim: GOAL_OCC_DIM });
 
       // Strahlen: wandern auf der Quadratkante (am Ziel eingefroren) und
@@ -691,7 +692,7 @@ export function createPlaying(game) {
           // Weisses Aufstrahlen: alle Strahlen gleich hell -> EIN Stroke.
           const segs = faceSegments(feet.map(([bx, bz]) => [[bx, 0, bz], [bx, beamH, bz]]), face);
           renderer.renderScene({ segments: segs, intensity: 1 - flashAge / GOAL_FLASH_TIME },
-            camera, { near: goalNear, color: FLASH_COLOR, glow: FLASH_GLOW });
+            camera, { near: near, color: FLASH_COLOR, glow: FLASH_GLOW });
         } else {
           // Flacker-Wert auf FLICKER_STEPS Stufen gerundet, pro Stufe EIN
           // Stroke (statt bis zu 2 pro Strahl) -- sichtbar und verdeckt
@@ -708,10 +709,10 @@ export function createPlaying(game) {
             if (cut < beamH) bucketAdd(visBuckets, qf, faceSegments([[[bx, cut, bz], [bx, beamH, bz]]], face));
           }
           for (const [qf, segments] of visBuckets) {
-            renderer.renderScene({ segments, intensity: BEAM_MAX_INT * qf }, camera, { near: goalNear });
+            renderer.renderScene({ segments, intensity: BEAM_MAX_INT * qf }, camera, { near: near });
           }
           for (const [qf, segments] of dimBuckets) {
-            renderer.renderScene({ segments, intensity: GOAL_OCC_DIM * BEAM_MAX_INT * qf }, camera, { near: goalNear });
+            renderer.renderScene({ segments, intensity: GOAL_OCC_DIM * BEAM_MAX_INT * qf }, camera, { near: near });
           }
         }
       }
@@ -739,7 +740,7 @@ export function createPlaying(game) {
           for (const [key, segments] of buckets) {
             const [color, q] = key.split('|');
             renderer.renderScene({ segments, intensity: Number(q) }, camera,
-              { near: goalNear, color, glow: FLASH_GLOW });
+              { near: near, color, glow: FLASH_GLOW });
           }
         }
       }
@@ -755,10 +756,8 @@ export function createPlaying(game) {
           life: WAVE_LIFE, arm: WAVE_ARM_RATIO * cell,
         });
         if (!geo) continue;
-        // Near-Plane wie bei den Waenden mit der Zellgroesse skalieren: beim
-        // Aufprall ist die Wand naeher als die Standard-Near des Renderers --
-        // ohne Override wuerde das Kreuz frontal komplett weggeclippt.
-        const near = NEAR_RATIO * cell;
+        // Beim Aufprall ist die Wand naeher als die Standard-Near des
+        // Renderers -- ohne den near-Override wuerde das Kreuz weggeclippt.
         const segments = faceSegments(geo.segments, face);
         renderer.renderScene({ segments, intensity: geo.fade * wv.strength }, camera, { near });
         const whiteness = wv.flash ? (1 - age / FLASH_TIME) * wv.strength : 0;
@@ -805,7 +804,7 @@ export function createPlaying(game) {
           segs.push(...flipperSegments(f, { cell }));
         }
         renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
-          intensity: 0.95, dim: ENEMY_OCC_DIM, color: FLIPPER_COLOR, glow: ENEMY_GLOW,
+          intensity: 0.95, dim: ENEMY_OCC_DIM, color: NEON_MAGENTA, glow: ENEMY_GLOW,
         });
       }
 
@@ -817,7 +816,7 @@ export function createPlaying(game) {
           segs.push(...pulsarSegments(p, sceneT, { cell }));
         }
         renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
-          intensity: 0.95, dim: ENEMY_OCC_DIM, color: PULSAR_COLOR, glow: ENEMY_GLOW,
+          intensity: 0.95, dim: ENEMY_OCC_DIM, color: ARCADE_YELLOW, glow: ENEMY_GLOW,
         });
       }
 
@@ -829,7 +828,7 @@ export function createPlaying(game) {
           Math.floor(sceneT * FOE_SHOT_FLICKER + (s.phase ?? 0)) % FIREWORK_COLORS.length];
         renderer.renderScene(
           { segments: faceSegments(spinnerShotSegments(s, sceneT, { cell }), face) },
-          camera, { near: NEAR_RATIO * cell, color, glow: 10 });
+          camera, { near, color, glow: 10 });
       }
 
       // Projektile: weisse rotierende Sterne. Keine Verdeckung noetig -- sie
@@ -840,7 +839,7 @@ export function createPlaying(game) {
           segs.push(...shotSegments(s, sceneT, { cell, yaw, height: EYE_RATIO * cell }));
         }
         renderer.renderScene({ segments: faceSegments(segs, face) }, camera,
-          { near: NEAR_RATIO * cell, color: SHOT_COLOR, glow: 10 });
+          { near, color: SHOT_COLOR, glow: 10 });
       }
 
       // Splitter-Explosionen (Verpuffen, Feind-Abschuss, Crash).
@@ -848,7 +847,7 @@ export function createPlaying(game) {
         const geo = burstSegments(sceneT - b.born, b);
         if (!geo) continue;
         renderer.renderScene({ segments: faceSegments(geo.segments, face), intensity: geo.fade },
-          camera, { near: NEAR_RATIO * cell, color: b.color, glow: 10 });
+          camera, { near, color: b.color, glow: 10 });
       }
 
       // Fadenkreuz: zeigt die aktuelle ZIELRICHTUNG der Projektile -- bei
@@ -858,10 +857,8 @@ export function createPlaying(game) {
       if (shoot && !crash && !reached) {
         const aim = aimYaw(yaw, drive ? driveState.steer : walkState.steer);
         const d = CROSSHAIR_DIST * cell;
-        // near mit cell skalieren (Near-Plane-Regel): der Anker liegt bei
-        // 2.5 Gangbreiten -- mit dem festen 0.1 verschwaende das Fadenkreuz
-        // bei noch groesseren Labyrinthen kommentarlos.
-        const near = NEAR_RATIO * cell;
+        // near-Override (s.o.): der Anker liegt bei 2.5 Gangbreiten -- mit
+        // dem festen 0.1 verschwaende das Fadenkreuz bei grossen Labyrinthen.
         const anchor = renderer.worldToScreen(
           faceLocalToWorld(px - Math.sin(aim) * d, EYE_RATIO * cell, pz - Math.cos(aim) * d, face, CUBE_SIZE), camera, near);
         const above = renderer.worldToScreen(

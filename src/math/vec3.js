@@ -1,5 +1,7 @@
 // Reine 3D-Vektor-Mathematik. Keine DOM-/Canvas-Abhaengigkeit -> headless testbar.
 // Ein Vektor ist schlicht ein Array [x, y, z]. Funktionen sind seiteneffektfrei.
+// Bibliotheks-Repertoire: vec3/add/scale/length werden aktuell nur von Tests
+// genutzt, bleiben aber als Grundausstattung der Vektor-Bibliothek.
 
 export function vec3(x = 0, y = 0, z = 0) {
   return [x, y, z];

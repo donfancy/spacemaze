@@ -36,7 +36,8 @@ export function isChamber(x, y) {
   return (x % 2 === 1) && (y % 2 === 1);
 }
 
-// Pfeiler = beide Koordinaten gerade.
+// Pfeiler = beide Koordinaten gerade. Bewusst behaltener Test-Helfer
+// (Struktur-Invarianten der Generator-Tests), Produktion nutzt ihn nicht.
 export function isPillar(x, y) {
   return (x % 2 === 0) && (y % 2 === 0);
 }
@@ -181,7 +182,8 @@ function neighborsOf([cx, cy], n) {
 }
 
 // Menge aller von `from` aus erreichbaren offenen Zellen (als "x,y"-Strings).
-// Nuetzlich fuer Verbundenheitstests und spaeter fuers Gameplay.
+// Bewusst behaltener TEST-HELFER (Invarianten: "alle Kammern erreichbar"),
+// Produktion nutzt ihn nicht -- wie isPillar oben.
 export function reachable(maze, from) {
   const { n, grid } = maze;
   const key = (x, y) => x + ',' + y;
@@ -212,10 +214,11 @@ export function findPath(maze, from, to) {
   const key = (x, y) => x + ',' + y;
   const prev = new Map([[key(from[0], from[1]), null]]);
   const queue = [from];
+  let head = 0; // Lese-Index statt shift() -- O(1) pro Pop
   const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-  while (queue.length > 0) {
-    const [cx, cy] = queue.shift();
+  while (head < queue.length) {
+    const [cx, cy] = queue[head++];
     if (cx === to[0] && cy === to[1]) {
       const path = [];
       let cur = [cx, cy];

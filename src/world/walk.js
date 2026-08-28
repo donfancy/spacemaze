@@ -38,7 +38,8 @@ export function createWalkState() {
 //     Fahrgeraeusch: an der Wand angedrueckt ist es 0, beim Gleiten anteilig.
 export function walkStep(maze, state, pose, input, dt, opts) {
   const { unit, cell, radius } = opts;
-  const params = { ...WALK, ...(opts.params ?? {}) };
+  // Nur bei Override mergen -- laeuft 60x/s im Sim-Schritt.
+  const params = opts.params ? { ...WALK, ...opts.params } : WALK;
 
   // Lenk-Rampe: Drehrate faehrt von 0 hoch und wieder herunter.
   const turnTarget = Math.max(-1, Math.min(1, input.turn ?? 0));

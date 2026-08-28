@@ -265,10 +265,8 @@ export function spinnerFire(spinners, shots, dt, rng, player, cell) {
     if (!s.alive || !s.shoot) continue;
     // Spieler im Gang des Spinners? (quer in der Gangbreite, laengs in der
     // Spanne; t < 0 waere der Nachbargang hinter der End-Wand)
-    const along = s.axis === 'x' ? player.px : player.pz;
-    const crossP = s.axis === 'x' ? player.pz : player.px;
-    if (Math.abs(crossP - s.cross) >= 0.5 * cell) continue;
-    const tp = (along - s.wall) * s.dir;
+    const [tp, qp] = runCoords(s, player.px, player.pz);
+    if (qp >= 0.5 * cell) continue;
     if (tp < 0 || tp > s.runLen) continue;
     // ... und der Spinner liegt VOR dem Spieler (wer wegschaut/flieht,
     // wird nicht in den Ruecken geschossen).

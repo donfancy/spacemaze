@@ -35,7 +35,3 @@ const TRANSITIONS = {
 export function nextState(state, event) {
   return TRANSITIONS[state]?.[event] ?? null;
 }
-
-export function isValidState(state) {
-  return Object.values(State).includes(state);
-}

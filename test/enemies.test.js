@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateMaze, findPath, isChamber, OPEN } from '../src/world/maze.js';
-import { cellAt, cellCenter } from '../src/world/mazeWorld.js';
+import { cellAt } from '../src/world/mazeWorld.js';
 import { createRng } from '../src/util/rng.js';
 import { ENEMY, createEnemies, enemiesStep, enemyHit, enemySegments } from '../src/world/enemies.js';
 

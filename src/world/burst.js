@@ -86,14 +86,14 @@ export function burstShards(age, opts) {
     let azz = hash01(j, seed + 41) - 0.5;
     const al = Math.hypot(ax, ay, azz) || 1;
     ax /= al; ay /= al; azz /= al;
-    const ang = SHARD_SPIN * (0.6 + 0.8 * hash01(j, seed + 53)) * age
+    const ang = SHARD_SPIN * (0.6 + 0.8 * hash01(j, seed + 53)) * age // Taumel-Tempo 0.6x-1.4x
       + hash01(j, seed + 71) * 2 * Math.PI;
     const cosA = Math.cos(ang), sinA = Math.sin(ang);
     // Unregelmaessiges Dreieck in der lokalen xy-Ebene, dann Rodrigues-Drehung.
     const tri = [];
     for (let k = 0; k < 3; k++) {
       const a = (k / 3) * 2 * Math.PI + (hash01(j * 3 + k, seed + 83) - 0.5) * 0.9;
-      const r = edge * (0.55 + 0.6 * hash01(j * 3 + k, seed + 97));
+      const r = edge * (0.55 + 0.6 * hash01(j * 3 + k, seed + 97)); // Ecken-Radius 0.55x-1.15x
       const vx = Math.cos(a) * r, vy = Math.sin(a) * r, vz = 0;
       const dot = ax * vx + ay * vy + azz * vz;
       tri.push([

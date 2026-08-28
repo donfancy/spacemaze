@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { State, GameEvent, nextState, isValidState } from '../src/core/states.js';
+import { State, GameEvent, nextState } from '../src/core/states.js';
 
 test('voller Zyklus Startscreen -> MazeGen -> Falling -> Playing -> Rising -> Map -> Startscreen', () => {
   assert.equal(nextState(State.STARTSCREEN, GameEvent.START), State.MAZE_GEN);
@@ -19,8 +19,3 @@ test('ungueltige Uebergaenge liefern null', () => {
   assert.equal(nextState('NONSENSE', GameEvent.START), null);
 });
 
-test('isValidState erkennt gueltige Zustaende', () => {
-  assert.ok(isValidState(State.STARTSCREEN));
-  assert.ok(isValidState(State.PLAYING));
-  assert.ok(!isValidState('FOO'));
-});

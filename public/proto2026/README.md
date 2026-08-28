@@ -30,7 +30,8 @@ Kosten der Effekte live vergleichen (Toggle druecken, FPS beobachten).
 - `world3d.js` — Szenen-AUFBAU aus den puren Spiel-Modulen (kein Spielzustand)
 - `main.js` — Render-Loop, Autopilot (CatmullRom-Kurve ueber den Loesungsweg,
   Kurvenneigung, weiches Nachschwenken), Eingabe, HUD
-- `vendor/` — Three.js r185 als ES-Module (kein Build-Tool, kein npm-Paket)
+- Three.js r185 liegt als ES-Module in `public/vendor/` (seit Stufe 0 mit
+  der echten 2026-Engine geteilt; kein Build-Tool, kein npm-Paket)
 
 ## Gelernte Fallen (fuers echte Projekt)
 

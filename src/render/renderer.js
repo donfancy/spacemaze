@@ -139,6 +139,8 @@ export class Renderer {
       polylines.push([[pa.x, pa.y], [pb.x, pb.y]]);
     }
     this.drawPolylines(polylines, {
+      // Praezedenz bewusst: die SZENE schlaegt die Options (playing setzt
+      // pro renderScene-Aufruf szenen-eigene Intensitaeten).
       intensity: scene.intensity ?? opts.intensity ?? 1,
       lineWidth: opts.lineWidth ?? 2,
       color: opts.color ?? this.color,

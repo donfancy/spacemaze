@@ -52,17 +52,18 @@ export function beamWander(i, t, opts = {}) {
 }
 
 // Fusspunkte der Strahlen zur Zeit `time`: Strahl i ist fest an Kante
-// floor(i / (perEdge+1)) gebunden und wandert auf ihr entlang -- insgesamt
-// 4*(perEdge+1) Strahlen. Liefert [[x,z], ...].
+// floor(i / perEdge) gebunden und wandert auf ihr entlang -- insgesamt
+// 4*perEdge Strahlen (perEdge = Strahlen PRO Kante, ehrlicher Name).
+// Liefert [[x,z], ...].
 export function goalBeamFeet(zone, opts = {}) {
-  const perEdge = opts.perEdge ?? 2;
+  const perEdge = opts.perEdge ?? 3;
   const time = opts.time ?? 0;
   const { x0, x1, z0, z1 } = zone;
   const corners = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
   const feet = [];
-  const count = 4 * (perEdge + 1);
+  const count = 4 * perEdge;
   for (let i = 0; i < count; i++) {
-    const e = Math.floor(i / (perEdge + 1));
+    const e = Math.floor(i / perEdge);
     const [ax, az] = corners[e];
     const [bx, bz] = corners[(e + 1) % 4];
     const u = beamWander(i, time, { rate: opts.rate });
@@ -78,18 +79,19 @@ export function goalBeamFeet(zone, opts = {}) {
 // (t = Anteil der Wanddistanz an der Strahldistanz); darueber ragt er frei
 // ueber die Wand. Liefert das Maximum ueber alle schneidenden Grundriss-
 // Segmente (0 = ganz frei sichtbar); der Aufrufer kappt bei der Strahlhoehe.
-// footprints: xz-Segmente als [x,0,z]-Paare (wallFootprints).
-export function beamOcclusionCut(footprints, cam, foot, opts = {}) {
+// ACHTUNG Punktformate: footprints sind [x,0,z]-TRIPEL (wallFootprints),
+// camXZ und footXZ dagegen [x,z]-PAARE -- die Namen sagen es jetzt.
+export function beamOcclusionCut(footprints, camXZ, footXZ, opts = {}) {
   const eye = opts.eye ?? 0;
   const wallHeight = opts.wallHeight ?? 1;
-  const dx = foot[0] - cam[0];
-  const dz = foot[1] - cam[1];
+  const dx = footXZ[0] - camXZ[0];
+  const dz = footXZ[1] - camXZ[1];
   let cut = 0;
   for (const [a, b] of footprints) {
     const rx = b[0] - a[0], rz = b[2] - a[2];
     const det = rx * dz - rz * dx;
     if (Math.abs(det) < 1e-12) continue; // parallel zur Sichtlinie
-    const qx = a[0] - cam[0], qz = a[2] - cam[1];
+    const qx = a[0] - camXZ[0], qz = a[2] - camXZ[1];
     const t = (rx * qz - rz * qx) / det; // Anteil auf der Sichtlinie
     const u = (dx * qz - dz * qx) / det; // Anteil auf dem Wand-Segment
     if (t <= 1e-9 || t >= 1 - 1e-9 || u < 0 || u > 1) continue;

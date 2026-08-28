@@ -59,8 +59,9 @@ export function occludeEdge(edge, camera, viewport, occluders, opts = {}) {
 
   // Kante parametrisiert ueber t in [0,1] (im Bildschirmraum linear):
   //   x(t)    = pa.x + dx*t
-  //   invE(t) = invA + (invB-invA)*t
-  const invEAt = (t) => invA + (invB - invA) * t;
+  //   invE(t) = invA + dInv*t   (inline statt Closure -- Hot-Path,
+  //   occludeEdge laeuft pro Kante pro Frame)
+  const dInv = invB - invA;
 
   // Vertikale Kante: ein einziger Bildschirm-x -> einheitlich klassifizieren.
   if (Math.abs(dx) < 1e-6) {
@@ -85,8 +86,8 @@ export function occludeEdge(edge, camera, viewport, occluders, opts = {}) {
     if (tLo >= tHi) continue;
 
     // D(t) = occInvd(o, x(t)) - invE(t) - eps, linear in t. Verdeckt, wo D(t) > 0.
-    const dLo = occInvd(o, pa.x + dx * tLo) - invEAt(tLo) - eps;
-    const dHi = occInvd(o, pa.x + dx * tHi) - invEAt(tHi) - eps;
+    const dLo = occInvd(o, pa.x + dx * tLo) - (invA + dInv * tLo) - eps;
+    const dHi = occInvd(o, pa.x + dx * tHi) - (invA + dInv * tHi) - eps;
     if (dLo <= 0 && dHi <= 0) continue;
     if (dLo > 0 && dHi > 0) { occluded.push([tLo, tHi]); continue; }
     const tc = tLo + (tHi - tLo) * (dLo / (dLo - dHi)); // exakte Nullstelle

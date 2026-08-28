@@ -79,7 +79,10 @@ const normKey = (e) => (e.key.length === 1 ? e.key.toUpperCase() : e.key);
 window.addEventListener('keydown', (e) => {
   const key = normKey(e);
   audio.unlock();              // Autoplay-Policy: Sound braucht eine User-Geste
-  if (key === 'M') audio.toggleMuted(); // globaler Stumm-Schalter
+  if (key === 'M') {
+    audio.toggleMuted();       // globaler Stumm-Schalter -- faellt nicht ins Spiel durch
+    return;
+  }
   game.keys.add(key);          // gehaltene Taste (kontinuierliche Steuerung)
   game.handleKey(key);         // diskrete Aktion (S, Q, ...)
   if (key.startsWith('Arrow') || key === ' ') e.preventDefault(); // kein Seiten-Scrollen (Pfeile, Space = Feuer)

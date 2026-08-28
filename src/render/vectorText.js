@@ -33,7 +33,7 @@ export function measureText(text, opts = {}) {
 //   size      Glyphenhoehe in Pixeln (Default 24)
 //   align     'left' | 'center' | 'right'  (horizontale Ausrichtung um x)
 //   baseline  'top' | 'middle' | 'bottom'  (vertikale Ausrichtung um y)
-//   tracking  Zell-Zusatzabstand in Rastereinheiten (Default 0.4)
+//   tracking  Zell-Zusatzabstand in Rastereinheiten (Default 1.2, s.o.)
 //   lineGap   Zeilenabstand als Anteil von size (Default 0.6)
 //   angle     Rotation um den Anker (x,y) in Radiant; positiv = im Uhrzeigersinn
 //             (Bildschirm-y zeigt nach unten). Default 0.

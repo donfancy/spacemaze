@@ -112,7 +112,8 @@ export function shotsStep(maze, state, dt, opts) {
 // damit sie sich von den Kollisionsfunken abheben; 1980 nutzt die Defaults).
 export function shotSegments(shot, time, opts) {
   const { cell, yaw, height } = opts;
-  const params = { ...SHOTS, ...(opts.params ?? {}) };
+  // Nur bei Override mergen -- laeuft pro Schuss pro Frame (bis 8x/Frame).
+  const params = opts.params ? { ...SHOTS, ...opts.params } : SHOTS;
   const s = params.size * cell;
   const rx = Math.cos(yaw); // lokale Rechts-Richtung (xz) zur Blickrichtung yaw
   const rz = -Math.sin(yaw);

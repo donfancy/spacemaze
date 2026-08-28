@@ -92,7 +92,9 @@ export class Game {
   // Aufrufer: MazeGen bei der Geburt der Karte (so zeigen Start-Karte und
   // Reinfall-Schwenk die Feind-Kreuze schon vor dem Spiel), Falling bei
   // jedem frischen Anlauf (Retry nach Game Over) und Playing als Fallback
-  // fuer den Direkteinstieg (Tests).
+  // fuer den Direkteinstieg (Tests). Beim allerersten frischen Anlauf
+  // wuerfeln MazeGen UND Falling (bewusst doppelt: deterministisch gleiches
+  // Ergebnis, nur doppelte Spawn-Arbeit -- ein fresh-Flag lohnte nicht).
   spawnFoes(maze) {
     const cfg = levelConfig(this.level);
     const unit = unitSize(maze);

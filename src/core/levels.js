@@ -93,19 +93,19 @@ export const LEVELS = [
   // deren Beruehrung die Blickachse um 270/360/450 Grad verdreht.
   { n: 47, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
     pulsars: { count: 3 }, flippers: { count: 6 }, enemies: { count: 12, patrol: 1, color: TEMPEST_BLUE },
-    spinners: { count: 6, shoot: true, color: PHOSPHOR_GREEN } },                                        // Level 26
+    spinners: { count: 6, shoot: true } },                                        // Level 26
   { n: 47, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
     pulsars: { count: 4 }, flippers: { count: 6 }, enemies: { count: 12, patrol: 1, color: TEMPEST_BLUE },
-    spinners: { count: 7, shoot: true, color: PHOSPHOR_GREEN } },                                        // Level 27
+    spinners: { count: 7, shoot: true } },                                        // Level 27
   { n: 49, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
     pulsars: { count: 5 }, flippers: { count: 7 }, enemies: { count: 13, patrol: 1, color: TEMPEST_BLUE },
-    spinners: { count: 7, shoot: true, color: PHOSPHOR_GREEN } },                                        // Level 28
+    spinners: { count: 7, shoot: true } },                                        // Level 28
   { n: 49, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
     pulsars: { count: 6 }, flippers: { count: 7 }, enemies: { count: 14, patrol: 1, color: TEMPEST_BLUE },
-    spinners: { count: 8, shoot: true, color: PHOSPHOR_GREEN } },                                        // Level 29
+    spinners: { count: 8, shoot: true } },                                        // Level 29
   { n: 51, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
     pulsars: { count: 8 }, flippers: { count: 8 }, enemies: { count: 15, patrol: 1, color: TEMPEST_BLUE },
-    spinners: { count: 8, shoot: true, color: PHOSPHOR_GREEN } },                                        // Level 30
+    spinners: { count: 8, shoot: true } },                                        // Level 30
 ];
 
 export const MIN_LEVEL = 1;

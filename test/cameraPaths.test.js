@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sphericalToCartesian, orbitCamera, dockPose, topDownDock, orbitTimeFacing } from '../src/world/cameraPaths.js';
+import { sphericalToCartesian, orbitCamera, dockPose, orbitTimeFacing } from '../src/world/cameraPaths.js';
 import { createCamera, forward } from '../src/math/camera.js';
 import { length, sub, normalize } from '../src/math/vec3.js';
 import { SIDE_FACES, pickDockFace } from '../src/world/cubeFaces.js';
@@ -94,10 +94,3 @@ test('orbitTimeFacing: Orbit-Pose ist der Flaeche zugewandt (alle 4 Seiten)', ()
   }
 });
 
-test('topDownDock: senkrecht ueber dem Zentrum, Blick nach unten', () => {
-  const dock = topDownDock([0, 0, 0], 2.4, Math.PI / 2.4, 0.85);
-  assert.equal(dock.position[0], 0);
-  assert.equal(dock.position[2], 0);
-  assert.ok(dock.position[1] > 1.2, 'Kamera muss ueber der Oberseite (y=1.2) sein');
-  assert.ok(close(dock.pitch, -Math.PI / 2));
-});

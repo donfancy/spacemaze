@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRng, randInt, pick } from '../src/util/rng.js';
+import { createRng, randInt } from '../src/util/rng.js';
 
 test('gleicher Seed liefert identische Folge (Determinismus)', () => {
   const a = createRng(12345);
@@ -36,10 +36,3 @@ test('randInt bleibt in [0,max)', () => {
   }
 });
 
-test('pick liefert ein Element des Arrays', () => {
-  const r = createRng(99);
-  const arr = ['a', 'b', 'c'];
-  for (let i = 0; i < 50; i++) {
-    assert.ok(arr.includes(pick(r, arr)));
-  }
-});

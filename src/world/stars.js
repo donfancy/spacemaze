@@ -31,7 +31,10 @@ export const STARS = {
   maxSize: 1.6,       // groesste Stern-Halbgroesse (Bildschirm-Pixel)
 };
 
-// Deterministischer Hash 0..1 (wie fireworks.js) -- gleiche Karte, gleicher Himmel.
+// Deterministischer Hash 0..1 (wie fireworks.js) -- gleiche Karte, gleicher
+// Himmel. Das `% 9973` faltet Seeds in ~10k Aequivalenzklassen: Seeds im
+// Abstand 9973 ergaeben denselben Himmel -- praktisch egal, aber "anderer
+// Seed -> anders" gilt darum nur fast immer.
 function hash(i, salt, seed) {
   const s = Math.sin(i * 127.1 + salt * 311.7 + (seed % 9973) * 0.618) * 43758.5453;
   return s - Math.floor(s);
@@ -53,7 +56,7 @@ export function createStars(seed, opts = {}) {
       el: Math.asin(u0 + (1 - u0) * hash(i, 2, seed)),
       size: STARS.maxSize * (0.45 + 0.55 * hash(i, 3, seed)),
       phase: hash(i, 4, seed) * 2 * Math.PI,
-      tint: Math.floor(hash(i, 5, seed) * 6) % 6,
+      tint: Math.floor(hash(i, 5, seed) * 6), // hash < 1 -> schon 0..5
     });
   }
   return stars;

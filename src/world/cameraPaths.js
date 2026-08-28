@@ -66,18 +66,6 @@ function shortestAngle(from, to) {
   return d;
 }
 
-// Draufsicht-Pose: Kamera senkrecht ueber `center`, blickt gerade nach unten,
-// sodass ein Quadrat der Kantenlaenge `squareSize` (die Oberseite) den Screen
-// vertikal zu `fill` ausfuellt.
-export function topDownDock(center, squareSize, fov, fill = 0.85) {
-  const dist = squareSize / (2 * Math.tan(fov / 2) * fill);
-  return {
-    position: [center[0], center[1] + squareSize / 2 + dist, center[2]],
-    yaw: 0,
-    pitch: -Math.PI / 2,
-  };
-}
-
 // Interpoliert harmonisch von der Start-Pose zur Dock-Pose (progress in [0,1]):
 // Position linear, yaw ueber den kuerzeren Winkelweg, pitch direkt.
 export function dockPose(progress, start, dock) {

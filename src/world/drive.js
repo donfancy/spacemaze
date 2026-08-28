@@ -52,7 +52,8 @@ export function rampToward(value, target, rate, dt) {
 // (Anteil der Reisegeschwindigkeit senkrecht in die Wand).
 export function driveStep(maze, state, pose, turn, dt, opts) {
   const { unit, cell, radius } = opts;
-  const params = { ...DRIVE, ...(opts.params ?? {}) };
+  // Nur bei Override mergen -- laeuft 60x/s im Sim-Schritt.
+  const params = opts.params ? { ...DRIVE, ...opts.params } : DRIVE;
 
   state.cooldown = Math.max(0, state.cooldown - dt);
 

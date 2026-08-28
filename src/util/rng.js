@@ -23,8 +23,3 @@ export function randomSeed() {
 export function randInt(rng, max) {
   return Math.floor(rng() * max);
 }
-
-// Zufaelliges Element eines (nicht-leeren) Arrays.
-export function pick(rng, arr) {
-  return arr[randInt(rng, arr.length)];
-}

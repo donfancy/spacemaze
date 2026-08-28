@@ -43,6 +43,7 @@ export function fireworkBeams(age, opts) {
   if (age < 0 || age >= FIREWORK.duration) return beams;
   const steps = FIREWORK_COLORS.length + 1; // + Weiss
   for (let i = 0; i < FIREWORK.count; i++) {
+    // `% 9973`: Seed-Aequivalenzklassen wie in stars.js (Kommentar dort).
     const h = (salt) => hash(i + (seed % 9973) * 0.618, salt);
     const life = FIREWORK.minLife + (FIREWORK.maxLife - FIREWORK.minLife) * h(4);
     const born = h(3) * (FIREWORK.duration - life);

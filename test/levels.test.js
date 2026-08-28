@@ -12,15 +12,11 @@ import {
 test('Maze-Groessen: 1-15 wachsend, 16-20 moderat, ab 21 wieder wachsend', () => {
   assert.equal(MIN_LEVEL, 1);
   assert.equal(MAX_LEVEL, 30);
+  // Die vollstaendige Liste deckt auch die Formeln ab (1-5: 7+2*level,
+  // 6-15: 5+2*level) -- eine Quelle der Wahrheit reicht.
   assert.deepEqual(LEVELS.map((l) => l.n),
     [9, 11, 13, 15, 17, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 35, 35, 37, 37, 39,
       41, 43, 43, 45, 45, 47, 47, 49, 49, 51]);
-  for (let level = 1; level <= 5; level++) {
-    assert.equal(levelConfig(level).n, 7 + 2 * level);
-  }
-  for (let level = 6; level <= 15; level++) {
-    assert.equal(levelConfig(level).n, 5 + 2 * level);
-  }
 });
 
 test('Level 1 bis 5 sind Blockwelt mit Tank-Steuerung; ab 6: schmale Waende + Fahrt', () => {
