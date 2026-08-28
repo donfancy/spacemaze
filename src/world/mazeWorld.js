@@ -106,27 +106,43 @@ export function startFacingYaw(maze) {
   return 0;
 }
 
-// Versucht eine Bewegung um (dx,dz); pro Achse blockiert, was in eine Wand fuehrt
-// (erlaubt Gleiten an Waenden). `radius` ist der Spieler-Sicherheitsabstand.
-// Der Spieler ist ein Quadrat der Halbbreite radius: geprueft wird das GANZE
-// Quadrat an der Zielposition (rectWalkable) -- nicht nur Eckpunkte. Das haelt
-// erstens den Abstand radius zu jeder Wand (sonst unterschreitet man die
-// Render-Near-Plane und die Wand verdeckt nichts mehr) und verhindert zweitens
-// bei schmalen Waenden das Durchrutschen an Pfosten, die schmaler als das
-// Quadrat sind. Liefert die neue Position [x,z].
-export function tryMove(maze, x, z, dx, dz, opts = {}) {
-  const unit = opts.unit ?? 1;
-  const radius = opts.radius ?? 0.25;
+// Achsweise Bewegung um (dx,dz) mit Buchfuehrung: pro Achse blockiert, was
+// in eine Wand fuehrt (klassisches Gleiten an Waenden; erst x, dann z --
+// blockiert x, kann z im selben Schritt weiterziehen). Der Spieler ist ein
+// Quadrat der Halbbreite radius: geprueft wird das GANZE Quadrat an der
+// Zielposition (rectWalkable) -- nicht nur Eckpunkte. Das haelt erstens den
+// Abstand radius zu jeder Wand (sonst unterschreitet man die Render-Near-
+// Plane und die Wand verdeckt nichts mehr) und verhindert zweitens bei
+// schmalen Waenden das Durchrutschen an Pfosten, die schmaler als das
+// Quadrat sind. DIE eine Laufzeit-Implementierung fuer walk.js und
+// drive.js (vorher zwei driftgefaehrdete Kopien). Liefert
+// { nx, nz, blockedX, blockedZ }.
+export function moveAxiswise(maze, x, z, dx, dz, radius, unit) {
   let nx = x;
   let nz = z;
-
+  let blockedX = false;
+  let blockedZ = false;
   if (dx !== 0) {
     const cx = x + dx;
     if (rectWalkable(maze, cx - radius, cx + radius, z - radius, z + radius, unit)) nx = cx;
+    else blockedX = true;
   }
   if (dz !== 0) {
     const cz = z + dz;
     if (rectWalkable(maze, nx - radius, nx + radius, cz - radius, cz + radius, unit)) nz = cz;
+    else blockedZ = true;
   }
+  return { nx, nz, blockedX, blockedZ };
+}
+
+// Bei einem Eck-Treffer (beide Achsen im selben Schritt blockiert) bestimmt
+// die staerkere Komponente die Kollisions-Achse.
+export function blockedAxis(move, dx, dz) {
+  return move.blockedX && (!move.blockedZ || Math.abs(dx) >= Math.abs(dz)) ? 'x' : 'z';
+}
+
+// Bequemer Wrapper ohne Buchfuehrung: liefert nur die neue Position [x,z].
+export function tryMove(maze, x, z, dx, dz, opts = {}) {
+  const { nx, nz } = moveAxiswise(maze, x, z, dx, dz, opts.radius ?? 0.25, opts.unit ?? 1);
   return [nx, nz];
 }

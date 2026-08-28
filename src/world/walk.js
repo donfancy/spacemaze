@@ -10,7 +10,7 @@
 // Weltgroesse einer Achsen-Einheit, `cell` die Gangbreite (Gameplay-Massstab).
 // Geschwindigkeiten in WALK sind in Gangbreiten pro Sekunde.
 
-import { rectWalkable } from './mazeWorld.js';
+import { moveAxiswise, blockedAxis } from './mazeWorld.js';
 import { rampToward } from './drive.js';
 
 export const WALK = {
@@ -57,29 +57,16 @@ export function walkStep(maze, state, pose, input, dt, opts) {
   const dx = -Math.sin(yaw) * state.vel * cell * dt;
   const dz = -Math.cos(yaw) * state.vel * cell * dt;
 
-  // Achsweise bewegen wie tryMove (ganzes Spieler-Quadrat), mit Buchfuehrung,
-  // welche Achse blockiert hat.
-  let nx = pose.px;
-  let nz = pose.pz;
-  let blockedX = false;
-  let blockedZ = false;
-  if (dx !== 0) {
-    const cx = pose.px + dx;
-    if (rectWalkable(maze, cx - radius, cx + radius, pose.pz - radius, pose.pz + radius, unit)) nx = cx;
-    else blockedX = true;
-  }
-  if (dz !== 0) {
-    const cz = pose.pz + dz;
-    if (rectWalkable(maze, nx - radius, nx + radius, cz - radius, cz + radius, unit)) nz = cz;
-    else blockedZ = true;
-  }
+  // Achsweise bewegen (ganzes Spieler-Quadrat, Gleiten) mit Buchfuehrung,
+  // welche Achse blockiert hat -- die geteilte Implementierung in mazeWorld.
+  const move = moveAxiswise(maze, pose.px, pose.pz, dx, dz, radius, unit);
+  const { nx, nz, blockedX, blockedZ } = move;
 
   // Kollisions-Meldung nur an der FLANKE (frisch aufgetroffen): solange man
-  // angedrueckt bleibt, haelt `contact` die Achse still. Bei einem Eck-Treffer
-  // (beide Achsen im selben Schritt) zaehlt die staerkere Komponente.
+  // angedrueckt bleibt, haelt `contact` die Achse still.
   let collision = null;
   if (blockedX || blockedZ) {
-    const axis = blockedX && (!blockedZ || Math.abs(dx) >= Math.abs(dz)) ? 'x' : 'z';
+    const axis = blockedAxis(move, dx, dz);
     const fresh = !state.contact[axis];
     if (fresh && dt > 0) {
       const comp = axis === 'x' ? dx : dz;

@@ -11,7 +11,7 @@
 // Geschwindigkeiten in DRIVE sind in Gangbreiten pro Sekunde.
 
 import { isOpenCell } from './maze.js';
-import { rectWalkable, cellAt } from './mazeWorld.js';
+import { moveAxiswise, blockedAxis, cellAt } from './mazeWorld.js';
 import { mazeMetric } from './metric.js';
 
 export const DRIVE = {
@@ -81,27 +81,15 @@ export function driveStep(maze, state, pose, turn, dt, opts) {
   const dx = (-Math.sin(yaw) * state.vel + state.push.x) * cell * dt;
   const dz = (-Math.cos(yaw) * state.vel + state.push.z) * cell * dt;
 
-  // Achsweise bewegen wie tryMove (ganzes Spieler-Quadrat via rectWalkable,
-  // Gleiten an Waenden), aber mit Buchfuehrung, WELCHE Achse blockiert hat.
-  let nx = pose.px;
-  let nz = pose.pz;
-  let blockedX = false;
-  let blockedZ = false;
-  if (dx !== 0) {
-    const cx = pose.px + dx;
-    if (rectWalkable(maze, cx - radius, cx + radius, pose.pz - radius, pose.pz + radius, unit)) nx = cx;
-    else blockedX = true;
-  }
-  if (dz !== 0) {
-    const cz = pose.pz + dz;
-    if (rectWalkable(maze, nx - radius, nx + radius, cz - radius, cz + radius, unit)) nz = cz;
-    else blockedZ = true;
-  }
+  // Achsweise bewegen (ganzes Spieler-Quadrat, Gleiten) mit Buchfuehrung,
+  // WELCHE Achse blockiert hat -- die geteilte Implementierung in mazeWorld.
+  const move = moveAxiswise(maze, pose.px, pose.pz, dx, dz, radius, unit);
+  const { nx, nz, blockedX, blockedZ } = move;
 
   let collision = null;
   if ((blockedX || blockedZ) && state.cooldown <= 0 && state.vel > 0) {
     // Staerkere der blockierten Komponenten bestimmt Achse und Wucht.
-    const axis = blockedX && (!blockedZ || Math.abs(dx) >= Math.abs(dz)) ? 'x' : 'z';
+    const axis = blockedAxis(move, dx, dz);
     const comp = axis === 'x' ? dx : dz;
     const impact = Math.min(1, Math.abs(comp) / dt / (params.cruise * cell));
     if (impact >= params.minImpact) {
