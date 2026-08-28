@@ -148,7 +148,6 @@ function frame(now) {
   if (debugEnabled) {
     debug.set('STATE', game.stateKey);
     debug.set('FPS', fps);
-    debug.set('TRANS', game.transition.active ? game.transition.toState : '-');
     debug.set('TIME', game.time.toFixed(1));
     if (!active2026) renderDebug(); // Debug-Overlay lebt auf dem 1980-Canvas
   }

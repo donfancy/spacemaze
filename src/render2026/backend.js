@@ -209,7 +209,7 @@ export function createBackend2026(container = document.body) {
 
   // --- DOM-Overlays (Platzhalter bis zur HUD-Frage in Stufe 6) ----------------
   // label: Hinweiszeile unten links. title/switchLine/press: Startscreen-Texte.
-  // headline: GAME OVER auf der Karte. fade: ersetzt renderer.fillBlack.
+  // headline: GAME OVER auf der Karte.
   const FONT = '"SF Mono",Menlo,Consolas,monospace';
   function overlay(css) {
     const el = document.createElement('div');
@@ -235,11 +235,6 @@ export function createBackend2026(container = document.body) {
   flashEl.style.cssText =
     'position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;';
   root.appendChild(flashEl);
-
-  const fade = document.createElement('div');
-  fade.style.cssText =
-    'position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;';
-  root.appendChild(fade);
 
   // Nur bei Aenderung ins DOM schreiben (kein Layout-Gezerre pro Frame).
   function setText(el, text) {
@@ -1395,12 +1390,6 @@ export function createBackend2026(container = document.body) {
       const pv = game.stateKey === State.PLAYING ? game.current.viewState?.() : null;
       flashEl.style.opacity = pv?.crash && pv.crash.t < CRASH_FLASH
         ? String(0.95 * (1 - pv.crash.t / CRASH_FLASH) ** 2)
-        : '0';
-
-      // Fade-Uebergang analog renderer.fillBlack in game.render().
-      const tr = game.transition;
-      fade.style.opacity = tr.active
-        ? String(tr.t < 0.5 ? tr.t * 2 : (1 - tr.t) * 2)
         : '0';
     },
 

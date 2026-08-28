@@ -129,7 +129,7 @@ export function createStartscreen(game) {
           dockT = DOCK_DURATION;
           phase = 'docked';
           // Nahtlos (ohne Fade) ins Labyrinth: MazeGen uebernimmt dieselbe Flaeche.
-          game.dispatch(GameEvent.START, { fade: false });
+          game.dispatch(GameEvent.START);
         }
       }
     },

@@ -30,7 +30,7 @@ test('parseEngine: unbekannte Werte fallen sicher auf 1980 zurueck', () => {
 function fakeRenderer() {
   return {
     width: 800, height: 600, calls: 0,
-    beginFrame() {}, fillBlack() { this.calls++; },
+    beginFrame() {},
     drawText() { this.calls++; }, drawPolylines() { this.calls++; },
     renderScene() { this.calls++; },
     worldToScreen() { return { x: 400, y: 300 }; },
@@ -359,15 +359,12 @@ test('Falling/Rising/Map: viewState traegt Schwenk-Fortschritt und Ziellage', ()
   assert.ok(vm.fade < 1 && vm.fade > 0, 'Karten-Exit blendet aus');
 });
 
-test('Game: Backend sieht auch Szenenwechsel und Transition-Zustand', () => {
+test('Game: Backend sieht Szenenwechsel sofort (dispatch ist nahtlos)', () => {
   const seen = [];
-  const backend = { render(g) { seen.push([g.stateKey, g.transition.active]); } };
+  const backend = { render(g) { seen.push(g.stateKey); } };
   const game = new Game({ engine: ENGINE_2026, renderBackend: backend });
   game.render(fakeRenderer());
-  game.dispatch(GameEvent.START);           // startet den Fade zum MazeGen
-  game.update(0.4);                         // Halbzeit ueberschritten: Zustand gewechselt
+  game.dispatch(GameEvent.START);           // sofortiger Wechsel zum MazeGen
   game.render(fakeRenderer());
-  assert.equal(seen[0][0], 'STARTSCREEN');
-  assert.equal(seen[1][0], 'MAZE_GEN');
-  assert.equal(seen[1][1], true, 'Transition muss fuer den Fade sichtbar sein');
+  assert.deepEqual(seen, ['STARTSCREEN', 'MAZE_GEN']);
 });

@@ -16,7 +16,6 @@ function fakeRenderer() {
     height: 600,
     calls: 0,
     beginFrame() {},
-    fillBlack() {},
     drawText() { this.calls++; },
     drawPolylines() { this.calls++; },
     renderScene(scene, camera, opts) { this.calls++; this.lastSceneColor = opts?.color; },
@@ -55,13 +54,11 @@ test('S leitet die Andock-Sequenz ein; erst danach Uebergang zur Labyrinth-Erzeu
   g.handleKey('X'); // irrelevante Taste -> nichts passiert
   advance(g, r, 0.1);
   assert.equal(g.stateKey, State.STARTSCREEN);
-  assert.ok(!g.transition.active);
 
   g.handleKey('S');
   // Waehrend des Andockens (~1,6s) bleibt der Zustand Startscreen, kein Uebergang.
   advance(g, r, 0.3);
   assert.equal(g.stateKey, State.STARTSCREEN);
-  assert.ok(!g.transition.active);
 
   // Nach dem Andocken folgt der Uebergang zur Labyrinth-Erzeugung.
   advance(g, r, 2.6);
@@ -489,5 +486,4 @@ test('X auf der Karte: Ausblenden, Abdock-Flug, dann reagiert der Startscreen wi
 test('dispatch ignoriert undefinierte Uebergaenge', () => {
   const g = new Game();
   assert.equal(g.dispatch(GameEvent.EXIT), false); // im Startscreen nicht erlaubt
-  assert.ok(!g.transition.active);
 });

@@ -83,18 +83,6 @@ export class Renderer {
     ctx.restore();
   }
 
-  // Schwarzes Overlay mit gegebener Deckkraft -- fuer Fade-Uebergaenge.
-  fillBlack(alpha) {
-    if (alpha <= 0) return;
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.globalAlpha = Math.min(1, alpha);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, this.width, this.height);
-    ctx.restore();
-  }
-
   // Zeichnet eine Liste von Polylinien (Bildschirm-Pixelkoordinaten) in einem Zug.
   drawPolylines(polylines, opts = {}) {
     if (this.shatterParams) polylines = shatterPolylines(polylines, this.shatterParams);

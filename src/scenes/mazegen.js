@@ -72,7 +72,7 @@ export function createMazeGen(game) {
         game.audio?.play(gnawPatch(GROW_TIME));
       }
       if (t >= MARKER_TIME + GROW_TIME + HOLD_TIME) {
-        game.dispatch(GameEvent.MAZE_READY, { fade: false }); // nahtlos ins Reinfallen
+        game.dispatch(GameEvent.MAZE_READY); // nahtlos ins Reinfallen
       }
     },
 

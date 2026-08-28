@@ -286,7 +286,7 @@ export function createPlaying(game) {
     const settled = driveState.vel === 0 && driveState.push.x === 0 && driveState.push.z === 0;
     if (braking && (reached || settled)) {
       brakeHold += dt;
-      if (brakeHold >= BRAKE_HOLD) game.dispatch(GameEvent.EXIT, { fade: false });
+      if (brakeHold >= BRAKE_HOLD) game.dispatch(GameEvent.EXIT);
     }
     // Kurvenneigung: Ziel proportional zu Lenkung und Tempo, weich nachgefuehrt.
     const speed01 = reached ? 0 : Math.max(-1, Math.min(1, driveState.vel / DRIVE.cruise));
@@ -424,7 +424,7 @@ export function createPlaying(game) {
         pitchOsc.step(dt);
         waves = waves.filter((w) => sceneT - w.born < WAVE_LIFE);
         bursts = bursts.filter((b) => sceneT - b.born < b.life);
-        if (crashT >= CRASH_TIME) game.dispatch(GameEvent.EXIT, { fade: false });
+        if (crashT >= CRASH_TIME) game.dispatch(GameEvent.EXIT);
         return;
       }
 
@@ -592,7 +592,7 @@ export function createPlaying(game) {
       }
       if (reached) {
         reachedTime += dt;
-        if (reachedTime >= GOAL_AUTO_EXIT) game.dispatch(GameEvent.EXIT, { fade: false });
+        if (reachedTime >= GOAL_AUTO_EXIT) game.dispatch(GameEvent.EXIT);
       }
     },
 
@@ -942,7 +942,7 @@ export function createPlaying(game) {
       if (drive && !reached) {
         braking = true; // Fahrt-Modus: erst abbremsen, updateDrive hebt dann ab
       } else {
-        game.dispatch(GameEvent.EXIT, { fade: false }); // nahtlos in den Rueckschwenk
+        game.dispatch(GameEvent.EXIT); // nahtlos in den Rueckschwenk
       }
     },
   };

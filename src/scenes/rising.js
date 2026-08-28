@@ -60,7 +60,7 @@ export function createRising(game) {
 
     update(dt) {
       t += dt;
-      if (t >= duration) game.dispatch(GameEvent.RISE_DONE, { fade: false });
+      if (t >= duration) game.dispatch(GameEvent.RISE_DONE);
     },
 
     render(renderer) {

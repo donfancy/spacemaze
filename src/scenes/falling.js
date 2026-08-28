@@ -64,7 +64,7 @@ export function createFalling(game) {
 
     update(dt) {
       t += dt;
-      if (t >= DURATION) game.dispatch(GameEvent.FALL_DONE, { fade: false });
+      if (t >= DURATION) game.dispatch(GameEvent.FALL_DONE);
     },
 
     render(renderer) {

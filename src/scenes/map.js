@@ -59,7 +59,7 @@ export function createMap(game) {
         exitT += dt;
         if (exitT >= EXIT_FADE) {
           game.undock = true; // Startscreen: Andock-Flug rueckwaerts von dieser Flaeche
-          game.dispatch(GameEvent.EXIT, { fade: false });
+          game.dispatch(GameEvent.EXIT);
         }
         return;
       }
@@ -115,7 +115,7 @@ export function createMap(game) {
         // Spielerlage; nach Game Over dagegen frischer Versuch vom Start
         // (gleiche Maze, Weg und Feinde werden in Playing neu aufgesetzt).
         game.resume = !game.gameOver;
-        if (!game.dispatch(GameEvent.RESUME, { fade: false })) game.resume = false;
+        if (!game.dispatch(GameEvent.RESUME)) game.resume = false;
       } else if (key === 'X') {
         beginExit(); // Karte abblenden, dann -> Startscreen (Abdock-Flug)
       }
