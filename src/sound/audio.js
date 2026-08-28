@@ -48,9 +48,13 @@ export function createAudioOutput() {
   }
 
   // Einen Ereignis-Patch abspielen: pro Stimme Quelle (+ Filter) + Huellkurve,
-  // raeumt sich nach Patch-Dauer selbst auf.
+  // raeumt sich nach Patch-Dauer selbst auf. Auch bei noch SUSPENDED
+  // schedulen: unlock() laeuft beim selben Tastendruck, aber ctx.resume()
+  // ist asynchron -- der allererste Sound der Session (Level-Tick) fiele
+  // sonst still aus. Die bei currentTime geplanten Knoten spielen beim
+  // Resume korrekt los; der Context existiert erst nach einer User-Geste.
   function play(patch) {
-    if (!ready()) return;
+    if (!ctx || ctx.state === 'closed') return;
     const t0 = ctx.currentTime;
     for (const v of patch.voices) {
       let src;
@@ -67,7 +71,7 @@ export function createAudioOutput() {
       if (v.filter) {
         const f = ctx.createBiquadFilter();
         f.type = v.filter.type;
-        if (v.filter.q) f.Q.value = v.filter.q;
+        if (v.filter.q !== undefined) f.Q.value = v.filter.q;
         applyEnvelope(f.frequency, v.filter.freq, t0);
         node = node.connect(f);
       }

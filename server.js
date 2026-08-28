@@ -4,9 +4,8 @@
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname, normalize, join } from 'node:path';
+import { extname, join, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
@@ -40,19 +39,20 @@ const server = createServer(async (req, res) => {
       filePath = join(ROOT, 'public', urlPath);
     }
 
-    // Directory-Traversal verhindern.
-    const resolved = normalize(filePath);
-    if (!resolved.startsWith(ROOT)) {
+    // Directory-Traversal verhindern (join() normalisiert bereits; der
+    // Separator-Anhang verhindert, dass Geschwister wie "spacemaze-foo"
+    // durch den Prefix-Vergleich rutschen).
+    if (!filePath.startsWith(ROOT + sep)) {
       res.writeHead(403).end('Forbidden');
       return;
     }
 
-    const data = await readFile(resolved);
-    const type = MIME[extname(resolved)] || 'application/octet-stream';
+    const data = await readFile(filePath);
+    const type = MIME[extname(filePath)] || 'application/octet-stream';
     res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
     res.end(data);
   } catch (err) {
-    if (err.code === 'ENOENT') {
+    if (err.code === 'ENOENT' || err.code === 'EISDIR') {
       res.writeHead(404, { 'Content-Type': 'text/plain' }).end('404 Not Found: ' + req.url);
     } else {
       res.writeHead(500, { 'Content-Type': 'text/plain' }).end('500 Server Error');

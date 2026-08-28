@@ -3,7 +3,7 @@
 
 import { Renderer } from './render/renderer.js';
 import { Game } from './core/game.js';
-import { resolveEngine, ENGINE_2026 } from './core/engine.js';
+import { resolveEngine, ENGINE_1980, ENGINE_2026 } from './core/engine.js';
 import { createAudioOutput } from './sound/audio.js';
 import { DebugConsole } from './debug/debugConsole.js';
 
@@ -39,6 +39,14 @@ function applyEngine(g) {
       backend.resize(window.innerWidth, window.innerHeight, Math.min(window.devicePixelRatio || 1, 2));
       g.renderBackend = backend;
       applyEngine(g); // jetzt wirklich umblenden
+    }).catch((err) => {
+      // Import gescheitert (offline, Vendor fehlt): zurueck auf 1980 und den
+      // Schalter freigeben -- sonst bliebe die rejected Promise fuer immer
+      // stehen und "2026" waere stumm tot.
+      console.error('2026-Backend laedt nicht -- bleibe bei 1980:', err);
+      backendLoading = null;
+      g.engine = ENGINE_1980;
+      applyEngine(g);
     });
   }
   const active = is2026Active(g);

@@ -53,6 +53,9 @@ test('bump/sizzle/fanfare erfuellen die Patch-Invarianten', () => {
     checkPatch(risePatch(dur), `rise(${dur})`);
     checkPatch(gnawPatch(dur), `gnaw(${dur})`);
   }
+  // Kurze Dauern: die Biss-Huellkurven schrumpfen mit dem Abstand und
+  // bleiben streng aufsteigend (Guard in gnawPatch).
+  for (const dur of [0.05, 0.3, 0.5, 0.8]) checkPatch(gnawPatch(dur), `gnaw(${dur})`);
   checkPatch(shotPatch(), 'shot');
   checkPatch(poofPatch(), 'poof');
   checkPatch(boomPatch(), 'boom');

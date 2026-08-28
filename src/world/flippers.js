@@ -211,7 +211,9 @@ export function flippersStep(flippers, dt, cell) {
     } else {
       f.flipT += dt;
       if (f.flipT >= FLIPPER.flipTime) {
-        f.angle = ((f.from + f.delta) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+        // Exakt im 90-Grad-Raster einrasten (wie Pulsare/Gyro) statt
+        // Float-Modulo -- kein Winzrest, der sich aufsummieren koennte.
+        f.angle = orientIndex(f.from + f.delta) * QUARTER;
         f.mode = 'hold';
         f.hold = orientIndex(f.angle) % 2 === 1
           ? FLIPPER.holdSide + FLIPPER.holdJitter * (2 * nextRnd(f) - 1)

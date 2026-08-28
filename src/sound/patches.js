@@ -131,14 +131,22 @@ export function risePatch(duration = 1.7) {
 // Dauer = Wachstumszeit der Szene; die Beiss-Rate ist fest (~10/s), damit es
 // bei jeder Labyrinth-Groesse gleich klingt.
 export function gnawPatch(duration = 2.6) {
+  duration = Math.max(0.2, duration);
   const bites = Math.max(6, Math.round(duration * 10));
   const span = duration - 0.06; // Luft, damit der letzte Biss vor dem Ende ausklingt
+  // Bei kurzen Dauern schrumpfen Attack/Ausklingen/Jitter mit dem
+  // Biss-Abstand, damit die Huellkurven-Zeiten streng aufsteigend bleiben
+  // (bei den ueblichen Dauern >= 1 s greifen die Schranken nicht).
+  const step = span / bites;
+  const attack = Math.min(0.005, 0.1 * step);
+  const decay = Math.min(0.04, 0.45 * step);
+  const jitter = Math.min(0.02, 0.2 * step);
   const gain = [[0, 0]];
   const freq = [];
   for (let i = 0; i < bites; i++) {
-    const ti = 0.005 + ((i + 0.5) / bites) * span + 0.02 * Math.sin(i * 12.9898);
+    const ti = 0.005 + ((i + 0.5) / bites) * span + jitter * Math.sin(i * 12.9898);
     const level = 0.12 + 0.08 * Math.abs(Math.sin(i * 7.13));
-    gain.push([ti, 0], [ti + 0.005, level], [ti + 0.04, 0]);
+    gain.push([ti, 0], [ti + attack, level], [ti + decay, 0]);
     freq.push([ti, 900 + 450 * Math.sin(i * 3.7)]);
   }
   gain.push([duration, 0]);

@@ -229,7 +229,10 @@ export function pulsarPlayerTouch(pulsars, px, pz, radius, cell, prev) {
     const crossP = p.axis === 'x' ? pz : px;
     const g = along - p.along;
     if (!p.armed) {
-      if (Math.abs(g) > PULSAR.rearmDist * cell) p.armed = true;
+      // Echten Abstand messen (nicht nur laengs) -- wer ueber einen
+      // Quergang mit aehnlichem `along` zurueckkehrt, hatte real Abstand.
+      const [qx, qz] = pulsarPos(p);
+      if (Math.hypot(px - qx, pz - qz) > PULSAR.rearmDist * cell) p.armed = true;
       continue;
     }
     if (Math.abs(crossP - p.cross) >= 0.5 * cell) continue;

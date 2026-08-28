@@ -194,6 +194,7 @@ export function createPlaying(game) {
   let fieldPitch = 0;     // Feld-Abstand (Kammer + Wand, Welt) fuer die Paar-Distanz
   let shotsState = null;  // Tempest-Schuesse (world/shots.js)
   let bursts = [];        // aktive Splitter-Explosionen (Verpuffen/Abschuss/Crash)
+  let burstSeq = 0;       // laufender Splitter-Seed (unabhaengig von gerade lebenden Bursts)
   let crash = false;      // Feindberuehrung: Explosion laeuft, dann Game Over
   let crashT = 0;
   let crashPos = null;    // Einschlag {x,z} -- Zentrum des Bild-Zerberstens
@@ -233,25 +234,25 @@ export function createPlaying(game) {
     const hs = SPINNER.height * cell; // Spinner leben unterhalb der Augenhoehe
     if (ev.type === 'wall' || ev.type === 'shield') {
       game.audio?.play(poofPatch());
-      bursts.push({ born: sceneT, center: [ev.x, ev.type === 'shield' ? hs : h, ev.z], seed: bursts.length + 1, count: 8, speed: 1.2 * cell, life: 0.35, size: 0.07 * cell, color: SHOT_COLOR });
+      bursts.push({ born: sceneT, center: [ev.x, ev.type === 'shield' ? hs : h, ev.z], seed: burstSeq++, count: 8, speed: 1.2 * cell, life: 0.35, size: 0.07 * cell, color: SHOT_COLOR });
     } else if (ev.type === 'spike') {
       game.audio?.play(clinkPatch());
-      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 3, count: 6, speed: 1.4 * cell, life: 0.3, size: 0.06 * cell, color: spinnerCol });
+      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 6, speed: 1.4 * cell, life: 0.3, size: 0.06 * cell, color: spinnerCol });
     } else if (ev.type === 'spinner') {
       // Ohne Truemmer-Platten (Boris): Spinner sind reine LINIEN-Wesen --
       // flaechige Truemmer passen zu Tankern und Flippern, nicht hier.
       game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: spinnerCol });
+      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: spinnerCol });
     } else if (ev.type === 'zap') {
       game.audio?.play(poofPatch());
-      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: bursts.length + 7, count: 10, speed: 1.8 * cell, life: 0.4, size: 0.08 * cell, color: SHOT_COLOR });
+      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 10, speed: 1.8 * cell, life: 0.4, size: 0.08 * cell, color: SHOT_COLOR });
     } else if (ev.type === 'flipper') {
       game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: FLIPPER_COLOR, shardCount: 6, shardSize: 0.3 * cell });
+      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: burstSeq++, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: FLIPPER_COLOR, shardCount: 6, shardSize: 0.3 * cell });
     } else {
       // Tanker-Abschuss: Funken-Splitter + flaechige Truemmer (nur 2026).
       game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: bursts.length + 5, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: enemyCol, shardCount: 6, shardSize: 0.3 * cell });
+      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: burstSeq++, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: enemyCol, shardCount: 6, shardSize: 0.3 * cell });
     }
   }
 
@@ -376,6 +377,7 @@ export function createPlaying(game) {
       stars = game.level >= STARS.minLevel ? createStars(maze.seed) : null;
       shotsState = createShotsState();
       bursts = [];
+      burstSeq = 0;
       crash = false;
       crashT = 0;
       game.gameOver = false;
@@ -926,6 +928,7 @@ export function createPlaying(game) {
     // Spinner-Schuesse. Spinner/Flipper/Pulsare liest die Engine wie die
     // Tanker von game.* (dort leben sie samt Resume/Retry-Regeln).
     viewState() {
+      if (!maze) return null; // vor enter() -- gleicher Vertrag wie alle Szenen
       return { maze, cell, unit, px, pz, yaw, sceneT, reached, reachedAt, bump,
         drive, roll: bank + rollOsc.x + gyro.roll, pitch: pitchOsc.x,
         orient: gyro.orient, foeShots,
