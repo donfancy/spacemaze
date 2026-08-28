@@ -29,9 +29,8 @@
 // toedlich ueber die ganze Gangbreite. Die Durchkommens-Garantie gilt
 // weiter: der Test simuliert das Duell MIT feuerndem Spinner.
 
-import { OPEN, isChamber, findPath } from './maze.js';
-import { cellCenter } from './mazeWorld.js';
 import { randInt } from '../util/rng.js';
+import { corridorCandidates, foeMarkers } from './foePlacement.js';
 
 export const SPINNER = {
   minChambers: 3,   // so viele Kammern muss ein gerades Gangstueck mindestens haben
@@ -72,38 +71,11 @@ export const SPINNER = {
   intercept: 0.3,    // Abfang-Radius eigener Projektile gegen den Schuss (Gangbreiten)
 };
 
-function isOpen(maze, x, y) {
-  return x >= 0 && x < maze.n && y >= 0 && y < maze.n && maze.grid[y][x] === OPEN;
-}
-
-// Maximale gerade offene Spannen (Gangstuecke) entlang beider Achsen.
-// Spannen beginnen und enden immer auf Kammern (Kammern sind stets offen,
-// ein offenes Zwischenwand-Feld verbindet zwei offene Kammern). Liefert
-// [{ axis, fix, lo, hi, chambers }] mit Grid-Spanne [lo..hi] auf der Achse.
-export function straightRuns(maze) {
-  const runs = [];
-  for (const axis of ['x', 'z']) {
-    for (let fix = 1; fix <= maze.n - 2; fix += 2) {
-      let lo = -1;
-      for (let i = 1; i <= maze.n - 1; i++) {
-        const open = axis === 'x' ? isOpen(maze, i, fix) : isOpen(maze, fix, i);
-        if (open && lo < 0) lo = i;
-        if (!open && lo >= 0) {
-          const hi = i - 1;
-          runs.push({ axis, fix, lo, hi, chambers: (hi - lo) / 2 + 1 });
-          lo = -1;
-        }
-      }
-    }
-  }
-  return runs;
-}
-
 // Erzeugt die Spinner eines Levels. config = { count } (Level-Daten),
 // opts = { unit, cell, rng }. Deterministisch bei gleichem rng (Tests).
-// Bevorzugt Gangstuecke, die den Loesungsweg kreuzen (man begegnet ihnen),
-// laengere zuerst; die Schutzzone um S und G (erste/letzte Weg-Kammern wie
-// bei den Rauten) bleibt frei. Pro Gangstueck hoechstens EIN Spinner.
+// Platzierung via corridorCandidates (foePlacement.js): Weg-Gaenge zuerst,
+// laengere zuerst, Schutzzone um S und G bleibt frei, pro Gangstueck
+// hoechstens EIN Spinner.
 // Wand-Ende: auf dem Loesungsweg sitzt der Spinner VORAUS in Laufrichtung
 // (die Begegnung ist frontal -- von hinten waere der Spike nur eine harmlose
 // Einbahn-Sperre); bei blosser Querung moeglichst fern der Kreuzung (mehr
@@ -111,41 +83,16 @@ export function straightRuns(maze) {
 export function createSpinners(maze, config, opts) {
   const { unit, cell, rng } = opts;
   const count = config.count ?? 0;
-
-  const path = (findPath(maze, maze.start, maze.goal) ?? []).filter(([x, y]) => isChamber(x, y));
-  const key = (x, y) => x + ',' + y;
-  const pathIdx = new Map(path.map(([x, y], i) => [key(x, y), i]));
-  const guard = new Set([...path.slice(0, SPINNER.exclude), ...path.slice(-SPINNER.exclude)]
-    .map(([x, y]) => key(x, y)));
-
-  const candidates = [];
-  for (const run of straightRuns(maze)) {
-    if (run.chambers < SPINNER.minChambers) continue;
-    let guarded = false;
-    const visits = []; // Weg-Kammern auf dem Gang: { i: Grid-Koordinate laengs, idx: Position auf dem Weg }
-    for (let i = run.lo; i <= run.hi; i += 2) {
-      const k = run.axis === 'x' ? key(i, run.fix) : key(run.fix, i);
-      if (pathIdx.has(k)) visits.push({ i, idx: pathIdx.get(k) });
-      if (guard.has(k)) guarded = true;
-    }
-    if (!guarded) candidates.push({ ...run, onPath: visits.length > 0, visits });
-  }
-  // Weg-Gaenge zuerst, dann die laengeren -- deterministisch sortiert.
-  candidates.sort((a, b) => (b.onPath - a.onPath)
-    || (b.chambers - a.chambers) || (a.fix - b.fix) || (a.lo - b.lo) || (a.axis < b.axis ? -1 : 1));
+  const candidates = corridorCandidates(maze, {
+    minChambers: SPINNER.minChambers, exclude: SPINNER.exclude, unit, cell,
+  });
 
   return candidates.slice(0, count).map((run) => {
-    // Welt-Koordinaten des Gangstuecks: Wandflaechen an beiden Enden.
-    const centerOf = (i) => (run.axis === 'x'
-      ? cellCenter(maze, i, run.fix, unit)
-      : cellCenter(maze, run.fix, i, unit));
-    const a = centerOf(run.lo);
-    const b = centerOf(run.hi);
-    const aAlong = run.axis === 'x' ? a[0] : a[1];
-    const bAlong = run.axis === 'x' ? b[0] : b[1];
-    const cross = run.axis === 'x' ? a[1] : a[0];
-    const lowWall = aAlong - 0.5 * cell;
-    const highWall = bAlong + 0.5 * cell;
+    // Welt-Koordinaten des Gangstuecks: Wandflaechen an beiden Enden
+    // (min/max sind die Kammermitten der Endzellen).
+    const cross = run.cross;
+    const lowWall = run.min - 0.5 * cell;
+    const highWall = run.max + 0.5 * cell;
     const runLen = highWall - lowWall;
     // Wand-Ende: Laufrichtung des Wegs ueber den Gang bestimmt das Ende
     // VORAUS; einzelne Querung -> fern der Kreuzung; abseits -> rng.
@@ -290,11 +237,7 @@ export function spinnerPlayerHit(spinners, px, pz, radius, cell, prev) {
 
 // Marker-Positionen fuer die Kartensicht (lebende Spinner, Koerper-Mitte).
 export function spinnerMarkers(spinners) {
-  if (!spinners) return null;
-  return spinners.filter((s) => s.alive).map((s) => {
-    const [x, z] = spinnerPos(s);
-    return { x, z, alive: true };
-  });
+  return foeMarkers(spinners, spinnerPos);
 }
 
 // --- Spinner-Schuesse (ab Level 21, config.shoot) -------------------------

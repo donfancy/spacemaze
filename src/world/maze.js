@@ -41,6 +41,12 @@ export function isPillar(x, y) {
   return (x % 2 === 0) && (y % 2 === 0);
 }
 
+// Offene Zelle im Grid (mit Rand-Check) -- der gemeinsame Grundbaustein
+// fuer Feind-Platzierung, Fahr-Kollision und Kollisionswellen.
+export function isOpenCell(maze, x, y) {
+  return x >= 0 && x < maze.n && y >= 0 && y < maze.n && maze.grid[y][x] === OPEN;
+}
+
 // Alle Kammern eines Quadranten (bezogen auf die Grid-Mitte m=(n-1)/2).
 //   q === 1 : x > m && y > m   (Start-Region)
 //   q === 3 : x < m && y < m   (Ziel-Region, diagonal gegenueber)

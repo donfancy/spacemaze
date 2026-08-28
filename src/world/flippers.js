@@ -20,10 +20,11 @@
 //   3 oder mehr Feldern Entfernung abgeschossen wird (spawnFlipperPair) --
 //   die Strafe fuers Feige-von-weitem-Schiessen.
 
-import { OPEN, isChamber, findPath } from './maze.js';
 import { cellAt, cellCenter } from './mazeWorld.js';
 import { randInt } from '../util/rng.js';
-import { straightRuns } from './spinners.js';
+import {
+  corridorCandidates, foeMarkers, openSpan, QUARTER, orientIndex, sideOf, nextRnd,
+} from './foePlacement.js';
 
 export const FLIPPER = {
   minChambers: 3,  // so viele Kammern braucht ein Gangstueck fuer einen Flipper
@@ -44,32 +45,10 @@ export const FLIPPER = {
   pairGap: 0.6,    // Versatz des zweiten Paar-Flippers (Gangbreiten)
 };
 
-const QUARTER = Math.PI / 2;
-
-// Winkel-Konvention (Drehung um die Gang-Laengsachse): 0 = unten,
-// PI/2 = rechts (+quer), PI = oben, 3*PI/2 = links (-quer).
-function orientIndex(angle) {
-  return ((Math.round(angle / QUARTER) % 4) + 4) % 4;
-}
-
 // Eingerastete Seiten-Stellung: +1 (rechts) / -1 (links) / 0 (unten, oben
 // oder mitten im Flip) -- nur in einer Seiten-Stellung ist er abschiessbar.
-export function flipperSide(f) {
-  if (f.mode !== 'hold') return 0;
-  const k = orientIndex(f.angle);
-  return k === 1 ? 1 : k === 3 ? -1 : 0;
-}
-
-// Winziger deterministischer Zufall pro Flipper (LCG auf f.rnd) -- die
-// Flip-Entscheidungen brauchen zur Laufzeit keinen externen rng.
-function nextRnd(f) {
-  f.rnd = (Math.imul(f.rnd, 1664525) + 1013904223) >>> 0;
-  return f.rnd / 4294967296;
-}
-
-function isOpen(maze, x, y) {
-  return x >= 0 && x < maze.n && y >= 0 && y < maze.n && maze.grid[y][x] === OPEN;
-}
+// (Winkel-Raster und LCG-Zufall: foePlacement.js, geteilt mit den Pulsaren.)
+export const flipperSide = sideOf;
 
 // Welt-Position (x,z) der X-Mitte (Gangmitte quer, `along` laengs).
 export function flipperPos(f) {
@@ -97,50 +76,15 @@ function makeFlipper(axis, cross, along, min, max, rnd) {
 // Erzeugt die Flipper eines Levels. config = { count } (Level-Daten),
 // opts = { unit, cell, rng, avoid } -- `avoid` sind die Spinner des Levels:
 // deren Gangstuecke bleiben flipperfrei (ein Flipper, der durch einen Spike
-// pendelt, waere unlesbar). Platzierung wie bei den Spinnern: lange gerade
-// Gangstuecke, Weg-Gaenge zuerst, Schutzzone um S und G; der Flipper startet
-// in der Gang-MITTE. Deterministisch bei gleichem rng.
+// pendelt, waere unlesbar). Platzierung via corridorCandidates
+// (foePlacement.js, wie Spinner/Pulsare); der Flipper startet in der
+// Gang-MITTE. Deterministisch bei gleichem rng.
 export function createFlippers(maze, config, opts) {
   const { unit, cell, rng, avoid = [] } = opts;
   const count = config.count ?? 0;
-
-  const path = (findPath(maze, maze.start, maze.goal) ?? []).filter(([x, y]) => isChamber(x, y));
-  const key = (x, y) => x + ',' + y;
-  const pathSet = new Set(path.map(([x, y]) => key(x, y)));
-  const guard = new Set([...path.slice(0, FLIPPER.exclude), ...path.slice(-FLIPPER.exclude)]
-    .map(([x, y]) => key(x, y)));
-
-  const candidates = [];
-  for (const run of straightRuns(maze)) {
-    if (run.chambers < FLIPPER.minChambers) continue;
-    let guarded = false;
-    let onPath = false;
-    for (let i = run.lo; i <= run.hi; i += 2) {
-      const k = run.axis === 'x' ? key(i, run.fix) : key(run.fix, i);
-      if (pathSet.has(k)) onPath = true;
-      if (guard.has(k)) guarded = true;
-    }
-    if (guarded) continue;
-    // Spannweite in Welt-Koordinaten (wie bei den Spinnern).
-    const centerOf = (i) => (run.axis === 'x'
-      ? cellCenter(maze, i, run.fix, unit)
-      : cellCenter(maze, run.fix, i, unit));
-    const a = centerOf(run.lo);
-    const b = centerOf(run.hi);
-    const min = run.axis === 'x' ? a[0] : a[1];
-    const max = run.axis === 'x' ? b[0] : b[1];
-    const cross = run.axis === 'x' ? a[1] : a[0];
-    // Gangstuecke mit Spinner ueberspringen (gleiche Achse, gleiche Gang-
-    // mitte, ueberlappende Spanne).
-    const taken = avoid.some((s) => s.axis === run.axis
-      && Math.abs(s.cross - cross) < 1e-9
-      && Math.min(s.wall, s.wall + s.dir * s.runLen) < max + cell
-      && Math.max(s.wall, s.wall + s.dir * s.runLen) > min - cell);
-    if (!taken) candidates.push({ ...run, onPath, min, max, cross });
-  }
-  candidates.sort((a, b) => (b.onPath - a.onPath)
-    || (b.chambers - a.chambers) || (a.fix - b.fix) || (a.lo - b.lo) || (a.axis < b.axis ? -1 : 1));
-
+  const candidates = corridorCandidates(maze, {
+    minChambers: FLIPPER.minChambers, exclude: FLIPPER.exclude, unit, cell, avoid,
+  });
   return candidates.slice(0, count).map((run) => makeFlipper(
     run.axis, run.cross, (run.min + run.max) / 2, run.min, run.max,
     randInt(rng, 4294967296)));
@@ -164,10 +108,7 @@ export function spawnFlipperPair(maze, enemy, player, opts) {
   // quer abgeschossen laege die Spanne sonst im falschen Gang.
   const [egx, egy] = cellAt(maze, enemy.x, enemy.z, unit);
   const [ax, ay] = axis === 'x' ? [1, 0] : [0, 1];
-  let back = 0;
-  while (isOpen(maze, egx - (back + 1) * ax, egy - (back + 1) * ay)) back++;
-  let fwd = 0;
-  while (isOpen(maze, egx + (fwd + 1) * ax, egy + (fwd + 1) * ay)) fwd++;
+  const [back, fwd] = openSpan(maze, egx, egy, ax, ay);
   const lo = cellCenter(maze, egx - back * ax, egy - back * ay, unit);
   const hi = cellCenter(maze, egx + fwd * ax, egy + fwd * ay, unit);
   const min = axis === 'x' ? lo[0] : lo[1];
@@ -276,11 +217,7 @@ export function flipperPlayerHit(flippers, px, pz, radius, cell, prev) {
 
 // Marker-Positionen fuer die Kartensicht (lebende Flipper).
 export function flipperMarkers(flippers) {
-  if (!flippers) return null;
-  return flippers.filter((f) => f.alive).map((f) => {
-    const [x, z] = flipperPos(f);
-    return { x, z, alive: true };
-  });
+  return foeMarkers(flippers, flipperPos);
 }
 
 // Geometrie eines Flippers als Liniensegmente (lokale Flaechen-Welt): die

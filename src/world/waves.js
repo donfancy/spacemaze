@@ -3,12 +3,8 @@
 // Wellenringe im Vektor-Stil. Reine Geometrie (lokale Flaechen-Koordinaten
 // [lx, ly, lz] wie in mazeView), kein Canvas -> headless testbar.
 
-import { OPEN } from './maze.js';
+import { isOpenCell } from './maze.js';
 import { mazeMetric } from './metric.js';
-
-function isOpenCell(maze, x, y) {
-  return x >= 0 && x < maze.n && y >= 0 && y < maze.n && maze.grid[y][x] === OPEN;
-}
 
 // Baut aus einer Kollision (world/drive.js) die Wellen-Beschreibung:
 //   { axis, plane, u0, y0, extent } -- alles in Weltkoordinaten.

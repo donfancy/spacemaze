@@ -10,7 +10,7 @@
 // einer Achsen-Einheit der Metrik, `cell` die Gangbreite (Gameplay-Massstab).
 // Geschwindigkeiten in DRIVE sind in Gangbreiten pro Sekunde.
 
-import { OPEN } from './maze.js';
+import { isOpenCell } from './maze.js';
 import { rectWalkable, cellAt } from './mazeWorld.js';
 import { mazeMetric } from './metric.js';
 
@@ -40,10 +40,6 @@ export function rampToward(value, target, rate, dt) {
   const dv = target - value;
   const step = rate * dt;
   return Math.abs(dv) <= step ? target : value + Math.sign(dv) * step;
-}
-
-function isOpenCell(maze, x, y) {
-  return x >= 0 && x < maze.n && y >= 0 && y < maze.n && maze.grid[y][x] === OPEN;
 }
 
 // Ein Simulationsschritt. pose = {px,pz,yaw}, turn in [-1,1] (links positiv,

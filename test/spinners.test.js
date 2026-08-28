@@ -13,11 +13,12 @@ import { createRng } from '../src/util/rng.js';
 import { createShotsState, fireShot, shotsStep } from '../src/world/shots.js';
 import { DRIVE } from '../src/world/drive.js';
 import {
-  SPINNER, straightRuns, createSpinners, spinnersStep, spinnerShotHit,
+  SPINNER, createSpinners, spinnersStep, spinnerShotHit,
   spinnerPlayerHit, spinnerPos, spinnerTip, spinnerSegments, spinnerMarkers,
   spinnerFire, spinnerShotsStep, spinnerShotPlayerHit, spinnerShotIntercept,
   spinnerShotPos, spinnerShotSegments,
 } from '../src/world/spinners.js';
+import { straightRuns } from '../src/world/foePlacement.js';
 
 const THIN = { wall: 1, corridor: 5 };
 

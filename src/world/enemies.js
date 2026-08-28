@@ -8,9 +8,10 @@
 // Ein Teil (Level-Feld `patrol`) patrouilliert langsam den eigenen Gang
 // auf und ab, der Rest schwebt an Ort und Stelle.
 
-import { OPEN, isChamber, findPath } from './maze.js';
+import { isChamber, findPath } from './maze.js';
 import { cellCenter } from './mazeWorld.js';
 import { randInt } from '../util/rng.js';
+import { openSpan } from './foePlacement.js';
 
 export const ENEMY = {
   size: 0.3,        // Rauten-Halbhoehe (Gangbreiten)
@@ -21,19 +22,6 @@ export const ENEMY = {
   patrolSpeed: 0.6, // Patrouillen-Tempo (Gangbreiten/s)
   exclude: 3,       // so viele Weg-Kammern um S und G bleiben feindfrei
 };
-
-function isOpen(maze, x, y) {
-  return x >= 0 && x < maze.n && y >= 0 && y < maze.n && maze.grid[y][x] === OPEN;
-}
-
-// Offene Spanne (in Grid-Zellen) durch (gx,gy) entlang einer Achse.
-function openSpan(maze, gx, gy, ax, ay) {
-  let a = 0;
-  while (isOpen(maze, gx - (a + 1) * ax, gy - (a + 1) * ay)) a++;
-  let b = 0;
-  while (isOpen(maze, gx + (b + 1) * ax, gy + (b + 1) * ay)) b++;
-  return [a, b]; // Zellen rueckwaerts / vorwaerts
-}
 
 // Patrouillen-Strecke fuer eine Kammer: die Achse mit der laengeren offenen
 // Spanne, Grenzen = Zellmitten der Endzellen (so bleibt die Raute sicher im
@@ -114,7 +102,7 @@ export function enemiesStep(enemies, dt) {
   for (const e of enemies) {
     if (!e.alive || !e.patrol) continue;
     const p = e.patrol;
-    const coord = p.axis === 'x' ? 'x' : 'z';
+    const coord = p.axis; // 'x' | 'z' -- Feind-Feld heisst wie die Achse
     let v = e[coord] + p.dir * p.speed * dt;
     if (v > p.max) { v = p.max; p.dir = -1; }
     else if (v < p.min) { v = p.min; p.dir = 1; }

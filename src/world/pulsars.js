@@ -20,10 +20,10 @@
 //   und man selbst zur GEGENSEITE rueberzieht (passMargin) -- oben/unten
 //   sperrt die Zackenlinie die ganze Gangbreite.
 
-import { isChamber, findPath } from './maze.js';
-import { cellCenter } from './mazeWorld.js';
 import { randInt } from '../util/rng.js';
-import { straightRuns } from './spinners.js';
+import {
+  corridorCandidates, foeMarkers, QUARTER, orientIndex, sideOf, nextRnd,
+} from './foePlacement.js';
 
 export const PULSAR = {
   minChambers: 3,   // so viele Kammern braucht ein Gangstueck fuer einen Pulsar
@@ -46,27 +46,10 @@ export const PULSAR = {
   rearmDist: 0.6,   // Gangbreiten Abstand, bis der Pulsar wieder scharf ist
 };
 
-const QUARTER = Math.PI / 2;
-
-// Winkel-Konvention wie bei den Flippern (Drehung um die Gang-Laengsachse):
-// 0 = unten, PI/2 = rechts (+quer), PI = oben, 3*PI/2 = links (-quer).
-function orientIndex(angle) {
-  return ((Math.round(angle / QUARTER) % 4) + 4) % 4;
-}
-
 // Eingerastete Seiten-Stellung: +1 (rechts) / -1 (links) / 0 (unten, oben
 // oder mitten im Flip) -- nur seitlich gibt es das Vorbei-Schlupfloch.
-export function pulsarSide(p) {
-  if (p.mode !== 'hold') return 0;
-  const k = orientIndex(p.angle);
-  return k === 1 ? 1 : k === 3 ? -1 : 0;
-}
-
-// Winziger deterministischer Zufall pro Pulsar (LCG wie bei den Flippern).
-function nextRnd(p) {
-  p.rnd = (Math.imul(p.rnd, 1664525) + 1013904223) >>> 0;
-  return p.rnd / 4294967296;
-}
+// (Winkel-Raster und LCG-Zufall: foePlacement.js, geteilt mit den Flippern.)
+export const pulsarSide = sideOf;
 
 // Welt-Position (x,z) der Linien-Mitte (Gangmitte quer, `along` laengs).
 export function pulsarPos(p) {
@@ -96,70 +79,25 @@ function makePulsar(axis, cross, along, rnd) {
     phase: 0,      // Pulsier-Phase (individuell, kein Gleichtakt)
     rnd: rnd >>> 0,
   };
-  p.angle = orientIndex(Math.floor(nextRnd(p) * 4) * QUARTER) * QUARTER;
+  p.angle = Math.floor(nextRnd(p) * 4) * QUARTER;
   p.hold = holdRoll(p);
   p.phase = nextRnd(p) * 2 * Math.PI;
   p.rotDir = nextRnd(p) < 0.5 ? -1 : 1;
   return p;
 }
 
-// Belegte Laengs-Spanne eines fremden Feinds (Spinner ODER Flipper) -- die
-// beiden Formen unterscheiden sich: Flipper haben min/max, Spinner Wand +
-// Laufrichtung + Ganglaenge.
-function spanOf(s) {
-  if ('min' in s) return [s.min, s.max];
-  const a = s.wall;
-  const b = s.wall + s.dir * s.runLen;
-  return [Math.min(a, b), Math.max(a, b)];
-}
-
 // Erzeugt die Pulsare eines Levels. config = { count } (Level-Daten),
 // opts = { unit, cell, rng, avoid } -- `avoid` sind Spinner UND Flipper des
 // Levels: deren Gangstuecke bleiben pulsarfrei (drei Feindarten in einem
-// Gang waeren unlesbar). Platzierung wie bei Spinnern/Flippern: lange
-// gerade Gangstuecke, Weg-Gaenge zuerst, Schutzzone um S und G; der Pulsar
-// sitzt fest in der Gang-MITTE. Deterministisch bei gleichem rng.
+// Gang waeren unlesbar). Platzierung via corridorCandidates
+// (foePlacement.js, wie Spinner/Flipper); der Pulsar sitzt fest in der
+// Gang-MITTE. Deterministisch bei gleichem rng.
 export function createPulsars(maze, config, opts) {
   const { unit, cell, rng, avoid = [] } = opts;
   const count = config.count ?? 0;
-
-  const path = (findPath(maze, maze.start, maze.goal) ?? []).filter(([x, y]) => isChamber(x, y));
-  const key = (x, y) => x + ',' + y;
-  const pathSet = new Set(path.map(([x, y]) => key(x, y)));
-  const guard = new Set([...path.slice(0, PULSAR.exclude), ...path.slice(-PULSAR.exclude)]
-    .map(([x, y]) => key(x, y)));
-
-  const candidates = [];
-  for (const run of straightRuns(maze)) {
-    if (run.chambers < PULSAR.minChambers) continue;
-    let guarded = false;
-    let onPath = false;
-    for (let i = run.lo; i <= run.hi; i += 2) {
-      const k = run.axis === 'x' ? key(i, run.fix) : key(run.fix, i);
-      if (pathSet.has(k)) onPath = true;
-      if (guard.has(k)) guarded = true;
-    }
-    if (guarded) continue;
-    const centerOf = (i) => (run.axis === 'x'
-      ? cellCenter(maze, i, run.fix, unit)
-      : cellCenter(maze, run.fix, i, unit));
-    const a = centerOf(run.lo);
-    const b = centerOf(run.hi);
-    const min = run.axis === 'x' ? a[0] : a[1];
-    const max = run.axis === 'x' ? b[0] : b[1];
-    const cross = run.axis === 'x' ? a[1] : a[0];
-    // Gangstuecke mit Spinner oder Flipper ueberspringen (gleiche Achse,
-    // gleiche Gangmitte, ueberlappende Spanne).
-    const taken = avoid.some((s) => {
-      if (s.axis !== run.axis || Math.abs(s.cross - cross) >= 1e-9) return false;
-      const [lo, hi] = spanOf(s);
-      return lo < max + cell && hi > min - cell;
-    });
-    if (!taken) candidates.push({ ...run, onPath, min, max, cross });
-  }
-  candidates.sort((a, b) => (b.onPath - a.onPath)
-    || (b.chambers - a.chambers) || (a.fix - b.fix) || (a.lo - b.lo) || (a.axis < b.axis ? -1 : 1));
-
+  const candidates = corridorCandidates(maze, {
+    minChambers: PULSAR.minChambers, exclude: PULSAR.exclude, unit, cell, avoid,
+  });
   return candidates.slice(0, count).map((run) => makePulsar(
     run.axis, run.cross, (run.min + run.max) / 2, randInt(rng, 4294967296)));
 }
@@ -250,11 +188,7 @@ export function pulsarPlayerTouch(pulsars, px, pz, radius, cell, prev) {
 // Marker-Positionen fuer die Kartensicht (Pulsare sterben nie, aber die
 // Form haelt die Marker-Pipeline einheitlich mit den anderen Feinden).
 export function pulsarMarkers(pulsars) {
-  if (!pulsars) return null;
-  return pulsars.map((p) => {
-    const [x, z] = pulsarPos(p);
-    return { x, z, alive: true };
-  });
+  return foeMarkers(pulsars, pulsarPos); // alive ist bei Pulsaren immer true
 }
 
 // Aktuelle halbe Laenge der Zackenstrecke (Gangbreiten-Anteil) -- das
