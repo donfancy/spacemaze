@@ -368,3 +368,16 @@ test('Game: Backend sieht Szenenwechsel sofort (dispatch ist nahtlos)', () => {
   game.render(fakeRenderer());
   assert.deepEqual(seen, ['STARTSCREEN', 'MAZE_GEN']);
 });
+
+test('Engine 1980 ignoriert ein injiziertes Backend (Naht-Gegentest)', () => {
+  // Regressions-Schutz: der Dispatch in game.render prueft Engine UND
+  // Backend -- verkuerzte ihn jemand auf "Backend vorhanden", bliebe
+  // dieser Test nicht gruen.
+  let backendCalls = 0;
+  const backend = { render() { backendCalls++; } };
+  const game = new Game({ engine: ENGINE_1980, renderBackend: backend });
+  const r = fakeRenderer();
+  game.render(r);
+  assert.equal(backendCalls, 0, 'das Backend wird NICHT gerufen');
+  assert.ok(r.calls > 0, 'die 1980-Zeichnung laeuft');
+});

@@ -266,6 +266,7 @@ test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry',
   // Feinde stehen: Level 11 hat 6 Rauten, alle lebendig.
   assert.equal(g.enemies.length, 6);
   assert.ok(g.enemies.every((e) => e.alive));
+  const bornAt = g.enemies.map((e) => [e.gx, e.gy]); // fuer den Determinismus-Check unten
 
   // Space-Dauerfeuer laeuft ohne Fehler mit (Tempest-Logik ist unit-getestet).
   g.keys.add(' ');
@@ -300,6 +301,9 @@ test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry',
   assert.equal(g.gameOver, false);
   assert.equal(g.enemies.length, 6);
   assert.ok(g.enemies.every((e) => e.alive), 'alle Rauten leben wieder');
+  // Dokumentierte Zusage von spawnFoes: deterministisch aus maze.seed --
+  // der Retry landet bei DENSELBEN Geburts-Positionen.
+  assert.deepEqual(g.enemies.map((e) => [e.gx, e.gy]), bornAt, 'Retry: gleiche Positionen');
 });
 
 test('gewaehltes Level bestimmt die Maze-Groesse (Level 3 -> n=13)', () => {

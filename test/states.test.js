@@ -11,6 +11,11 @@ test('voller Zyklus Startscreen -> MazeGen -> Falling -> Playing -> Rising -> Ma
   assert.equal(nextState(State.MAP, GameEvent.EXIT), State.STARTSCREEN);
 });
 
+test('RESUME: von der Karte zurueck ins Reinfallen (Weiterspielen mit Q)', () => {
+  assert.equal(nextState(State.MAP, GameEvent.RESUME), State.FALLING);
+  assert.equal(nextState(State.PLAYING, GameEvent.RESUME), null, 'RESUME gibt es nur auf der Karte');
+});
+
 test('ungueltige Uebergaenge liefern null', () => {
   assert.equal(nextState(State.STARTSCREEN, GameEvent.EXIT), null);
   assert.equal(nextState(State.PLAYING, GameEvent.START), null);

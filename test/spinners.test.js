@@ -641,3 +641,14 @@ test('spinnerMarkers: nur lebende Spinner, an der Koerper-Position', () => {
   assert.deepEqual(spinnerMarkers(spinners), []);
   assert.equal(spinnerMarkers(null), null);
 });
+
+test('spinnerShotsStep kompaktiert in place: der mittlere von drei verpufft', () => {
+  const cell = 5;
+  const mk = (t) => ({ axis: 'x', dir: 1, wall: 0, cross: 0, runLen: 100, t, prevT: t, phase: 0 });
+  const shots = [mk(10), mk(99.9), mk(20)];
+  const [first, , third] = shots;
+  const events = spinnerShotsStep(shots, 0.1, cell); // +2.2*5*0.1 = 1.1 -> der mittlere ueberschreitet 100
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, 'wall');
+  assert.deepEqual(shots, [first, third], 'Ueberlebende ruecken auf, Reihenfolge bleibt');
+});

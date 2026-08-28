@@ -193,6 +193,17 @@ test('flipperPlayerHit: die Querschnitts-Ebene toetet bei Beruehrung und Kreuzen
   assert.equal(flipperPlayerHit(flippers, f.along, f.cross, radius, CELL), null);
 });
 
+test('flipperPlayerHit: auch MITTEN im Flip ist die Ebene toedlich (Spec: jede Stellung)', () => {
+  const { flippers } = makeFlipper();
+  const f = flippers[0];
+  const radius = 0.25 * CELL;
+  f.mode = 'flip';
+  f.angle = QUARTER / 2; // 45 Grad, zwischen zwei Rast-Stellungen
+  const hit = flipperPlayerHit(flippers, f.along + radius - 0.1, f.cross, radius, CELL);
+  assert.ok(hit, 'Beruehrung mitten im Flip toetet');
+  assert.equal(hit.flipper, f);
+});
+
 test('Der wandernde Flipper holt einen stehenden Spieler ein (prevAlong-Kreuzung)', () => {
   const { flippers } = makeFlipper();
   const f = flippers[0];

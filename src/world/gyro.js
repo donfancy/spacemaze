@@ -77,6 +77,13 @@ export function gyroTurn(orient, keys) {
   return (keys[LEFT_KEY[k]] ? 1 : 0) - (keys[LEFT_KEY[(k + 2) % 4]] ? 1 : 0);
 }
 
+// Winkel auf den KUERZESTEN Weg normalisieren ([-PI, PI)): der Rueckschwenk
+// dreht eine Rest-Verdrehung (game.viewRoll) sanft aus -- 270 Grad sollen
+// als -90 ausgedreht werden, nicht als Dreiviertel-Drehung zurueck.
+export function shortestRoll(angle) {
+  return ((angle + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+}
+
 // Anzeige der Lenk-Tasten fuer die Steuer-Zeile (erst Lenk-links, dann
 // Lenk-rechts, z.B. 'DOWN/UP' bei 90 Grad) -- direkt aus LEFT_KEY
 // abgeleitet und damit garantiert die Inverse des gyroTurn-Mappings.

@@ -139,6 +139,39 @@ test('Ausweichen: ein Schuss im Gang klappt die Seiten-Stellung RECHTZEITIG weg'
   assert.ok(dodged, 'der Pulsar ist ausgewichen');
 });
 
+test('Kein Ausweichen vor einem Schuss, der sich ENTFERNT (Richtungs-Check)', () => {
+  const { pulsars } = makePulsar();
+  const p = pulsars[0];
+  settle(p, QUARTER); // rechts eingerastet -- auf Schusshoehe
+  const shot = { x: p.along - CELL, z: p.cross, dx: -1, dz: 0 }; // nah, aber er fliegt WEG
+  for (let i = 0; i < 30; i++) pulsarsStep(pulsars, 1 / 120, CELL, [shot]);
+  assert.equal(pulsarSide(p), 1, 'bleibt seitlich eingerastet -- keine Bedrohung');
+});
+
+test('Landet ein Flip unter Beschuss SEITLICH, klappt er in derselben Richtung durch', () => {
+  const scenario = (withShot) => {
+    const { pulsars } = makePulsar();
+    const p = pulsars[0];
+    // Flip von unten nach rechts, einen Tick vor dem Einrasten -- waehrend
+    // sich ein eigener Schuss naehert (innerhalb dodgeRange, auf ihn zu).
+    p.mode = 'flip';
+    p.from = 0;
+    p.delta = QUARTER;
+    p.rotDir = 1;
+    p.flipT = 0.25 - 1e-4; // PULSAR.flipTime
+    const shots = withShot ? [{ x: p.along - CELL, z: p.cross, dx: 1, dz: 0 }] : null;
+    pulsarsStep(pulsars, 1 / 60, CELL, shots);
+    return p;
+  };
+  const threatened = scenario(true);
+  assert.equal(threatened.mode, 'flip', 'unter Beschuss: nicht seitlich einrasten');
+  assert.equal(threatened.from, QUARTER, 'der Folge-Flip startet an der Seiten-Stellung');
+  assert.equal(threatened.rotDir, 1, 'in DERSELBEN Drehrichtung durchklappen');
+  const calm = scenario(false);
+  assert.equal(calm.mode, 'hold', 'ohne Beschuss rastet derselbe Flip normal ein');
+  assert.equal(pulsarSide(calm), 1);
+});
+
 test('Beruehrung oben/unten: die Ebene sperrt die GANZE Gangbreite', () => {
   const { pulsars } = makePulsar();
   const p = pulsars[0];

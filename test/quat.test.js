@@ -40,6 +40,9 @@ const SAMPLE_BASES = [
   basisFromForwardUp([0, -1, 0], [0, 0, 1]),   // Blick nach unten, up = +z
   basisFromForwardUp([0.3, -0.5, 0.8], [0, 1, 0]),
   basisFromForwardUp([-0.7, 0.7, 0.1], [0.2, 0.3, 0.9]),
+  basisFromForwardUp([0, 0, 1], [0, -1, 0]),   // 180 Grad um x: trace <= 0 und
+                                               // m00 am groessten -- deckt den
+                                               // letzten Shepperd-Zweig ab
 ];
 
 test('quatFromBasis/basisFromQuat: Round-Trip erhaelt die Basis', () => {

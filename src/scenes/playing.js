@@ -46,7 +46,7 @@ import {
   FLIPPER, flippersStep, flipperPlayerHit, flipperShotHit, flipperSegments, spawnFlipperPair,
 } from '../world/flippers.js';
 import { pulsarsStep, pulsarPlayerTouch, pulsarSegments } from '../world/pulsars.js';
-import { createGyro, startSpin, gyroStep, gyroTurn } from '../world/gyro.js';
+import { createGyro, startSpin, gyroStep, gyroTurn, shortestRoll } from '../world/gyro.js';
 import { createShotsState, aimYaw, fireShot, shotsStep, shotSegments } from '../world/shots.js';
 import { burstSegments } from '../world/burst.js';
 import { PHOSPHOR_GREEN, NEON_MAGENTA, ARCADE_YELLOW, TANKER_RED } from '../render/colors.js';
@@ -407,7 +407,7 @@ export function createPlaying(game) {
       // Rest-Verdrehung der Blickachse (Pulsar-Rotation) auf dem kuerzesten
       // Weg normalisiert an den Rueckschwenk uebergeben: der dreht sie sanft
       // aus, statt hart auf "aufrecht" zu springen.
-      game.viewRoll = ((gyro.roll + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+      game.viewRoll = shortestRoll(gyro.roll);
       // Einschlag-Bildschirmpunkt an den Rueckschwenk uebergeben: der
       // startet voll zerscherbt, und mit derselben Mitte behalten alle
       // Scherben ihre Flugbahn (sonst ruckte die Scherbenlage am Uebergang).

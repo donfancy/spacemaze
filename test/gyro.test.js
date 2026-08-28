@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRng } from '../src/util/rng.js';
-import { GYRO, createGyro, startSpin, gyroStep, gyroTurn } from '../src/world/gyro.js';
+import { GYRO, createGyro, startSpin, gyroStep, gyroTurn, shortestRoll } from '../src/world/gyro.js';
 
 const QUARTER = Math.PI / 2;
 const EPS = 1e-9;
@@ -109,4 +109,13 @@ test('startSpin ist mit echtem rng deterministisch und liefert gueltige Betraege
     while (g.spinning) gyroStep(g, 1 / 60);
     assert.equal(g.roll % QUARTER, 0);
   }
+});
+
+test('shortestRoll: kuerzester Weg, Bereich [-PI, PI)', () => {
+  assert.equal(shortestRoll(0), 0);
+  assert.ok(Math.abs(shortestRoll(1.5 * Math.PI) - (-0.5 * Math.PI)) < 1e-12, '270 Grad -> -90');
+  assert.ok(Math.abs(shortestRoll(-1.5 * Math.PI) - 0.5 * Math.PI) < 1e-12, '-270 Grad -> +90');
+  assert.ok(Math.abs(shortestRoll(2 * Math.PI)) < 1e-12, '360 Grad -> 0 (nichts auszudrehen)');
+  assert.ok(Math.abs(shortestRoll(5 * Math.PI) - (-Math.PI)) < 1e-12, 'ungerade Vielfache -> -PI');
+  assert.ok(Math.abs(shortestRoll(0.25 * Math.PI) - 0.25 * Math.PI) < 1e-12, 'kleine Winkel unveraendert');
 });
