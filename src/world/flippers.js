@@ -21,7 +21,7 @@
 //   die Strafe fuers Feige-von-weitem-Schiessen.
 
 import { OPEN, isChamber, findPath } from './maze.js';
-import { cellCenter } from './mazeWorld.js';
+import { cellAt, cellCenter } from './mazeWorld.js';
 import { randInt } from '../util/rng.js';
 import { straightRuns } from './spinners.js';
 
@@ -158,17 +158,21 @@ export function spawnFlipperPair(maze, enemy, player, opts) {
   const axis = Math.abs(dx) >= Math.abs(dz) ? 'x' : 'z';
   const toward = (axis === 'x' ? dx : dz) >= 0 ? 1 : -1;
 
-  // Patrouillen-Spanne des Tanker-Gangs entlang der Achse (Kammer-Mitten).
+  // Spanne des Gangs entlang der Achse (Kammer-Mitten), ausgehend von der
+  // AKTUELLEN Zelle des Tankers -- ein patrouillierender Tanker kann beim
+  // Abschuss Kammern von seiner Geburtszelle (gx/gy) entfernt stehen, und
+  // quer abgeschossen laege die Spanne sonst im falschen Gang.
+  const [egx, egy] = cellAt(maze, enemy.x, enemy.z, unit);
   const [ax, ay] = axis === 'x' ? [1, 0] : [0, 1];
   let back = 0;
-  while (isOpen(maze, enemy.gx - (back + 1) * ax, enemy.gy - (back + 1) * ay)) back++;
+  while (isOpen(maze, egx - (back + 1) * ax, egy - (back + 1) * ay)) back++;
   let fwd = 0;
-  while (isOpen(maze, enemy.gx + (fwd + 1) * ax, enemy.gy + (fwd + 1) * ay)) fwd++;
-  const lo = cellCenter(maze, enemy.gx - back * ax, enemy.gy - back * ay, unit);
-  const hi = cellCenter(maze, enemy.gx + fwd * ax, enemy.gy + fwd * ay, unit);
+  while (isOpen(maze, egx + (fwd + 1) * ax, egy + (fwd + 1) * ay)) fwd++;
+  const lo = cellCenter(maze, egx - back * ax, egy - back * ay, unit);
+  const hi = cellCenter(maze, egx + fwd * ax, egy + fwd * ay, unit);
   const min = axis === 'x' ? lo[0] : lo[1];
   const max = axis === 'x' ? hi[0] : hi[1];
-  const center = cellCenter(maze, enemy.gx, enemy.gy, unit);
+  const center = cellCenter(maze, egx, egy, unit);
   const cross = axis === 'x' ? center[1] : center[0];
 
   const clamp = (v) => Math.min(max, Math.max(min, v));
@@ -223,11 +227,17 @@ export function flippersStep(flippers, dt, cell) {
 // dort kreuzt das hochkant stehende X die Schusshoehe nahe der Wand; man
 // zielt mit dem Lenk-Ausschlag dorthin. Unten/oben (und mitten im Flip)
 // fliegen Schuesse ungehindert vorbei. Liefert das Ereignis oder null.
+// WAND SCHUETZT: nur Treffer im EIGENEN Gang zaehlen (Quer-Check wie beim
+// Spieler) -- der Substep-Punkt eines Schusses aus dem Nachbargang kann bis
+// zu 0.5 Einheiten in der Trennwand liegen und kaeme dem Seiten-Trefferpunkt
+// (0.5-lift Gangbreiten vor der Wand) sonst naeher als shotRadius.
 export function flipperShotHit(flippers, x, z, cell) {
   for (const f of flippers) {
     if (!f.alive) continue;
     const side = flipperSide(f);
     if (side === 0) continue;
+    const crossS = f.axis === 'x' ? z : x;
+    if (Math.abs(crossS - f.cross) >= 0.5 * cell) continue;
     const q = f.cross + side * (0.5 - FLIPPER.lift) * cell;
     const [hx, hz] = f.axis === 'x' ? [f.along, q] : [q, f.along];
     if (Math.hypot(x - hx, z - hz) < FLIPPER.shotRadius * cell) {

@@ -151,6 +151,22 @@ test('flipperShotHit: nur in Seiten-Stellung, Zielpunkt sitzt nahe der Wand', ()
   assert.ok(f.alive);
 });
 
+test('flipperShotHit: die Trennwand schuetzt -- Substep-Punkte IN der Wand treffen nicht', () => {
+  // Der Schuss-Substep prueft den Treffer VOR der Wand-Kollision: ein Schuss
+  // aus dem Nachbargang kann bis 0.5 Einheiten in der Trennwand stecken und
+  // kaeme dem Seiten-Trefferpunkt (5.2) auf 1.1 < shotRadius 1.5 nahe.
+  const { flippers } = makeFlipper();
+  const f = flippers[0]; // Gang y=1: cross 3.5, Gangkante bei 6, Wand 6..7
+  settle(f, QUARTER);    // rechts eingerastet, Trefferpunkt bei z = 5.2
+
+  assert.equal(flipperShotHit(flippers, f.along, 6.3, CELL), null,
+    'Punkt in der Trennwand (Nachbargang-Schuss) trifft nicht');
+  assert.ok(f.alive);
+  const ev = flipperShotHit(flippers, f.along, 5.9, CELL);
+  assert.ok(ev, 'Punkt im eigenen Gang nahe der Wand trifft weiterhin');
+  assert.equal(f.alive, false);
+});
+
 test('flipperPlayerHit: die Querschnitts-Ebene toetet bei Beruehrung und Kreuzen -- in JEDER Stellung', () => {
   const { flippers } = makeFlipper();
   const f = flippers[0];
@@ -216,6 +232,26 @@ test('spawnFlipperPair: links+rechts am Tanker, versetzt, beide auf den Spieler 
 
   // Deterministisch: gleicher Abschuss -> gleiches Paar.
   assert.deepEqual(spawnFlipperPair(maze, enemy, player, { unit: 1, cell: CELL }), pair);
+});
+
+test('spawnFlipperPair: patrouillierter Tanker -- das Paar spawnt im Gang der AKTUELLEN Lage', () => {
+  const maze = corridorMaze();
+  // Geburtszelle (5,1) im x-Gang, aber der Tanker steht gerade auf der
+  // Kreuzung (1,1); der Spieler schiesst ihn von unten durch den z-Gang
+  // (Spalte x=1) ab. Die Spanne muss aus der aktuellen Zelle kommen --
+  // von der Geburtszelle aus laege sie im falschen Gang (cross 15.5).
+  const enemy = { gx: 5, gy: 1, x: 3.5, z: 3.5 };
+  const player = { px: 3.5, pz: 9.5 };
+  const pair = spawnFlipperPair(maze, enemy, player, { unit: 1, cell: CELL });
+
+  assert.equal(pair.length, 2);
+  for (const f of pair) {
+    assert.equal(f.axis, 'z', 'Achse aus der Sichtlinie durch den z-Gang');
+    assert.equal(f.cross, 3.5, 'Gangmitte der Spalte x=1 (aktuelle Lage)');
+    assert.equal(f.min, 3.5, 'Spanne vom Kreuzungs-Ende ...');
+    assert.equal(f.max, 15.5, '... bis zur letzten Kammer des z-Gangs');
+    assert.equal(f.moveDir, 1, 'rueckt auf den Spieler zu');
+  }
 });
 
 test('flipperMarkers: nur lebende Flipper, an der X-Mitte', () => {
