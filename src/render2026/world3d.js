@@ -131,7 +131,9 @@ export function disposeWorld(world) {
     for (const m of mats) {
       if (seen.has(m)) continue;
       seen.add(m);
-      m.map?.dispose();
+      // Geteilte Texturen (z.B. die Dunst-Glow-Textur in mehreren Sprites)
+      // nur einmal freigeben.
+      if (m.map && !seen.has(m.map)) { seen.add(m.map); m.map.dispose(); }
       m.dispose();
     }
   });
