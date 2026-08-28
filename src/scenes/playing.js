@@ -607,7 +607,9 @@ export function createPlaying(game) {
       if (crash) {
         const p = Math.min(1, crashT / CRASH_TIME);
         const world = faceLocalToWorld(crashPos.x, EYE_RATIO * cell, crashPos.z, face, CUBE_SIZE);
-        const c = renderer.worldToScreen(world, camera); // Kamera-Basis steht vom Vorframe
+        // Kamera-Basis steht vom Vorframe; near mit cell skalieren (der
+        // Einschlag ist direkt vor der Kamera -- Near-Plane-Regel).
+        const c = renderer.worldToScreen(world, camera, NEAR_RATIO * cell);
         renderer.pushShatter({
           amount: 1 - (1 - p) * (1 - p), // harter Stoss, dann treibendes Auseinanderfliegen
           cx: c ? c.x : renderer.width / 2,
@@ -849,10 +851,14 @@ export function createPlaying(game) {
       if (shoot && !crash && !reached) {
         const aim = aimYaw(yaw, drive ? driveState.steer : walkState.steer);
         const d = CROSSHAIR_DIST * cell;
+        // near mit cell skalieren (Near-Plane-Regel): der Anker liegt bei
+        // 2.5 Gangbreiten -- mit dem festen 0.1 verschwaende das Fadenkreuz
+        // bei noch groesseren Labyrinthen kommentarlos.
+        const near = NEAR_RATIO * cell;
         const anchor = renderer.worldToScreen(
-          faceLocalToWorld(px - Math.sin(aim) * d, EYE_RATIO * cell, pz - Math.cos(aim) * d, face, CUBE_SIZE), camera);
+          faceLocalToWorld(px - Math.sin(aim) * d, EYE_RATIO * cell, pz - Math.cos(aim) * d, face, CUBE_SIZE), camera, near);
         const above = renderer.worldToScreen(
-          faceLocalToWorld(px - Math.sin(aim) * d, (EYE_RATIO + CROSSHAIR_SIZE) * cell, pz - Math.cos(aim) * d, face, CUBE_SIZE), camera);
+          faceLocalToWorld(px - Math.sin(aim) * d, (EYE_RATIO + CROSSHAIR_SIZE) * cell, pz - Math.cos(aim) * d, face, CUBE_SIZE), camera, near);
         if (anchor && above) {
           // Groesse aus der Projektion -- das Fadenkreuz atmet mit der Perspektive.
           const r = Math.max(6, Math.hypot(above.x - anchor.x, above.y - anchor.y));

@@ -4,11 +4,10 @@ import {
   generateMaze, isChamber, isPillar, chambersInQuadrant,
   reachable, findPath, WALL, OPEN,
 } from '../src/world/maze.js';
-import { createRng } from '../src/util/rng.js';
 
 // Helfer: deterministisches Labyrinth fuer reproduzierbare Tests.
 function maze(n = 11, seed = 20260627) {
-  return generateMaze(n, { rng: createRng(seed) });
+  return generateMaze(n, { seed });
 }
 
 // Anzahl Kammern in einem n x n Grid: ((n-1)/2)^2.

@@ -66,7 +66,7 @@ export function chambersInQuadrant(n, q) {
   return result;
 }
 
-// Erzeugt ein Labyrinth. options: { seed?, rng?, metric?, straight? }.
+// Erzeugt ein Labyrinth. options: { seed?, metric?, straight? }.
 // `metric` ({ wall, corridor }) bestimmt nur die DARSTELLUNGS-Breiten der Zellen
 // (siehe world/metric.js) -- die Labyrinth-Struktur selbst ist davon unabhaengig.
 // `straight` (0..1, Standard 0) ist ein Geradeaus-Bias beim Graben: mit dieser
@@ -81,8 +81,11 @@ export function generateMaze(n = 11, options = {}) {
     throw new Error('n muss >= 7 sein (S und G sollen beide Sackgassen sein), war ' + n);
   }
 
+  // Nur ueber `seed` -- eine frueher moegliche eigene rng-Quelle konnte
+  // maze.seed vom Grid entkoppeln, und aus maze.seed leiten inzwischen
+  // spawnFoes, createStars und das Feuerwerk Deterministisches ab.
   const seed = options.seed ?? randomSeed();
-  const rng = options.rng ?? createRng(seed);
+  const rng = createRng(seed);
 
   // Grid initialisieren: Kammern offen, alles andere Wand.
   const grid = [];

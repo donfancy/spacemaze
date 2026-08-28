@@ -1,4 +1,4 @@
-// 6-DOF-Kamera: 3x Position (x,y,z) + 3x Orientierung (yaw, pitch, roll).
+// Kamera: 3x Position (x,y,z) + Orientierung (yaw, pitch) oder freie Basis.
 // Rein rechnerisch, kein Canvas -> headless testbar.
 //
 // Koordinatensystem (rechtshaendig, OpenGL-Stil):
@@ -7,16 +7,18 @@
 //
 // yaw   = Drehung um die y-Achse (nach links/rechts schauen)
 // pitch = Drehung um die x-Achse (hoch/runter schauen)
-// roll  = Drehung um die z-Achse (Kippen des Horizonts)
+// BEWUSST KEIN roll: die Hidden-Lines-Regel 4 verlangt eine horizontale
+// 3D-Kamera -- Roll (Kurvenneigung, Gyro) laeuft IMMER als Bildraum-Sway
+// (render/sway.js), nie in der Kamera. Ein Roll-Feld hier waere eine
+// Einladung, genau diese Regel zu verletzen (entfernt 28.8.2026).
 
-import { sub, normalize, cross, dot, rotateX, rotateY, rotateZ } from './vec3.js';
+import { sub, normalize, cross, dot, rotateX, rotateY } from './vec3.js';
 
 export function createCamera(opts = {}) {
   return {
     position: opts.position ? [...opts.position] : [0, 0, 0],
     yaw: opts.yaw ?? 0,
     pitch: opts.pitch ?? 0,
-    roll: opts.roll ?? 0,
     fov: opts.fov ?? Math.PI / 2, // 90 Grad vertikales Sichtfeld
   };
 }
@@ -34,31 +36,26 @@ export function basisFromForwardUp(forwardDir, upHint) {
 
 // Transformiert einen Weltpunkt in den View-Space (Kamerakoordinaten).
 // Mit camera.basis: Projektion auf die Basisachsen (Kamera blickt entlang -z_view,
-// daher z = -(p . forward)). Sonst klassisch ueber yaw/pitch/roll:
+// daher z = -(p . forward)). Sonst klassisch ueber yaw/pitch:
 //   1) relativ zur Kameraposition verschieben,
 //   2) mit der inversen Kamerarotation zurueckdrehen
-//      (Inverse von yaw->pitch->roll ist -roll->-pitch->-yaw).
+//      (Inverse von yaw->pitch ist -pitch->-yaw).
 export function worldToView(camera, worldPoint) {
   const p = sub(worldPoint, camera.position);
   if (camera.basis) {
     const { right, up, forward } = camera.basis;
     return [dot(p, right), dot(p, up), -dot(p, forward)];
   }
-  let q = rotateY(p, -camera.yaw);
-  q = rotateX(q, -camera.pitch);
-  q = rotateZ(q, -camera.roll);
-  return q;
+  const q = rotateY(p, -camera.yaw);
+  return rotateX(q, -camera.pitch);
 }
 
 // Vorwaertsrichtung der Kamera in Weltkoordinaten (wohin sie schaut).
 export function forward(camera) {
   if (camera.basis) return camera.basis.forward;
   // Startet als -z und wird mit der Kamerarotation in die Welt gedreht.
-  let f = [0, 0, -1];
-  f = rotateZ(f, camera.roll);
-  f = rotateX(f, camera.pitch);
-  f = rotateY(f, camera.yaw);
-  return f;
+  const f = rotateX([0, 0, -1], camera.pitch);
+  return rotateY(f, camera.yaw);
 }
 
 // Berechnet yaw/pitch (roll bleibt 0), damit eine Kamera an `position` genau auf

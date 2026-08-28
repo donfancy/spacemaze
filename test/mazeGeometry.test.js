@@ -2,10 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateMaze, OPEN } from '../src/world/maze.js';
 import { corridorOutline, growthOutline, mergeCollinear } from '../src/world/mazeGeometry.js';
-import { createRng } from '../src/util/rng.js';
 
 function maze(n = 11, seed = 20260627) {
-  return generateMaze(n, { rng: createRng(seed) });
+  return generateMaze(n, { seed });
 }
 
 // Grad jedes Gittervertex in der Liniemenge (fuer Kontur-Test).

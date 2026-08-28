@@ -148,8 +148,11 @@ export class Renderer {
 
   // Projiziert einen Weltpunkt auf Bildschirm-Pixel ({x,y}) oder null, wenn er
   // hinter der Near-Plane liegt. Nuetzlich, um 2D-Marker an 3D-Positionen zu setzen.
-  worldToScreen(worldPoint, camera) {
+  // `near` optional wie bei renderScene (Near-Plane-Regel: mit `cell`
+  // skalieren!) -- der feste Standard 0.1 verschluckt sonst kommentarlos
+  // Punkte nahe der Kamera (Fadenkreuz-Anker bei grossen Labyrinthen).
+  worldToScreen(worldPoint, camera, near = this.near) {
     const v = worldToView(camera, worldPoint);
-    return project(v, { width: this.width, height: this.height, fov: camera.fov, near: this.near });
+    return project(v, { width: this.width, height: this.height, fov: camera.fov, near });
   }
 }
