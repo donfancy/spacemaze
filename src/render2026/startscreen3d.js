@@ -8,18 +8,26 @@
 
 import * as THREE from 'three';
 import { PHOSPHOR_GREEN, TEMPEST_BLUE, NEON_MAGENTA } from '../render/colors.js';
-import { hdr, buildStarField, buildDust } from './world3d.js';
+import { hdr, buildStarField } from './world3d.js';
+import { bakeSkybox } from './skybox.js';
+import { startscreenSkyTheme } from './skyTheme.js';
 
 import { CUBE_SIZE } from '../scenes/mazeView.js'; // eine Quelle fuer beide Engines
 const STAR_SEED = 1980;   // fester Himmel (kein Maze-Seed auf dem Startscreen)
 
-export function buildStartscreenScene() {
+export function buildStartscreenScene(renderer) {
   const scene = new THREE.Scene();
 
   const { mats: starMats } = buildStarField(scene, {
     seed: STAR_SEED, center: [0, 0], hemisphere: false,
   });
-  buildDust(scene, [0, 0]);
+  // Nebel-Skybox (volle Kugel, dezentes Gruen -- der Anfang des Crescendos);
+  // disposeWorld(start) gibt skyRT beim Teardown frei.
+  let skyRT = null;
+  if (renderer) {
+    skyRT = bakeSkybox(renderer, startscreenSkyTheme());
+    scene.background = skyRT.texture;
+  }
 
   // Wuerfel: dunkle Flaechen (wie die Labyrinth-Waende) + HDR-Leuchtkanten.
   const faceMat = new THREE.MeshStandardMaterial({
@@ -49,5 +57,5 @@ export function buildStartscreenScene() {
   l2.position.set(-6, -3, -5);
   scene.add(l2);
 
-  return { scene, edgeMat, faceMat, starMats };
+  return { scene, edgeMat, faceMat, starMats, skyRT };
 }

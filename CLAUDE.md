@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 369 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 375 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -71,6 +71,13 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Schwenk-Wand-Cache (mergedOutline), backend.dispose() + Welt-Freigabe am
   Startscreen, tote Exporte entfernt, 369 Tests. Aufgeschobenes: IDEAS.md
   (Perf) und PLAN2026.md Stufe 6 (proto-Abschied, playing-Zerlegung).
+- **Stufe 6 begonnen — SKYBOX (29.8.2026):** prozeduraler Nebel-Himmel in
+  der 2026-Engine, ein Crescendo über die Levels (dezent in Level 1, voll im
+  Arcade-Finale; auch Startscreen). `render2026/skyTheme.js` (pur: Rezept aus
+  Level + Seed) + `render2026/skybox.js` (einmaliger Cubemap-Bake, FBM-Nebel +
+  Galaxien-Band + Staub; unter der Bloom-Schwelle, Dither, horizonFade;
+  ersetzt die Dunst-Sprites; skyRT-dispose in disposeWorld). Details/Fallen:
+  PLAN2026.md Stufe 6.
 - **Der komplette Zyklus läuft**: Startscreen (Level-Auswahl per Pfeiltasten) →
   andocken → Labyrinth wächst → Reinfallen → Ego-Begehung (Tank-Steuerung,
   Hidden Lines) → Q/20s → Rückschwenk → Karte mit Weg. Auf der Karte: solange

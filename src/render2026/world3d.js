@@ -16,6 +16,7 @@ import { OPEN } from '../world/maze.js';
 import { corridorOutline, mergeCollinear } from '../world/mazeGeometry.js';
 import { mazeMetric } from '../world/metric.js';
 import { createRng } from '../util/rng.js';
+import { bakeSkybox } from './skybox.js';
 import {
   PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_RED, ARCADE_YELLOW, NEON_MAGENTA,
 } from '../render/colors.js';
@@ -67,7 +68,7 @@ export function buildWorld(maze, opts = {}) {
 
   buildWallsAndLines(world, maze);
   buildFloor(world, maze);
-  buildSky(world, maze, opts.rainbow);
+  buildSky(world, maze, opts);
   buildBeacon(world, maze);
   buildMirror(world);
   buildFloodlights(world, maze);
@@ -124,6 +125,9 @@ export function applyTheme(world, hex) {
 // Welt wegwerfen (Levelwechsel): GPU-Ressourcen freigeben, sonst leckt jedes
 // neue Labyrinth Geometrie- und Textur-Speicher.
 export function disposeWorld(world) {
+  // Die Skybox-Cubemap haengt als scene.background NICHT im Szenengraph --
+  // ihr RenderTarget explizit freigeben (gilt auch fuer den Startscreen).
+  world.skyRT?.dispose();
   const seen = new Set();
   world.scene.traverse((obj) => {
     if (obj.geometry && !seen.has(obj.geometry)) { seen.add(obj.geometry); obj.geometry.dispose(); }
@@ -342,54 +346,22 @@ export function buildStarField(scene, { seed, center = [0, 0], hemisphere = true
   return { mats, geos };
 }
 
-// Psychedelischer Weltraum-Dunst: grosse additive Glow-Sprites am Horizont.
-export function buildDust(scene, center = [0, 0]) {
-  const [cx, cz] = center;
-  const tex = glowTexture();
-  const clouds = [
-    { hex: NEON_MAGENTA, az: 0.7, el: 0.18, s: 700, o: 0.07 },
-    { hex: TEMPEST_BLUE, az: 2.9, el: 0.30, s: 900, o: 0.06 },
-    { hex: PHOSPHOR_GREEN, az: 4.6, el: 0.12, s: 600, o: 0.05 },
-  ];
-  for (const { hex, az, el, s, o } of clouds) {
-    const mat = new THREE.SpriteMaterial({
-      map: tex, color: new THREE.Color(hex), transparent: true, opacity: o,
-      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
-    });
-    const sp = new THREE.Sprite(mat);
-    sp.position.set(
-      cx + 900 * Math.cos(el) * Math.cos(az),
-      900 * Math.sin(el),
-      cz + 900 * Math.cos(el) * Math.sin(az)
-    );
-    sp.scale.set(s, s, 1);
-    scene.add(sp);
-  }
-}
-
-function buildSky(world, maze, rainbow = false) {
+// Himmel: funkelnde Punkt-Sterne + prozedurale Nebel-Skybox (skybox.js,
+// einmalig in eine Cubemap gebacken -- ersetzt die frueheren Dunst-Sprites).
+// opts.renderer/opts.sky kommen aus backend.js (der Bake braucht den
+// WebGLRenderer; das Thema samt Crescendo-Gain liefert skyTheme.js).
+function buildSky(world, maze, opts) {
   const { scene, total } = world;
   const { mats, geos } = buildStarField(scene, {
     seed: maze.seed, center: [total / 2, total / 2], hemisphere: true,
-    tintProb: rainbow ? 0.85 : 0.16,
+    tintProb: opts.rainbow ? 0.85 : 0.16,
   });
   world.starGroups = mats;
   world.starGeos = geos;
-  buildDust(scene, [total / 2, total / 2]);
-}
-
-// Weicher radialer Glow als Canvas-Textur (Render-Schicht, kein Spielzustand).
-function glowTexture() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 256;
-  const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.4, 'rgba(255,255,255,0.35)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 256, 256);
-  return new THREE.CanvasTexture(c);
+  if (opts.renderer && opts.sky) {
+    world.skyRT = bakeSkybox(opts.renderer, opts.sky);
+    scene.background = world.skyRT.texture;
+  }
 }
 
 // Ziel-Leuchtfeuer: Ring aus HDR-Lichtsaeulen + additiver Lichtkegel + Punktlicht.

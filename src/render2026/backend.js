@@ -48,6 +48,7 @@ import {
   UNITS_PER_CELL, FOG_DENSITY, HEADLIGHT_INTENSITY, EGO_BOOST, MIRROR_LINE_DIM,
 } from './world3d.js';
 import { buildStartscreenScene } from './startscreen3d.js';
+import { skyTheme } from './skyTheme.js';
 
 const EYE = EYE_RATIO * UNITS_PER_CELL; // Augenhoehe: halbe Gangbreite
 
@@ -107,6 +108,7 @@ const SHARD_HDR = 1.35;         // flaechige Truemmer: gluehende Platten, kein V
 // sie sich klar von den Kollisionsfunken abheben (Boris' Punkt); dazu
 // FLIRRENDE Arcade-Farben zum Weiss gemischt (harte Schaltung wie 1981).
 const SHOT_PARAMS = { size: 0.12, spin: 18 };
+const SKY_DRIFT = 0.004;        // rad/s: kaum merkliche Drehung der Nebel-Skybox
 const SHOT_FLICKER = 12;        // Farb-Schaltrate (Hz)
 const SHOT_WHITE_MIX = 0.55;    // Weiss-Anteil der Arcade-Farben
 const NEAR_STAR = 0.6;          // Gangbreiten: der Stern-Radius waechst erst mit
@@ -249,7 +251,7 @@ export function createBackend2026(container = document.body) {
   // --- Startscreen-Szene (Prototyp-Optik), einmal lazy gebaut -----------------
   let start = null;
   function useStartScene() {
-    if (!start) start = buildStartscreenScene();
+    if (!start) start = buildStartscreenScene(renderer);
     renderPass.scene = start.scene;
   }
 
@@ -267,6 +269,10 @@ export function createBackend2026(container = document.body) {
       world = buildWorld(maze, {
         rainbow: !!cfg?.rainbowStars,
         shotLights: cfg?.shoot ? SHOT_LIGHT_COUNT : 0,
+        // Nebel-Skybox: einmaliger Cubemap-Bake beim Weltaufbau (skybox.js);
+        // das Thema (Level-Palette + Crescendo) ist pur in skyTheme.js.
+        renderer,
+        sky: skyTheme(game.level, maze.seed),
       });
       // Umrechnung lokale Flaechen-Einheiten (px/pz, trail, Feinde) -> 3D.
       world.kLocal = UNITS_PER_CELL / cellSize(maze);
@@ -405,6 +411,9 @@ export function createBackend2026(container = document.body) {
   // Leuchtfeuer mit (Maze-Wachstum, Karten-Exit).
   function animateWorld(game, view, dim = 1) {
     twinkleMats(world.starGroups, game.time);
+    // Kaum merkliche Drift der Nebel-Skybox (backgroundRotation kostet pro
+    // Frame nichts -- nur eine Matrix-Uniform; die Punkt-Sterne bleiben fest).
+    world.scene.backgroundRotation.y = game.time * SKY_DRIFT;
 
     const done = view ? view.reached : game.reachedGoal;
     const flashAge = view?.reached ? view.sceneT - view.reachedAt : Infinity;
@@ -1083,6 +1092,7 @@ export function createBackend2026(container = document.body) {
     camera.rotation.set(view.pose.pitch, view.pose.yaw, 0);
     start.edgeMat.color.set(view.color ?? PHOSPHOR_GREEN).multiplyScalar(EGO_BOOST);
     twinkleMats(start.starMats, game.time);
+    start.scene.backgroundRotation.y = game.time * SKY_DRIFT;
   }
 
   // Maze-Wachstum: Draufsicht, die Boden-Kontur frisst sich in der
