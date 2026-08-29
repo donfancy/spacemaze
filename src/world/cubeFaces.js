@@ -81,6 +81,22 @@ export function faceLocalToWorld(lx, ly, lz, face, squareSize) {
   ];
 }
 
+// Umkehrung von faceLocalToWorld: Weltpunkt -> lokale Flaechen-Koordinaten
+// (lx entlang uAxis, lz entlang vAxis, ly = Hoehe ueber der Flaeche). Die
+// Achsen sind orthonormal, die Umkehrung ist also eine reine Projektion.
+// Genutzt von der 2026-Platine: die Startscreen-Lichter werden auf die
+// Andock-Flaeche projiziert, damit der Licht-Verlauf beim Wechsel zur
+// Draufsicht exakt weiterlaeuft (kein "Umschalten").
+export function worldToFaceLocal(p, face, squareSize) {
+  const half = squareSize / 2;
+  const dot = (a) => p[0] * a[0] + p[1] * a[1] + p[2] * a[2];
+  return {
+    lx: dot(face.uAxis) + half,
+    ly: dot(face.normal) - half,
+    lz: dot(face.vAxis) + half,
+  };
+}
+
 // Wie faceLocalToWorld, aber fuer RICHTUNGEN (ohne Verschiebung) -- z.B. Blickrichtung.
 export function faceDir(lx, ly, lz, face) {
   return [

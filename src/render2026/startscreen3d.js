@@ -7,8 +7,8 @@
 // damit die Posen der Orbit-/Dock-Bahnen unveraendert gelten.
 
 import * as THREE from 'three';
-import { PHOSPHOR_GREEN, TEMPEST_BLUE, NEON_MAGENTA } from '../render/colors.js';
-import { hdr, buildStarField } from './world3d.js';
+import { PHOSPHOR_GREEN } from '../render/colors.js';
+import { hdr, buildStarField, ACCENT_LIGHTS } from './world3d.js';
 import { bakeSkybox } from './skybox.js';
 import { startscreenSkyTheme } from './skyTheme.js';
 
@@ -49,13 +49,15 @@ export function buildStartscreenScene(renderer) {
   // Licht: Grundschimmer + zwei farbige Lichter schraeg gegenueber -- die
   // Flaechen bekommen einen psychedelischen Verlauf, wie die Flutlichter im
   // Labyrinth. Abstand gross genug gegen den Bloom-Blowout (decay-2-Falle).
+  // Definition in world3d.js (ACCENT_LIGHTS): die Platine projiziert
+  // DIESELBEN Lichter auf die Andock-Flaeche -- der Verlauf laeuft beim
+  // Wechsel in die Draufsicht nahtlos weiter.
   scene.add(new THREE.HemisphereLight(0x50506e, 0x101018, 2.0));
-  const l1 = new THREE.PointLight(NEON_MAGENTA, 220, 40, 2);
-  l1.position.set(5, 4, 6);
-  scene.add(l1);
-  const l2 = new THREE.PointLight(TEMPEST_BLUE, 220, 40, 2);
-  l2.position.set(-6, -3, -5);
-  scene.add(l2);
+  for (const { color, pos, intensity } of ACCENT_LIGHTS) {
+    const light = new THREE.PointLight(color, intensity, 40, 2);
+    light.position.set(pos[0], pos[1], pos[2]);
+    scene.add(light);
+  }
 
   return { scene, edgeMat, faceMat, starMats, skyRT };
 }

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SIDE_FACES, pickDockFace, faceDockPose, mapGridToFace, mapSegmentsToFace, gridBorderOnFace,
-  faceLocalToWorld, faceDir,
+  faceLocalToWorld, faceDir, worldToFaceLocal,
 } from '../src/world/cubeFaces.js';
 import { createCamera, forward } from '../src/math/camera.js';
 
@@ -91,4 +91,21 @@ test('faceDir mappt lokale Richtungen ohne Verschiebung', () => {
   assertVecClose(faceDir(1, 0, 0, face), face.uAxis); // lokales +x -> uAxis
   assertVecClose(faceDir(0, 0, 1, face), face.vAxis); // lokales +z -> vAxis
   assertVecClose(faceDir(0, 1, 0, face), face.normal); // lokale Hoehe -> normal
+});
+
+test('worldToFaceLocal: Umkehrung von faceLocalToWorld auf allen Seitenflaechen', () => {
+  const size = 2.4;
+  const probes = [
+    [0.3, 0, 1.7],    // auf der Flaeche
+    [1.2, 4.8, 1.2],  // weit davor (Licht-Lage)
+    [-2.8, -3, 6.2],  // ausserhalb des Quadrats, hinter der Flaeche
+  ];
+  for (const face of SIDE_FACES) {
+    for (const [lx, ly, lz] of probes) {
+      const world = faceLocalToWorld(lx, ly, lz, face, size);
+      const back = worldToFaceLocal(world, face, size);
+      assert.ok(close(back.lx, lx) && close(back.ly, ly) && close(back.lz, lz),
+        `Roundtrip (${lx},${ly},${lz}) auf yaw=${face.yaw}: ${JSON.stringify(back)}`);
+    }
+  }
 });

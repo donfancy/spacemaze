@@ -78,6 +78,23 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Galaxien-Band + Staub; unter der Bloom-Schwelle, Dither, horizonFade;
   ersetzt die Dunst-Sprites; skyRT-dispose in disposeWorld). Details/Fallen:
   PLAN2026.md Stufe 6.
+- **Stufe 6 — PLATINE/FRÄSEN in der Kartensicht (29.8.2026):** die
+  2026-Draufsichten zeigen KEIN Boden-Raster mehr („karriert", Boris),
+  sondern die Würfelfläche als beleuchtete PLATTE (Material + Licht-Rezept
+  des Startscreen-Würfels, `buildPlate`/`plateLights` in world3d.js), in
+  die sich die Gänge als SCHWARZE Kanäle mit Leuchtkante fräsen (ein Quad
+  pro maze.order-Zelle, setDrawRange synchron zum Wachstum). Schwenks =
+  Crossfade Platte↔Raster (`setPlate` in backend.js), Karten-Exit heilt
+  die Kanäle zu und die Platte wird zur Abdock-Würfelfläche — beide Cuts
+  weg, Ego unverändert. FALLE: transparent-Toggle braucht
+  material.needsUpdate (OPAQUE-Define). Harmonisierung des Szenenwechsels:
+  Platten-Lichter = die per `worldToFaceLocal` (cubeFaces.js, pur) auf die
+  Andock-Fläche PROJIZIERTEN Startscreen-Akzente (`ACCENT_LIGHTS`, ×kLocal²)
+  — der Licht-Verlauf läuft am Schnitt weiter; Rahmen-Glow blendet
+  (setLineGlow(markerFade) bzw. (fade)); GLANZLICHT wischt beim
+  Ankommen/Abschied diagonal über die Platte (`sweepSheen`). Details:
+  PLAN2026.md Stufe 6 (dort auch die offene Ego-Hälfte: Wände als
+  gefrästes Volumen + Deckel).
 - **Der komplette Zyklus läuft**: Startscreen (Level-Auswahl per Pfeiltasten) →
   andocken → Labyrinth wächst → Reinfallen → Ego-Begehung (Tank-Steuerung,
   Hidden Lines) → Q/20s → Rückschwenk → Karte mit Weg. Auf der Karte: solange

@@ -20,7 +20,8 @@ import { bakeSkybox } from './skybox.js';
 import {
   PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_RED, ARCADE_YELLOW, NEON_MAGENTA,
 } from '../render/colors.js';
-import { WALL_RATIO } from '../scenes/mazeView.js';
+import { WALL_RATIO, CUBE_SIZE } from '../scenes/mazeView.js';
+import { SIDE_FACES, worldToFaceLocal } from '../world/cubeFaces.js';
 
 export const UNITS_PER_CELL = 5;        // 3D-Einheiten pro Gangbreite
 export const FOG_DENSITY = 0.028;       // pro 3D-Einheit (Prototyp-Wert; die
@@ -37,6 +38,16 @@ export const EGO_BOOST = 2.2;
 // Spiegel-Konturen ohne HDR (Regel: kein Bloom im Spiegelbild, wirkt
 // matt-reflektiert) -- gilt auch fuer die Spiegel-Kopien in backend.js.
 export const MIRROR_LINE_DIM = 0.85;
+
+// Die zwei farbigen Akzent-Lichter der Startscreen-Szene (psychedelischer
+// Verlauf auf den Wuerfelflaechen): EINE Quelle fuer startscreen3d.js UND
+// die Platine (buildPlate projiziert sie auf die Andock-Flaeche, damit der
+// Licht-Verlauf beim Wechsel in die Draufsicht exakt weiterlaeuft).
+// Positionen in Wuerfel-Weltkoordinaten (CUBE_SIZE 2.4), Intensitaet dort.
+export const ACCENT_LIGHTS = [
+  { color: NEON_MAGENTA, pos: [5, 4, 6], intensity: 220 },
+  { color: TEMPEST_BLUE, pos: [-6, -3, -5], intensity: 220 },
+];
 
 // HDR-Farbe: ueber Weiss hinaus verstaerkt, damit der Bloom-Schwellwert (0.85)
 // sie aufnimmt -- alles unter ~1.0 bleibt matt, alles darueber glueht.
@@ -68,6 +79,7 @@ export function buildWorld(maze, opts = {}) {
 
   buildWallsAndLines(world, maze);
   buildFloor(world, maze);
+  buildPlate(world, maze, opts.dockFace);
   buildSky(world, maze, opts);
   buildBeacon(world, maze);
   buildMirror(world);
@@ -300,6 +312,84 @@ function buildFloor(world, maze) {
     color: new THREE.Color(PHOSPHOR_GREEN).multiplyScalar(0.9),
     transparent: true, opacity: 0.5,
   });
+}
+
+// Platine + Fraesung (Stufe 6): die Draufsichten zeigen die Wuerfelflaeche als
+// beleuchtete PLATTE im Material des Startscreen-Wuerfels (Boris' Wahl: die
+// Platte IST die Wuerfelflaeche -- nahtloses An-/Abdocken), die Gaenge liegen
+// als SCHWARZE KANAELE darin: ein Quad pro geoeffneter Zelle, in der
+// Grab-Reihenfolge maze.order -- setDrawRange laesst die Fraese im MazeGen
+// sichtbar fressen. Sichtbarkeit, Opazitaet und Zell-Stand steuert backend.js
+// (setPlate); hier nur der einmalige Aufbau.
+// TIEFEN-REGEL: polygonOffset staffelt Platte (2) hinter Fraesung (1) hinter
+// die aufliegenden Linien (Kontur/Rahmen, ohne Offset) -- das trennt im
+// TIEFENPUFFER robust, wo blosse y-Abstaende bei der grossen Draufsicht-
+// Distanz z-flimmern (gleiche Falle wie Boden-Raster vs. Kontur).
+const PLATE_Y = 0.05;
+const MILL_Y = 0.07;
+
+function buildPlate(world, maze, dockFace) {
+  const { scene, total, u } = world;
+  world.plateMat = new THREE.MeshStandardMaterial({
+    color: 0x4a5a78, roughness: 0.55, metalness: 0.15,
+    emissive: 0x0a0e1a, emissiveIntensity: 1,
+    polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2,
+  });
+  world.plate = new THREE.Mesh(new THREE.PlaneGeometry(total, total), world.plateMat);
+  world.plate.rotation.x = -Math.PI / 2;
+  world.plate.position.set(total / 2, PLATE_Y, total / 2);
+  world.plate.visible = false;
+  scene.add(world.plate);
+
+  // Fraes-Quads: Zelle order[i] belegt die Floats [i*18, i*18+18) -- der
+  // DrawRange (Zellen x 6 Eckpunkte) folgt exakt dem growthOutline-Zaehler.
+  const pos = [];
+  for (const [cx, cy] of maze.order) {
+    const x1 = u(cx), z1 = u(cy), x2 = u(cx + 1), z2 = u(cy + 1);
+    pos.push(
+      x1, MILL_Y, z1, x2, MILL_Y, z2, x2, MILL_Y, z1,
+      x1, MILL_Y, z1, x1, MILL_Y, z2, x2, MILL_Y, z2,
+    );
+  }
+  const millGeo = new THREE.BufferGeometry();
+  millGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  world.millMat = new THREE.MeshBasicMaterial({
+    color: 0x000000, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+  });
+  world.mill = new THREE.Mesh(millGeo, world.millMat);
+  world.mill.visible = false;
+  scene.add(world.mill);
+
+  // Platten-Lichter: die ZWEI Akzent-Lichter der Startscreen-Szene
+  // (ACCENT_LIGHTS), auf die Andock-Flaeche projiziert (worldToFaceLocal)
+  // und groessenskaliert auf die Platte gesetzt -- Abstaende x kLocal,
+  // Intensitaet x kLocal^2 (1/d^2) ergeben EXAKT das Bestrahlungs-Muster
+  // der Wuerfelflaeche am Andock-Ende: der Licht-Verlauf laeuft beim
+  // Wechsel in die Draufsicht einfach weiter, statt zu springen (Boris'
+  // "deutliches Umschalten"). Ein Licht HINTER der Flaeche (ly < 0)
+  // beleuchtete sie auch auf dem Startscreen nicht -- es landet unter der
+  // Platte und bleibt wirkungslos, genau wie dort. Intensitaet 0 = aus;
+  // backend.js blendet sie mit der Platte (setPlate).
+  const kLocal = total / CUBE_SIZE;
+  const face = dockFace ?? SIDE_FACES[0];
+  world.plateLights = [];
+  world.plateLightIntensity = [];
+  for (const { color, pos: lp, intensity } of ACCENT_LIGHTS) {
+    const { lx, ly, lz } = worldToFaceLocal(lp, face, CUBE_SIZE);
+    const light = new THREE.PointLight(color, 0, 0, 2);
+    light.position.set(lx * kLocal, ly * kLocal, lz * kLocal);
+    scene.add(light);
+    world.plateLights.push(light);
+    world.plateLightIntensity.push(intensity * kLocal * kLocal);
+  }
+
+  // Glanzlicht (Boris' Wunsch): ein weisses Punktlicht, das beim Ankommen
+  // in der Draufsicht einmal diagonal ueber die Platte wischt (und beim
+  // Karten-Exit zurueck) -- der wandernde Glanz macht aus dem Szenenwechsel
+  // eine Bewegung. Intensitaet 0 = aus; backend.js faehrt es (sweepSheen).
+  world.sheenLight = new THREE.PointLight(0xffffff, 0, 0, 2);
+  scene.add(world.sheenLight);
+  world.sheenIntensity = 1.2 * total * total;
 }
 
 // Sternenhimmel: drei Punktwolken mit Phasenversatz -> unabhaengiges Funkeln

@@ -273,6 +273,9 @@ export function createBackend2026(container = document.body) {
         // das Thema (Level-Palette + Crescendo) ist pur in skyTheme.js.
         renderer,
         sky: skyTheme(game.level, maze.seed),
+        // Andock-Flaeche: die Platine projiziert die Startscreen-Lichter
+        // darauf (nahtloser Licht-Verlauf beim Wechsel in die Draufsicht).
+        dockFace: game.dockFace,
       });
       // Umrechnung lokale Flaechen-Einheiten (px/pz, trail, Feinde) -> 3D.
       world.kLocal = UNITS_PER_CELL / cellSize(maze);
@@ -295,6 +298,10 @@ export function createBackend2026(container = document.body) {
     world.gridMat.opacity = 0.8;
     world.outlineMat.opacity = 1;
     world.outlineLines.visible = true;
+    world.plate.visible = false;
+    world.mill.visible = false;
+    for (const light of world.plateLights) light.intensity = 0;
+    world.sheenLight.intensity = 0;
     world.growth?.buf?.hide();
     // Kampf-Objekte (Stufe 4): nur die Ego-Ansicht schaltet sie sichtbar --
     // in den Draufsichten stehen stattdessen die Feind-Kreuze.
@@ -377,6 +384,57 @@ export function createBackend2026(container = document.body) {
       },
     };
     return buf;
+  }
+
+  // Platine + gefraeste Gaenge (Stufe 6, world3d.buildPlate): in den
+  // Draufsichten ist die Wuerfelflaeche eine deckende Platte, die Gaenge
+  // schwarze Kanaele mit Leuchtkante (outlineLines). `count` = Zahl der
+  // gefraesten Zellen in Grab-Reihenfolge (maze.order; Infinity = alle),
+  // die Opazitaeten blenden in den Schwenks und beim Karten-Exit.
+  function setPlate(plateA, millA, count = Infinity) {
+    world.plate.visible = plateA > 0.01;
+    world.mill.visible = millA > 0.01;
+    setFade(world.plateMat, plateA);
+    setFade(world.millMat, millA);
+    const cells = Math.min(count, worldMaze.order.length);
+    world.mill.geometry.setDrawRange(0, cells * 6);
+    // Platten-Lichter (die projizierten Startscreen-Akzente) blenden mit der
+    // Platte -- in der Ego-Welt sind sie aus (resetWorldFrame laesst die
+    // Platte unsichtbar, jeder Draufsicht-/Schwenk-Zeichner ruft setPlate).
+    world.plateLights.forEach((light, i) => {
+      light.intensity = world.plateLightIntensity[i] * plateA;
+    });
+  }
+
+  // Glanzlicht (Boris' Wunsch "smooth ankommen"): ein weisses Punktlicht
+  // wischt einmal diagonal ueber die Platte -- beim Ankommen in der
+  // Draufsicht von Nordwest nach Suedost (dir 1), beim Karten-Exit
+  // zurueck (dir -1). Sinus-Huellkurve: bei p 0 und 1 ist es aus, der
+  // Szenenschnitt selbst traegt also NIE Glanz -- die Bewegung direkt
+  // danach/davor kaschiert ihn.
+  function sweepSheen(p, dir = 1) {
+    if (p <= 0.001 || p >= 0.999) return; // resetWorldFrame hat es schon aus
+    const T = world.total;
+    const q = dir > 0 ? p : 1 - p;
+    const s = (-0.2 + 1.4 * q) * T; // von knapp ausserhalb bis knapp drueber
+    world.sheenLight.position.set(s, 0.35 * T, s);
+    world.sheenLight.intensity = world.sheenIntensity * Math.sin(Math.PI * p);
+  }
+
+  // Voll deckend OPAK zeichnen (Tiefentest sortiert Marker/Weg/Kreuze dann
+  // von selbst darueber), nur waehrend einer Blende transparent -- und dort
+  // ohne depthWrite, sonst loecherte die halb sichtbare Platte den Puffer.
+  // FALLE: der transparent-Wechsel braucht needsUpdate -- opake Materialien
+  // tragen ein OPAQUE-Define im Shader (Alpha hart 1), ohne Rebuild bleibt
+  // die Flaeche trotz opacity voll deckend (Sichtpruefungs-Befund). Nur bei
+  // ECHTEM Wechsel setzen, sonst kompiliert jeder Frame den Shader neu.
+  function setFade(mat, a) {
+    mat.opacity = a;
+    const solid = a > 0.999;
+    if (mat.transparent === !solid) return;
+    mat.transparent = !solid;
+    mat.depthWrite = solid;
+    mat.needsUpdate = true;
   }
 
   // Sternen-Funkeln (eine Formel fuer Welt und Startscreen).
@@ -1101,9 +1159,15 @@ export function createBackend2026(container = document.body) {
     if (!view?.maze) return drawPlaceholder(game);
     ensureWorld(game, view.maze, color);
     resetWorldFrame();
-    setLineGlow(1);
+    // Der Rahmen kommt mit dem VOLLEN Kanten-Glow der Wuerfelkante an
+    // (Andock-Ende) und blendet mit den Markern zur Diagramm-Normierung --
+    // ein springender Rahmen-Glow war Teil des "Umschaltens".
+    setLineGlow(view.markerFade);
     setTopDownCamera();
     setWallHeight(world, 0);
+    world.gridMat.opacity = 0; // kein Raster: die Platte ist die Wuerfelflaeche
+    setPlate(1, 1, view.growCount); // die Fraese frisst die Kanaele in Grab-Reihenfolge
+    sweepSheen(view.markerFade); // Glanzlicht wischt beim Ankommen ueber die Platte
     world.outlineLines.visible = false; // stattdessen die Teil-Kontur
     updateGrowth(view.maze, view.growCount);
     setMarkerFade(world, view.markerFade);
@@ -1124,6 +1188,10 @@ export function createBackend2026(container = document.body) {
     world.scene.fog.density = FOG_DENSITY * e;
     world.headlight.intensity = HEADLIGHT_INTENSITY * e;
     setWallHeight(world, e);
+    // Crossfade statt Cut: Platte + Gang-Schwarz weichen dem Bodenraster,
+    // waehrend die Waende aufwachsen (Boris' "smooth"-Eintauchen, Stufe 6).
+    setPlate(1 - e, 1 - e);
+    world.gridMat.opacity = 0.8 * e;
     setMarkerFade(world, 1 - e);
     updateFoeMarkers(game, 1 - e);
     updateTrail(view.resume ? game.trail : null, 1 - e);
@@ -1146,6 +1214,8 @@ export function createBackend2026(container = document.body) {
     world.scene.fog.density = FOG_DENSITY * a;
     world.headlight.intensity = HEADLIGHT_INTENSITY * a;
     setWallHeight(world, a);
+    setPlate(view.e, view.e); // symmetrisch zum Reinfallen: Platte kommt zurueck
+    world.gridMat.opacity = 0.8 * a;
     setMarkerFade(world, view.e);
     updateFoeMarkers(game, view.e);
     updateTrail(game.trail, view.e);
@@ -1162,13 +1232,19 @@ export function createBackend2026(container = document.body) {
     if (!view?.maze) return drawPlaceholder(game);
     ensureWorld(game, view.maze, color);
     resetWorldFrame();
-    setLineGlow(1);
+    // Beim Verlassen laedt sich der Rahmen zum vollen Kanten-Glow auf --
+    // exakt der Wert, mit dem die Wuerfelkante des Abdock-Flugs uebernimmt.
+    setLineGlow(view.fade);
     setTopDownCamera();
     setWallHeight(world, 0);
     const f = view.fade;
     world.outlineMat.opacity = f;
     world.outlineLines.visible = f > 0.01;
-    world.gridMat.opacity = 0.8 * f;
+    world.gridMat.opacity = 0;
+    // Beim Verlassen "heilt" die Flaeche: die schwarzen Kanaele blenden mit f
+    // aus, die Platte bleibt voll -- sie wird zur Wuerfelflaeche des Abdock-Flugs.
+    setPlate(1, f);
+    sweepSheen(1 - f, -1); // Glanzlicht wischt beim Abschied zurueck
     setMarkerFade(world, f);
     updateFoeMarkers(game, f);
     updateTrail(game.trail, f);
