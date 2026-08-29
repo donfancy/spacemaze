@@ -49,6 +49,9 @@ import {
 } from './world3d.js';
 import { buildStartscreenScene } from './startscreen3d.js';
 import { skyTheme } from './skyTheme.js';
+import {
+  MINIMAP, PLAYER_MARK, minimapWalls, cellCenterCells, minimapModel,
+} from './minimap.js';
 
 const EYE = EYE_RATIO * UNITS_PER_CELL; // Augenhoehe: halbe Gangbreite
 
@@ -174,6 +177,22 @@ const MARKER_BOOST_MAX = 3.0;   // Deckel fuer dunkle Farben (Blau braucht mehr 
 // zur vollen Ego-Helligkeit. Der additive KEGEL bleibt im Diagramm aus
 // (von oben laengs durchblickt = Blowout, Stufe-3-Falle).
 const DIAGRAM_BEACON = 0.25;
+
+// MINI-MAP (Stufe 6, ersetzt die 1980-Kompass-Rose in der Ego-Ansicht):
+// runde, MITDREHENDE Ausschnitts-Karte rechts unten -- Modell pur in
+// minimap.js (Scheiben-Koordinaten, heading up), hier nur Puffer + eine
+// kamera-verankerte Gruppe IN der Welt-Szene: sie laeuft durch dieselbe
+// Bloom-Kette (2026-Look gratis) und bleibt screen-fest, weil sie die
+// Kamera-Pose 1:1 uebernimmt -- auch beim Gyro-Roll (der Bildschirm dreht,
+// die Scheibe nicht; heading up bleibt korrekt, vorwaerts ist vorwaerts).
+const MM_DIST = 1.2;        // Abstand vor der Kamera (3D-Einheiten, > near 0.1)
+const MM_SCREEN = 0.14;     // Scheiben-Radius als Anteil der BildHOEHE
+const MM_MARGIN = 0.035;    // Randabstand rechts/unten (Anteil der Bildhoehe)
+const MM_BG_OPACITY = 0.55; // dunkle Scheibe unter den Linien (Lesbarkeit)
+const MM_CROSS = 0.055;     // Feind-Kreuz-Halbarm in Scheiben-Einheiten
+const MM_LETTER = 0.24;     // S/G-Sprite-Groesse in Scheiben-Einheiten
+const MM_NORTH = 0.2;       // N-Sprite-Groesse
+const MM_RIM_SEGS = 64;     // Kreis-Aufloesung des Rands
 
 export function createBackend2026(container = document.body) {
   // Alles DOM (Canvas + Overlays) lebt in EINEM Wurzel-Element -- der Live-
@@ -326,6 +345,7 @@ export function createBackend2026(container = document.body) {
     world.foeShotLines?.hide();
     world.fireworkLines?.hide();
     for (const m of world.foeMarks ?? []) m?.hide();
+    if (world.minimap) world.minimap.group.visible = false;
   }
 
   // Wachsender Geometrie-Puffer (LineSegments oder Dreiecks-Mesh) mit
@@ -335,10 +355,11 @@ export function createBackend2026(container = document.body) {
   // Materialien werden EINMAL uebergeben und beim Wachsen NIE weggeworfen
   // (sie haengen nicht an der Kapazitaet); waechst der Puffer, wird nur
   // die Geometrie getauscht (alte disposed) -- kein Material-/Szenen-Churn.
-  // opts: { world, triangles, vertexColors, material, mirrorMaterial }
+  // opts: { world, triangles, vertexColors, material, mirrorMaterial, parent }
   // (mirrorMaterial weglassen = kein Spiegelbild; dasselbe Material
-  // uebergeben = geteiltes Material wie bei der Flipper-Fuellung).
-  function makeBuffer({ world, triangles = false, vertexColors = false, material, mirrorMaterial = null }) {
+  // uebergeben = geteiltes Material wie bei der Flipper-Fuellung;
+  // parent haengt den Puffer statt in die Szene z.B. in die Mini-Map-Gruppe).
+  function makeBuffer({ world, triangles = false, vertexColors = false, material, mirrorMaterial = null, parent = null }) {
     const buf = {
       mesh: null, mirror: null, cap: 0,
       // Puffer fuer `floats` Positions-Floats bereitstellen (waechst nur).
@@ -356,7 +377,7 @@ export function createBackend2026(container = document.body) {
             return obj;
           };
           buf.mesh = make(material);
-          world.scene.add(buf.mesh);
+          (parent ?? world.scene).add(buf.mesh);
           if (mirrorMaterial) {
             buf.mirror = make(mirrorMaterial);
             world.mirror.add(buf.mirror);
@@ -1067,6 +1088,214 @@ export function createBackend2026(container = document.body) {
     });
   }
 
+  // --- Mini-Map (Stufe 6): runde, mitdrehende Ausschnitts-Karte im Ego --------
+
+  // Buchstaben-Sprite fuer die Mini-Map (N/S/G): wie textSprite in world3d,
+  // aber BEWUSST NICHT in world.markerMats -- die Ego-Ansicht blendet die
+  // Karten-Beschriftung mit setMarkerFade(0) aus, die Mini-Map-Buchstaben
+  // muessen stehen bleiben. depthTest aus: die Scheibe liegt IMMER ueber der
+  // Welt (renderOrder staffelt die Lagen).
+  function minimapSprite(group, text, size, order) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const ctx = c.getContext('2d');
+    ctx.font = 'bold 96px "SF Mono", Menlo, Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text, 64, 70);
+    const mat = new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(c), transparent: true,
+      depthTest: false, depthWrite: false, fog: false,
+    });
+    const sp = new THREE.Sprite(mat);
+    sp.scale.set(size, size, 1);
+    sp.renderOrder = order;
+    sp.visible = false;
+    group.add(sp);
+    return sp;
+  }
+
+  function minimapLineMat(opacity = 1) {
+    return new THREE.LineBasicMaterial({
+      transparent: true, opacity, depthTest: false, depthWrite: false, fog: false,
+    });
+  }
+
+  function ensureMinimap() {
+    if (world.minimap) return world.minimap;
+    const group = new THREE.Group();
+    group.visible = false;
+    world.scene.add(group);
+
+    // Dunkle Scheibe als Grund (Lesbarkeit ueber der hellen Ego-Welt).
+    const bg = new THREE.Mesh(
+      new THREE.CircleGeometry(1, MM_RIM_SEGS),
+      new THREE.MeshBasicMaterial({
+        color: 0x000000, transparent: true, opacity: MM_BG_OPACITY,
+        depthTest: false, depthWrite: false, fog: false,
+      }));
+    bg.renderOrder = 40;
+    group.add(bg);
+
+    // Rand-Kreis (LineLoop) in der Level-Farbe.
+    const rimPts = [];
+    for (let i = 0; i < MM_RIM_SEGS; i++) {
+      const a = (i / MM_RIM_SEGS) * 2 * Math.PI;
+      rimPts.push(new THREE.Vector3(Math.cos(a), Math.sin(a), 0));
+    }
+    const rim = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(rimPts), minimapLineMat(0.7));
+    rim.renderOrder = 44;
+    group.add(rim);
+
+    // Spieler-Pfeil: fest im Zentrum, zeigt nach oben (heading up).
+    const pp = [];
+    for (const [[x1, y1], [x2, y2]] of PLAYER_MARK) pp.push(x1, y1, 0, x2, y2, 0);
+    const player = new THREE.LineSegments(
+      new THREE.BufferGeometry()
+        .setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)),
+      minimapLineMat(1));
+    player.material.color.copy(hdr('#ffffff', 1.2));
+    player.renderOrder = 45;
+    group.add(player);
+
+    // Dynamische Puffer (wachsen bei Bedarf): Waende, Trail, Ziel-Pfeil,
+    // Feind-Kreuze pro Feindart (Farben wie die Karten-Kreuze).
+    const mm = world.minimap = {
+      group, rim, player,
+      walls: makeBuffer({ world, parent: group, material: minimapLineMat(0.9) }),
+      trail: makeBuffer({ world, parent: group, material: minimapLineMat(0.45) }),
+      arrow: makeBuffer({ world, parent: group, material: minimapLineMat(1) }),
+      foes: MARK_KINDS.map(() => makeBuffer({ world, parent: group, material: minimapLineMat(1) })),
+      letterS: minimapSprite(group, 'S', MM_LETTER, 46),
+      letterG: minimapSprite(group, 'G', MM_LETTER, 46),
+      north: minimapSprite(group, 'N', MM_NORTH, 46),
+      mazeSrc: null, themeKey: null,
+    };
+    mm.walls.ensure(6); mm.walls.mesh.renderOrder = 42;
+    mm.trail.ensure(6); mm.trail.mesh.renderOrder = 41;
+    mm.arrow.ensure(2 * 6); mm.arrow.mesh.renderOrder = 44;
+    mm.arrow.mesh.material.color.set(ARCADE_YELLOW).multiplyScalar(1.6);
+    mm.foes.forEach((b) => { b.ensure(6); b.mesh.renderOrder = 43; });
+    mm.north.material.opacity = 0.7; // gedimmt wie die Kompass-Buchstaben
+    return mm;
+  }
+
+  // Segmentliste [x1,y1,x2,y2] (Scheiben-Koordinaten) in einen Puffer giessen.
+  function fillDiscSegs(buf, segs) {
+    if (!segs.length) { buf.hide(); return; }
+    buf.ensure(segs.length * 6);
+    const pos = buf.pos;
+    let j = 0;
+    for (const [x1, y1, x2, y2] of segs) {
+      pos.setXYZ(j++, x1, y1, 0);
+      pos.setXYZ(j++, x2, y2, 0);
+    }
+    buf.show(j);
+  }
+
+  function updateMinimap(game, view) {
+    const mm = ensureMinimap();
+    // Beim Crash verschwindet das Instrument (das Bild zerbirst) -- 1980
+    // scherbt die Rose mit, hier ist Ausblenden das Pendant.
+    if (view.crash) { mm.group.visible = false; return; }
+    mm.group.visible = true;
+
+    // Pro Maze einmal: Wand-Kontur + S/G-Zentren in LOKALE Einheiten bringen
+    // (minimap.js rechnet in Gangbreiten, die Szene in Flaechen-Einheiten --
+    // ein fester Faktor view.cell, einmal beim Cachen multipliziert).
+    if (mm.mazeSrc !== view.maze) {
+      mm.mazeSrc = view.maze;
+      const c = view.cell;
+      mm.wallSegs = minimapWalls(view.maze)
+        .map(([[x1, y1], [x2, y2]]) => [[x1 * c, y1 * c], [x2 * c, y2 * c]]);
+      const sc = cellCenterCells(view.maze, view.maze.start[0], view.maze.start[1]);
+      const gc = cellCenterCells(view.maze, view.maze.goal[0], view.maze.goal[1]);
+      mm.startAt = [sc[0] * c, sc[1] * c];
+      mm.goalAt = [gc[0] * c, gc[1] * c];
+    }
+
+    // Farben folgen dem Level-Thema, luminanz-normiert wie die grosse Karte
+    // (sonst ueberglueht Gruen die kleine Scheibe, Karten-Glow-Regel).
+    if (mm.themeKey !== themeHex) {
+      mm.themeKey = themeHex;
+      const col = new THREE.Color(themeHex);
+      const lineBoost = diagramBoost(themeHex, 1, { ego: EGO_BOOST, targetLum: DIAGRAM_LINE_LUM });
+      mm.walls.mesh.material.color.copy(col).multiplyScalar(lineBoost);
+      mm.rim.material.color.copy(col).multiplyScalar(lineBoost);
+      mm.trail.mesh.material.color.copy(col).multiplyScalar(0.9);
+      const markerBoost = diagramBoost(themeHex, 1,
+        { ego: EGO_BOOST, targetLum: DIAGRAM_MARKER_LUM, maxBoost: MARKER_BOOST_MAX });
+      for (const sp of [mm.letterS, mm.letterG, mm.north]) {
+        sp.material.color.copy(col).multiplyScalar(markerBoost);
+      }
+    }
+
+    // Modell pur berechnen (heading up, an den Kreis geclippt).
+    const foes = [];
+    MARK_KINDS.forEach((kind, i) => {
+      for (const f of kind.list(game) ?? []) {
+        if (f.alive) foes.push({ x: f.x, z: f.z, kind: i });
+      }
+    });
+    const model = minimapModel({
+      walls: mm.wallSegs, trail: game.trail, foes,
+      start: mm.startAt, goal: mm.goalAt,
+      px: view.px, pz: view.pz, yaw: view.yaw,
+      radius: MINIMAP.viewCells * view.cell,
+    });
+
+    fillDiscSegs(mm.walls, model.walls);
+    fillDiscSegs(mm.trail, model.trail);
+
+    // Feind-Kreuze pro Feindart (Scheiben-feste Groesse, Farbe wie die Kreuze
+    // der grossen Karte).
+    MARK_KINDS.forEach((kind, i) => {
+      const segs = [];
+      for (const f of model.foes) {
+        if (f.kind !== i) continue;
+        segs.push([f.x - MM_CROSS, f.y, f.x + MM_CROSS, f.y],
+          [f.x, f.y - MM_CROSS, f.x, f.y + MM_CROSS]);
+      }
+      fillDiscSegs(mm.foes[i], segs);
+      if (segs.length) {
+        mm.foes[i].mesh.material.color.set(kind.color(game)).multiplyScalar(1.6);
+      }
+    });
+
+    // S/G-Buchstaben nur, wenn sie im Ausschnitt liegen; das Ziel ausserhalb
+    // zeigt stattdessen den gelben Richtungspfeil am Rand (pulst wie das
+    // Leuchtfeuer; nach dem Ziel-Erreichen ist er erloschen).
+    for (const [sp, label] of [[mm.letterS, 'S'], [mm.letterG, 'G']]) {
+      const hit = model.letters.find((l) => l.label === label);
+      sp.visible = !!hit;
+      if (hit) sp.position.set(hit.x, hit.y, 0);
+    }
+    if (model.goalArrow && !view.reached) {
+      fillDiscSegs(mm.arrow, model.goalArrow);
+      mm.arrow.mesh.material.opacity = 0.7 + 0.3 * Math.sin(game.time * 2.1);
+    } else {
+      mm.arrow.hide();
+    }
+
+    // N-Marke dreht mit der Scheibe (Kompass-Erbe).
+    mm.north.visible = true;
+    mm.north.position.set(model.north.x, model.north.y, 0);
+
+    // Kamera-Verankerung: Pose 1:1 uebernehmen und die Scheibe rechts unten
+    // in den Sichtkegel legen (Radius als fester Anteil der Bildhoehe).
+    const hh = Math.tan((curFov * Math.PI) / 360) * MM_DIST; // halbe Bildhoehe bei MM_DIST
+    const r = MM_SCREEN * 2 * hh;
+    const margin = MM_MARGIN * 2 * hh;
+    mmOffset.set(hh * camera.aspect - r - margin, -(hh - r - margin), -MM_DIST)
+      .applyQuaternion(camera.quaternion);
+    mm.group.position.copy(camera.position).add(mmOffset);
+    mm.group.quaternion.copy(camera.quaternion);
+    mm.group.scale.setScalar(r);
+  }
+  const mmOffset = new THREE.Vector3();
+
   // --- Kameras: Draufsicht und Schwenk ----------------------------------------
 
   const scratchCam = new THREE.PerspectiveCamera(); // nur fuer lookAt-Quaternionen
@@ -1344,6 +1573,10 @@ export function createBackend2026(container = document.body) {
     // Scheinwerfer schwebt UEBER der Kamera (Mindestabstand zu den Waenden,
     // sonst Bloom-Blowout an naher Wand, siehe world3d.js).
     world.headlight.position.set(x, EYE + 2, z);
+
+    // Mini-Map NACH dem Kamera-Setzen: die Scheibe uebernimmt die Pose
+    // DIESES Frames (sonst haengt sie einen Frame nach und "schwimmt").
+    updateMinimap(game, view);
 
     animateWorld(game, view);
   }

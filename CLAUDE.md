@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 375 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 393 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -95,6 +95,19 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Ankommen/Abschied diagonal über die Platte (`sweepSheen`). Details:
   PLAN2026.md Stufe 6 (dort auch die offene Ego-Hälfte: Wände als
   gefrästes Volumen + Deckel).
+- **Stufe 6 — MINI-MAP statt Kompass (29.8.2026):** die 2026-Ego-Ansicht
+  hat rechts unten eine runde, MITDREHENDE Ausschnitts-Karte (heading up
+  wie die 1980-Kompass-Rose: oben = Blickrichtung). `render2026/minimap.js`
+  (pur, testbar): Wand-Kontur in Gangbreiten + `minimapModel` in Scheiben-
+  Koordinaten (Einheitskreis, analytisch geclippt); Inhalt: Wände, Trail,
+  Feind-Kreuze in den Karten-Farben, S/G, mitdrehende N-Marke, Ziel
+  außerhalb = gelber Chevron-Pfeil am Rand (pulst wie das Leuchtfeuer).
+  Renderseite: kamera-verankerte Gruppe IN der Welt-Szene (erbt die
+  Bloom-Kette, screen-fest auch beim Gyro-Roll), Farben luminanz-normiert
+  wie die große Karte; Crash blendet die Scheibe aus. FALLE: updateMinimap
+  NACH dem Kamera-Setzen rufen (sonst hängt die Scheibe einen Frame nach),
+  und die N/S/G-Sprites NICHT in world.markerMats (Ego blendet die per
+  setMarkerFade(0) aus). Details: PLAN2026.md Stufe 6.
 - **Der komplette Zyklus läuft**: Startscreen (Level-Auswahl per Pfeiltasten) →
   andocken → Labyrinth wächst → Reinfallen → Ego-Begehung (Tank-Steuerung,
   Hidden Lines) → Q/20s → Rückschwenk → Karte mit Weg. Auf der Karte: solange
