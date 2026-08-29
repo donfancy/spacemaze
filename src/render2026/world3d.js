@@ -500,6 +500,16 @@ function buildMirror(world) {
   const { scene } = world;
   const g = new THREE.Group();
   g.scale.y = -1; // spiegelt alle Kinder an der Bodenebene
+  // FALLE (Boris' Schuss-Spiegel-Bug, 29.8.2026): TRANSPARENTE Spiegel-
+  // Objekte (Schuesse, Feuerwerk, Splitter, Leuchtfeuer, Sterne) sortieren
+  // gegen die halbtransparente Bodenplatte nach Objekt-POSITION -- die
+  // dynamischen Puffer sitzen alle am Welt-Ursprung, die Platte in der
+  // Karten-Mitte: je nach Blickrichtung gewann die Platte das Sortier-
+  // Rennen, schrieb Tiefe und schluckte das Spiegelbild darunter (Schuesse
+  // spiegelten sich nur in manchen Gangrichtungen). renderOrder wirkt an
+  // der Gruppe als groupOrder: ALLE Spiegel-Kinder zeichnen VOR der
+  // Bodenplatte, die sie danach gleichmaessig dimmt.
+  g.renderOrder = -1;
 
   world.mirrorLineMat = new THREE.LineBasicMaterial({
     color: new THREE.Color(PHOSPHOR_GREEN).multiplyScalar(0.85),

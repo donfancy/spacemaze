@@ -33,7 +33,7 @@ import { playHint, mapHint, gameOverColor } from '../core/hud.js';
 import { levelColor, levelConfig, enemyColor, spinnerColor } from '../core/levels.js';
 import { PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA, diagramBoost } from '../render/colors.js';
 import { EYE_RATIO, cellSize } from '../scenes/mazeView.js';
-import { burstSegments, burstShards } from '../world/burst.js';
+import { burstSegments, burstShards, burstGlow } from '../world/burst.js';
 import { ENEMY } from '../world/enemies.js';
 import { SHOTS, aimYaw, shotSegments } from '../world/shots.js';
 import { FIREWORK, FIREWORK_COLORS, fireworkBeams } from '../world/fireworks.js';
@@ -104,8 +104,12 @@ const TANKER_EDGE_HDR = 3.2;    // Kanten-Boost (Bloom-Glut wie im Prototyp)
 const CROSSHAIR_DIST = 2.5;     // Fadenkreuz-Anker (Gangbreiten voraus, wie 1980)
 const CROSSHAIR_SIZE = 0.12;    // Fadenkreuz-Halbarm (Gangbreiten)
 const CROSSHAIR_GAP = 0.4;      // Luecke in der Mitte (Anteil des Halbarms)
-const BURST_HDR = 2.4;          // Splitter-Farben leicht in den Bloom geboostet
-const SHARD_HDR = 1.35;         // flaechige Truemmer: gluehende Platten, kein Voll-Bloom
+const SHOT_HDR = 2.4;           // Schuss-Stern-Farben leicht in den Bloom geboostet
+// Splitter/Truemmer-Helligkeit (Boris: "erst blitzen, dann abdunkeln"): der
+// pure Verlauf burstGlow startet UEBER der Feind-Glut (Tanker-Kanten 3.2)
+// und verglimmt beim Verblassen unter die Feind-Helligkeit.
+const BURST_GLOW = { flash: 3.4, dim: 0.4 };  // Linien-Splitter
+const SHARD_GLOW = { flash: 2.0, dim: 0.25 }; // flaechige Truemmer-Platten
 
 // Schuesse: groesser und schneller rotierend als die 1980-Defaults, damit
 // sie sich klar von den Kollisionsfunken abheben (Boris' Punkt); dazu
@@ -597,6 +601,11 @@ export function createBackend2026(container = document.body) {
       roughness: 0.6, metalness: 0.1,
       emissive: col, emissiveIntensity: TANKER_GLOW,
       side: THREE.DoubleSide, // die Spiegelung (scale.y=-1) invertiert das Winding
+      // Der Nebel wusch den dunklen Koerper auf die Hintergrund-Farbe der
+      // Waende -- von weitem blieben nur die HDR-Kanten uebrig (Boris'
+      // Punkt: "flaechig" muss auf jede Distanz gelten). fog: false haelt
+      // die Flaeche lesbar; die Kanten behalten den Nebel als Tiefen-Hinweis.
+      fog: false,
     });
     t.edgeMat = new THREE.LineBasicMaterial({ color: col.clone().multiplyScalar(TANKER_EDGE_HDR) });
     // Spiegel-Kanten wie ueberall OHNE HDR (kein Bloom im Spiegelbild).
@@ -689,7 +698,7 @@ export function createBackend2026(container = document.body) {
         const [a, b] = segs[i];
         shotColor.set(FIREWORK_COLORS[(tick + n * 3 + i) % FIREWORK_COLORS.length])
           .lerp(shotWhite, SHOT_WHITE_MIX)
-          .multiplyScalar(BURST_HDR);
+          .multiplyScalar(SHOT_HDR);
         col.setXYZ(j, shotColor.r, shotColor.g, shotColor.b);
         pos.setXYZ(j++, a[0] * k, a[1] * k, a[2] * k);
         col.setXYZ(j, shotColor.r, shotColor.g, shotColor.b);
@@ -767,6 +776,9 @@ export function createBackend2026(container = document.body) {
   // Spezifikation `shardCount` (Tanker-Abschuss, Crash), fliegen
   // zusaetzlich FLAECHIGE Truemmer-Dreiecke mit (burstShards, Boris'
   // Punkt 4) -- gluehende Platten in der Explosionsfarbe, taumelnd.
+  // Helligkeit als BLITZ-Verlauf (burstGlow: erst ueber der Feind-Glut,
+  // dann dunkler verglimmen); Splitter UND Truemmer spiegeln sich wie der
+  // Feind selbst -- der Glow im Spiegel gedeckelt (kein Bloom im Spiegel).
   function updateBursts(view, k) {
     if (!world.burstPool) world.burstPool = [];
     const pool = world.burstPool;
@@ -777,7 +789,11 @@ export function createBackend2026(container = document.body) {
       let p = pool[used];
       if (!p) {
         p = pool[used] = {
-          line: makeBuffer({ world, material: new THREE.LineBasicMaterial({ transparent: true }) }),
+          line: makeBuffer({
+            world,
+            material: new THREE.LineBasicMaterial({ transparent: true }),
+            mirrorMaterial: new THREE.LineBasicMaterial({ transparent: true }),
+          }),
           shard: null,
         };
       }
@@ -788,18 +804,22 @@ export function createBackend2026(container = document.body) {
         pos.setXYZ(j++, a[0] * k, a[1] * k, a[2] * k);
         pos.setXYZ(j++, c[0] * k, c[1] * k, c[2] * k);
       }
+      const glow = burstGlow(geo.fade, BURST_GLOW);
       p.line.mesh.material.opacity = geo.fade;
-      p.line.mesh.material.color.set(b.color ?? '#ffffff').multiplyScalar(BURST_HDR);
+      p.line.mesh.material.color.set(b.color ?? '#ffffff').multiplyScalar(glow);
+      p.line.mirror.material.opacity = geo.fade;
+      p.line.mirror.material.color.set(b.color ?? '#ffffff')
+        .multiplyScalar(Math.min(glow, MIRROR_LINE_DIM));
       p.line.show(j);
 
       const shards = b.shardCount ? burstShards(view.sceneT - b.born, b) : null;
       if (shards) {
         if (!p.shard) {
+          const shardMat = () => new THREE.MeshBasicMaterial({
+            transparent: true, side: THREE.DoubleSide, depthWrite: false,
+          });
           p.shard = makeBuffer({
-            world, triangles: true,
-            material: new THREE.MeshBasicMaterial({
-              transparent: true, side: THREE.DoubleSide, depthWrite: false,
-            }),
+            world, triangles: true, material: shardMat(), mirrorMaterial: shardMat(),
           });
         }
         p.shard.ensure(shards.triangles.length * 9);
@@ -808,8 +828,12 @@ export function createBackend2026(container = document.body) {
         for (const tri of shards.triangles) {
           for (const [x, y, z] of tri) sPos.setXYZ(sj++, x * k, y * k, z * k);
         }
+        const sGlow = burstGlow(shards.fade, SHARD_GLOW);
         p.shard.mesh.material.opacity = shards.fade;
-        p.shard.mesh.material.color.set(b.color ?? '#ffffff').multiplyScalar(SHARD_HDR);
+        p.shard.mesh.material.color.set(b.color ?? '#ffffff').multiplyScalar(sGlow);
+        p.shard.mirror.material.opacity = shards.fade;
+        p.shard.mirror.material.color.set(b.color ?? '#ffffff')
+          .multiplyScalar(Math.min(sGlow, MIRROR_LINE_DIM));
         p.shard.show(sj);
       }
       used++;
@@ -887,6 +911,7 @@ export function createBackend2026(container = document.body) {
         color: new THREE.Color(NEON_MAGENTA).multiplyScalar(FLIPPER_FILL_DIM),
         transparent: true, opacity: FLIPPER_FILL_OPACITY,
         side: THREE.DoubleSide, depthWrite: false, // die Glut-Kontur gewinnt
+        fog: false, // wie der Tanker-Koerper: flaechig auch von weitem
       });
       // Spiegel teilt das Material (DoubleSide vertraegt die Spiegelung).
       m = world.flipperFill = makeBuffer({ world, triangles: true, material: mat, mirrorMaterial: mat });
@@ -931,7 +956,7 @@ export function createBackend2026(container = document.body) {
       const cy = SPINNER.height * view.cell;
       shotColor.set(FIREWORK_COLORS[
         Math.floor(view.sceneT * FOE_SHOT_FLICKER + (s.phase ?? 0)) % FIREWORK_COLORS.length])
-        .multiplyScalar(BURST_HDR);
+        .multiplyScalar(SHOT_HDR);
       for (const [a, b] of spinnerShotSegments(s, view.sceneT, { cell: view.cell })) {
         col.setXYZ(j, shotColor.r, shotColor.g, shotColor.b);
         pos.setXYZ(j++, (sx + (a[0] - sx) * scale) * k,

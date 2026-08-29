@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { burstSegments, burstShards } from '../src/world/burst.js';
+import { burstSegments, burstShards, burstGlow } from '../src/world/burst.js';
 
 const OPTS = { center: [1, 2, 3], count: 10, speed: 2, life: 0.6, size: 0.1, seed: 5 };
 
@@ -76,4 +76,21 @@ test('Truemmer fliegen radial nach aussen und TAUMELN (Form aendert sich)', () =
 test('burstShards deterministisch, Seed streut anders', () => {
   assert.deepEqual(burstShards(0.2, SHARD_OPTS), burstShards(0.2, SHARD_OPTS));
   assert.notDeepEqual(burstShards(0.2, SHARD_OPTS), burstShards(0.2, { ...SHARD_OPTS, seed: 6 }));
+});
+
+// --- Helligkeits-Verlauf (burstGlow) ----------------------------------------
+
+test('burstGlow: blitzt bei fade 1, verglimmt monoton auf dim', () => {
+  const glow = { flash: 3.4, dim: 0.4 };
+  assert.equal(burstGlow(1, glow), 3.4, 'Geburt = voller Blitz');
+  assert.equal(burstGlow(0, glow), 0.4, 'Ende = dunkles Verglimmen');
+  let prev = Infinity;
+  for (let f = 1; f >= 0; f -= 0.05) {
+    const g = burstGlow(f, glow);
+    assert.ok(g <= prev, `monoton fallend bei fade ${f.toFixed(2)}`);
+    prev = g;
+  }
+  // Der Blitz ist KURZ: bei halbem fade liegt der Glow schon unter dem
+  // linearen Mittel -- der Rest der Lebensdauer verglimmt dunkel.
+  assert.ok(burstGlow(0.5, glow) < (glow.flash + glow.dim) / 2);
 });

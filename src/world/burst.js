@@ -52,6 +52,16 @@ export function burstSegments(age, opts) {
   return { segments, fade };
 }
 
+// Helligkeits-Verlauf der Splitter und Truemmer (2026-Engine): erst BLITZEN
+// (flash, HDR ueber der Helligkeit des explodierenden Feinds), dann beim
+// Verblassen UNTER sie abdunkeln (dim) -- die Explosion verglimmt, statt
+// bis zum Schluss heller als der Feind zu strahlen (Boris' Punkt). Reine
+// Funktion von fade (1 -> 0 aus burstSegments/burstShards): die Quadrat-
+// Kurve faellt schnell aus dem Blitz und verglimmt lange dunkel.
+export function burstGlow(fade, { flash, dim }) {
+  return dim + (flash - dim) * fade * fade;
+}
+
 // FLAECHIGE Truemmer derselben Explosion (2026-Engine: "Panzerplatten" des
 // zerplatzten Feinds -- die 1980-Engine kennt nur Linien und ignoriert sie):
 // unregelmaessige Dreiecke, die wie die Splitter radial wegfliegen und dabei

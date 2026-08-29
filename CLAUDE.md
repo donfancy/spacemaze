@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 393 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 394 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -108,6 +108,20 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   NACH dem Kamera-Setzen rufen (sonst hängt die Scheibe einen Frame nach),
   und die N/S/G-Sprites NICHT in world.markerMats (Ego blendet die per
   setMarkerFade(0) aus). Details: PLAN2026.md Stufe 6.
+- **Stufe 6 — Kampf-Politur (29.8.2026):** Spiegel-FALLE gefixt: TRANSPARENTE
+  Spiegel-Objekte (Schüsse/Feuerwerk/Splitter) sortierten gegen die
+  halbtransparente Bodenplatte nach Objekt-POSITION (dynamische Puffer sitzen
+  am Welt-Ursprung) — je nach Blickrichtung schrieb die Platte zuerst Tiefe
+  und schluckte das Spiegelbild (Schüsse spiegelten nur in manchen
+  Gangrichtungen); Fix: `renderOrder = -1` auf der Spiegel-Gruppe (wirkt als
+  groupOrder, Spiegel zeichnet IMMER vor der Platte). Splitter + Trümmer
+  spiegeln sich jetzt wie der Feind (mirrorMaterial, Glow im Spiegel auf
+  MIRROR_LINE_DIM gedeckelt) und haben einen BLITZ-Verlauf (`burstGlow` pur
+  in burst.js: erst über der Feind-Glut, dann dunkler verglimmen — statt
+  konstant heller als der Feind). Tanker-Körper + Flipper-Füllung `fog:
+  false`: der Nebel wusch die dunklen Flächen auf Wand-Hintergrund, von
+  weitem blieben nur die HDR-Kanten (Drahtgitter-Look); Kanten behalten den
+  Nebel als Tiefen-Hinweis.
 - **Der komplette Zyklus läuft**: Startscreen (Level-Auswahl per Pfeiltasten) →
   andocken → Labyrinth wächst → Reinfallen → Ego-Begehung (Tank-Steuerung,
   Hidden Lines) → Q/20s → Rückschwenk → Karte mit Weg. Auf der Karte: solange
