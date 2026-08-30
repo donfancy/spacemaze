@@ -7,6 +7,7 @@
 
 import { GameEvent } from '../core/states.js';
 import { mapHint, gameOverColor } from '../core/hud.js';
+import { hasRecording } from '../core/recorder.js';
 import { createCamera } from '../math/camera.js';
 import { generateMaze } from '../world/maze.js';
 import { SIDE_FACES } from '../world/cubeFaces.js';
@@ -92,7 +93,10 @@ export function createMap(game) {
 
       // Klein unten rechts (wie die Steuerungszeile in der Ego-Ansicht).
       if (fade > 0.01) {
-        renderer.drawText(mapHint(game), {
+        renderer.drawText(mapHint({
+          reachedGoal: game.reachedGoal, gameOver: game.gameOver,
+          replay: hasRecording(game.recording),
+        }), {
           x: renderer.width - 24, y: renderer.height - 20, size: 13,
           align: 'right', baseline: 'bottom', intensity: 0.5 * fade,
         });
@@ -114,6 +118,8 @@ export function createMap(game) {
         // (gleiche Maze, Weg und Feinde werden in Playing neu aufgesetzt).
         game.resume = !game.gameOver;
         if (!game.dispatch(GameEvent.RESUME)) game.resume = false;
+      } else if (key === 'R' && hasRecording(game.recording)) {
+        game.dispatch(GameEvent.REPLAY); // den Lauf noch einmal anschauen
       } else if (key === 'X') {
         beginExit(); // Karte abblenden, dann -> Startscreen (Abdock-Flug)
       }

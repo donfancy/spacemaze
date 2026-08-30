@@ -17,9 +17,34 @@ export function playHint({ drive, shoot, orient } = {}) {
 }
 
 // Hinweis-Zeile der Karte: Q nur solange das Ziel offen ist; nach Game
-// Over wird Q zum Retry.
-export function mapHint({ reachedGoal, gameOver } = {}) {
-  return reachedGoal ? 'X EXIT' : gameOver ? 'Q RETRY  X EXIT' : 'Q RETURN  X EXIT';
+// Over wird Q zum Retry. `replay` (es gibt eine abspielbare Aufzeichnung)
+// bietet R an -- der Aufrufer reicht dafuer hasRecording(game.recording).
+export function mapHint({ reachedGoal, gameOver, replay } = {}) {
+  const r = replay ? 'R REPLAY  ' : '';
+  return reachedGoal ? r + 'X EXIT'
+    : gameOver ? 'Q RETRY  ' + r + 'X EXIT'
+      : 'Q RETURN  ' + r + 'X EXIT';
+}
+
+// Steuer-Zeile der Wiedergabe. `cams` nur in der 2026-Engine (die
+// Zusatz-Kameras gibt es 1980 nicht -- Hidden-Lines-Regel).
+export function replayHint({ cams } = {}) {
+  return 'SPACE PAUSE - LEFT/RIGHT SPEED - '
+    + (cams ? 'C CAMERA - ' : '') + 'M SOUND - X MAP';
+}
+
+// Statuszeile der Wiedergabe: Position/Dauer und Tempo (Pfeile zeigen die
+// Richtung, PAUSE gewinnt).
+export function replayStatus({ t, duration, speed, paused } = {}) {
+  const fmt = (s) => {
+    const m = Math.floor(Math.max(0, s) / 60);
+    const ss = Math.floor(Math.max(0, s) % 60);
+    return m + ':' + String(ss).padStart(2, '0');
+  };
+  const tempo = paused ? 'PAUSE'
+    : speed < 0 ? '<< ' + -speed + 'x'
+      : speed > 1 ? '>> ' + speed + 'x' : '';
+  return ('REPLAY ' + fmt(t) + ' / ' + fmt(duration) + '  ' + tempo).trimEnd();
 }
 
 // GAME-OVER-Puls: die FARBE pulsiert zwischen Feind-Rot und Weiss

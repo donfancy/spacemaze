@@ -6,7 +6,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { playHint, mapHint, gameOverColor } from '../src/core/hud.js';
+import { playHint, mapHint, replayHint, replayStatus, gameOverColor } from '../src/core/hud.js';
 import { gyroTurn, steerHintKeys } from '../src/world/gyro.js';
 import { TANKER_RED } from '../src/render/colors.js';
 
@@ -38,6 +38,23 @@ test('mapHint: Q nur solange das Ziel offen ist, nach Game Over Retry', () => {
   assert.equal(mapHint({}), 'Q RETURN  X EXIT');
   assert.equal(mapHint({ gameOver: true }), 'Q RETRY  X EXIT');
   assert.equal(mapHint({ reachedGoal: true }), 'X EXIT');
+});
+
+test('mapHint bietet R an, sobald eine Aufzeichnung abspielbar ist', () => {
+  assert.equal(mapHint({ replay: true }), 'Q RETURN  R REPLAY  X EXIT');
+  assert.equal(mapHint({ gameOver: true, replay: true }), 'Q RETRY  R REPLAY  X EXIT');
+  assert.equal(mapHint({ reachedGoal: true, replay: true }), 'R REPLAY  X EXIT');
+});
+
+test('replayHint/replayStatus: Steuer- und Statuszeile der Wiedergabe', () => {
+  assert.equal(replayHint({}), 'SPACE PAUSE - LEFT/RIGHT SPEED - M SOUND - X MAP');
+  assert.equal(replayHint({ cams: true }),
+    'SPACE PAUSE - LEFT/RIGHT SPEED - C CAMERA - M SOUND - X MAP');
+  assert.equal(replayStatus({ t: 34, duration: 130, speed: 1 }), 'REPLAY 0:34 / 2:10');
+  assert.equal(replayStatus({ t: 5, duration: 65, speed: 4 }), 'REPLAY 0:05 / 1:05  >> 4x');
+  assert.equal(replayStatus({ t: 5, duration: 65, speed: -2 }), 'REPLAY 0:05 / 1:05  << 2x');
+  assert.equal(replayStatus({ t: 5, duration: 65, speed: 2, paused: true }),
+    'REPLAY 0:05 / 1:05  PAUSE');
 });
 
 test('gameOverColor pulsiert zwischen Feind-Rot und Weiss (1.2 Hz)', () => {

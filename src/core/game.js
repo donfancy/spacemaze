@@ -21,6 +21,7 @@ import { createFalling } from '../scenes/falling.js';
 import { createPlaying } from '../scenes/playing.js';
 import { createRising } from '../scenes/rising.js';
 import { createMap } from '../scenes/map.js';
+import { createReplay } from '../scenes/replay.js';
 
 export class Game {
   constructor(options = {}) {
@@ -49,6 +50,10 @@ export class Game {
                               // Rotation, ab 26) -- der Rueckschwenk dreht sie aus
     this.crashScreen = null;  // Einschlagpunkt am Bildschirm ({cx,cy}) beim Crash --
                               // rising haelt damit die Scherben-Flugbahnen nahtlos
+    this.recording = null;    // Replay-Aufzeichnung des Laufs (core/recorder.js) --
+                              // Playing schreibt sie, R auf der Karte spielt sie ab;
+                              // ein frischer Anlauf (auch Retry) beginnt eine neue
+    this.replayCam = 0;       // Kamera-Modus der Wiedergabe (REPLAY_CAMS, nur 2026)
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.
     this.scenes = {
@@ -58,6 +63,7 @@ export class Game {
       [State.PLAYING]: createPlaying(this),
       [State.RISING]: createRising(this),
       [State.MAP]: createMap(this),
+      [State.REPLAY]: createReplay(this),
     };
 
     this.stateKey = State.STARTSCREEN;

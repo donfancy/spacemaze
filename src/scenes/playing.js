@@ -31,25 +31,25 @@
 
 import { GameEvent } from '../core/states.js';
 import { playHint } from '../core/hud.js';
+import { createRecording, recordFrame, recordEvent } from '../core/recorder.js';
 import { createCamera } from '../math/camera.js';
 import { createOscillator } from '../math/oscillator.js';
 import { generateMaze } from '../world/maze.js';
-import { cellCenter, startFacingYaw, wallFootprints } from '../world/mazeWorld.js';
+import { cellCenter, startFacingYaw } from '../world/mazeWorld.js';
 import { DRIVE, createDriveState, driveStep } from '../world/drive.js';
 import { WALK, createWalkState, walkStep } from '../world/walk.js';
-import { ENEMY, enemiesStep, enemyHit, enemySegments } from '../world/enemies.js';
+import { ENEMY, enemiesStep, enemyHit } from '../world/enemies.js';
 import {
-  SPINNER, spinnersStep, spinnerShotHit, spinnerPlayerHit, spinnerSegments,
-  spinnerFire, spinnerShotsStep, spinnerShotPlayerHit, spinnerShotIntercept, spinnerShotSegments,
+  SPINNER, spinnersStep, spinnerShotHit, spinnerPlayerHit,
+  spinnerFire, spinnerShotsStep, spinnerShotPlayerHit, spinnerShotIntercept,
 } from '../world/spinners.js';
 import {
-  FLIPPER, flippersStep, flipperPlayerHit, flipperShotHit, flipperSegments, spawnFlipperPair,
+  FLIPPER, flippersStep, flipperPlayerHit, flipperShotHit, spawnFlipperPair,
 } from '../world/flippers.js';
-import { pulsarsStep, pulsarPlayerTouch, pulsarSegments } from '../world/pulsars.js';
+import { pulsarsStep, pulsarPlayerTouch } from '../world/pulsars.js';
 import { createGyro, startSpin, gyroStep, gyroTurn, shortestRoll } from '../world/gyro.js';
-import { createShotsState, aimYaw, fireShot, shotsStep, shotSegments } from '../world/shots.js';
-import { burstSegments } from '../world/burst.js';
-import { PHOSPHOR_GREEN, NEON_MAGENTA, ARCADE_YELLOW, TANKER_RED } from '../render/colors.js';
+import { createShotsState, aimYaw, fireShot, shotsStep } from '../world/shots.js';
+import { PHOSPHOR_GREEN, NEON_MAGENTA, TANKER_RED } from '../render/colors.js';
 import { SHATTER } from '../render/shatter.js';
 import { mazeMetric } from '../world/metric.js';
 import { createRng } from '../util/rng.js';
@@ -57,81 +57,35 @@ import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams,
   shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch, whirrPatch, gyroPatch,
 } from '../sound/patches.js';
-import {
-  goalZone, inGoalZone, goalMarkerSegments, goalBeamFeet, beamFlicker, beamOcclusionCut,
-} from '../world/goal.js';
-import { fireworkBeams, FIREWORK_COLORS } from '../world/fireworks.js';
-import { STARS, createStars, starDirection, skylineElevation, starTwinkle } from '../world/stars.js';
-import { collisionWave, waveSegments } from '../world/waves.js';
+import { inGoalZone } from '../world/goal.js';
+import { STARS, createStars } from '../world/stars.js';
 import { recordTrailPoint } from '../world/trail.js';
 import { compassLayout } from '../render/compass.js';
 import { swayTransform } from '../render/sway.js';
 import { SIDE_FACES, faceLocalToWorld } from '../world/cubeFaces.js';
 import { levelConfig, spinnerColor, enemyColor } from '../core/levels.js';
-import {
-  CUBE_SIZE, WALL_RATIO, EYE_RATIO, FAR_RATIO, NEAR_RATIO, cellSize, unitSize,
-  faceWalls, faceFootprints, faceSegments, renderFaceWalls, renderFaceOverlay, egoPose,
-} from './mazeView.js';
+import { CUBE_SIZE, EYE_RATIO, NEAR_RATIO } from './mazeView.js';
+import { buildEgoStatics, renderEgoWorld, collisionWaveSet, WAVE_FX } from './egoWorld.js';
 
 const RADIUS_RATIO = 0.25;
 const GOAL_AUTO_EXIT = 20;  // Sekunden am Ziel bis automatischer Rueckschwenk
 const TRAIL_DIST_RATIO = 0.2; // Weg-Aufzeichnung: Mindestdistanz in Zellen
 
-// Ziel-Zone und -Leuchtfeuer: erreicht ist man erst 1/4 Feldgroesse "drinnen";
-// genau diese Zone markiert ein Boden-Quadrat, auf dessen Kante flimmernde
-// Leucht-Linien entlangwandern und in den Himmel strahlen. Beides MIT
-// Verdeckung, aber verdeckte Stuecke scheinen doppelt so stark durch wie
-// normale Kanten (0.2 statt DIM 0.1) -- und die Strahlen ragen oberhalb der
-// Wand-Sichtlinie frei heraus (beamOcclusionCut), so sieht man das Ziel von
-// weitem hinter den Mauern hochstrahlen. Am Ziel: alle Strahlen blitzen
-// weiss auf und erloeschen.
-const GOAL_INSET_RATIO = 0.25;   // Einrueckung pro Seite (Anteil der Feldgroesse)
-const BEAM_HEIGHT_RATIO = 60;    // Strahlhoehe in Zellen (quasi unendlich)
-const BEAM_PER_EDGE = 3;         // Strahlen pro Quadratkante (12 gesamt)
-const BEAM_MAX_INT = 0.7;        // hellster Flacker-Wert der Strahlen
-const BEAM_WANDER_RATE = 0.7;    // Wander-Stuetzstellen pro Sekunde
-const GOAL_MARKER_INT = 0.9;     // Intensitaet des Boden-Quadrats
-const GOAL_OCC_DIM = 0.2;        // verdeckt: doppelt so hell wie Wandkanten (DIM 0.1)
-const GOAL_FLASH_TIME = 1.0;     // s: weisses Aufstrahlen + Erloeschen am Ziel
-const FIREWORK_SPREAD = 2.2;     // Feuerwerk-Radius um die Zielmitte (Gangbreiten)
-const FIREWORK_HEIGHT = 8;       // maximale Feuerwerk-Strahlhoehe (Gangbreiten --
-                                 // endlich, damit die Spitzen sichtbar funkeln)
+// Ziel-Leuchtfeuer, Feuerwerk, Wellen- und Feind-Zeichnung: nach
+// scenes/egoWorld.js gehoben (gemeinsamer Welt-Zeichner mit der
+// REPLAY-Szene -- Beginn der "playing-Zerlegung", Stufe 6).
 
-// Stroke-Batching: jeder drawPolylines/renderScene-Aufruf ist ein eigener
-// Canvas-Stroke MIT Glow (shadowBlur -- der teuerste Zeichenpfad). Statt pro
-// Strahl einzeln zu stroken, wird der FLACKER-Wert auf wenige Stufen gerundet
-// und pro Stufe in EINEM Aufruf gezeichnet (die Faktoren fuer Grundhelligkeit
-// und Verdeckungs-Dimmung bleiben exakt).
-const FLICKER_STEPS = 4;
-function bucketAdd(buckets, key, segments) {
-  const list = buckets.get(key);
-  if (list) list.push(...segments);
-  else buckets.set(key, segments);
-}
-
-// Fahr-Modus: Kamera-Gefuehl und Kollisions-Effekte.
-const BANK_MAX = 0.2;         // rad: maximale Kurvenneigung
+// Fahr-Modus: Kamera-Gefuehl und Kollisions-Effekte. BANK_MAX exportiert:
+// die REPLAY-Szene normiert damit den aufgezeichneten bank-Kanal fuer den
+// Motor-Klang (dieselbe Formel wie der Live-Motor unten).
+export const BANK_MAX = 0.2;  // rad: maximale Kurvenneigung
 const BANK_TAU = 0.22;        // s: Ein-/Ausschwenkzeit der Neigung
 const SHAKE_ROLL = 1.6;       // rad/s Roll-Impuls bei vollem Aufprall
 const SHAKE_PITCH = 0.8;      // rad/s Nick-Impuls bei vollem Aufprall
-const WAVE_SPEED_RATIO = 1.5; // Wellen-Tempo in Gangbreiten/s (frontal steht man
-                              // dicht davor -- zu schnelle Wellen verlassen den
-                              // schmalen sichtbaren Wandausschnitt sofort)
-const WAVE_LIFE = 0.9;        // s Lebensdauer einer Welle
-const WAVE_ARM_RATIO = 0.25;  // Start-Halbarmlaenge des Kreuzes (Gangbreiten)
-const WAVE_PULSES = 3;        // Wellenzuege pro Aufprall
-const WAVE_PULSE_DELAY = 0.12; // s Abstand der Wellenzuege
-const FLASH_TIME = 0.15;      // s: jeder Wellenzug startet als weisser Blitz
-const FLASH_COLOR = '#ffffff';
-const FLASH_GLOW = 16;        // Glow des Blitzes (Standard: 8)
 const BRAKE_HOLD = 0.2;       // s Stillstand nach dem Bremsen (Q), bevor es abhebt
 
 // Kampf-Levels (ab Level 11): Feinde, Schiessen, Game Over.
-const SHOT_COLOR = '#ffffff';    // Projektile und Verpuffen
-const FOE_SHOT_FLICKER = 12;     // Farb-Schaltrate der Spinner-Schuesse (Hz)
-const ENEMY_GLOW = 12;           // Rauten gluehen etwas staerker (Gefahr)
-const ENEMY_OCC_DIM = 0.175;     // verdeckte Rauten schimmern durch die Wand
-                                 // (dezenter als frueher 0.25; Waende: 0.1)
+const SHOT_COLOR = '#ffffff';    // Splitter-Weiss (Verpuffen, Crash-Beiklang)
 const CRASH_TIME = 1.3;          // s: Explosion austoben lassen, dann zur Karte
 const CRASH_SHAKE_ROLL = 3.0;    // rad/s Roll-Impuls des Crashs
 const CRASH_SHAKE_PITCH = 1.8;   // rad/s Nick-Impuls des Crashs
@@ -144,8 +98,7 @@ export function createPlaying(game) {
 
   let maze = null;
   let face = null;
-  let walls = null;
-  let footprints = null;
+  let statics = null; // Wand-/Ziel-Geometrie der Begehung (egoWorld.buildEgoStatics)
   let cell = 1; // Gang-Breite (Gameplay-Massstab)
   let unit = 1; // Achsen-Einheit (Grid <-> Welt)
   let px = 0;
@@ -153,10 +106,6 @@ export function createPlaying(game) {
   let yaw = 0;
   let reached = false;
   let reachedTime = 0;
-  let goalInset = 0;    // Einrueckung der Ziel-Zone in Welt-Einheiten
-  let goalRect = null;  // Ziel-Zone (lokales Rechteck)
-  let goalSegs = null;  // Boden-Quadrat der Ziel-Zone (Welt-Segmente)
-  let localFoot = null; // Wand-Grundrisse LOKAL (fuer den Strahl-Schnitt)
   let reachedAt = 0;    // Szenenzeit des Ziel-Erreichens (weisses Erloeschen)
 
   // Fahr-Modus (ab Level 6).
@@ -199,6 +148,19 @@ export function createPlaying(game) {
   let crashScreen = null; // Einschlag am Bildschirm (fuer den Shatter-Handoff an rising)
   let crashPos = null;    // Einschlag {x,z} -- Zentrum des Bild-Zerberstens
 
+  // Replay-Aufzeichnung (core/recorder.js): Ereignis an der Aufnahme-Uhr
+  // festhalten (Sounds, Bursts, Zustandswechsel) -- null-sicher fuer Tests.
+  function recEvent(type, data) {
+    if (game.recording) recordEvent(game.recording, type, data);
+  }
+
+  // Burst starten UND als Replay-Event festhalten (born laeuft im Replay
+  // ueber die Event-Zeit, das spec-born hier zaehlt nur fuer die Live-Szene).
+  function pushBurst(spec) {
+    bursts.push(spec);
+    recEvent('burst', { spec });
+  }
+
   // Feindberuehrung: krachende Explosion an `at` {x,z}, dann schleudert es den
   // Spieler hinaus in die Kartenansicht (update() dispatcht nach CRASH_TIME).
   // opts: `kill` (Objekt mit alive-Flag, das in der Explosion aufgeht -- beim
@@ -212,14 +174,13 @@ export function createPlaying(game) {
     if (opts.kill) opts.kill.alive = false;
     game.audio?.engine(null);
     game.audio?.play(crashPatch());
+    recEvent('crash', { x: at.x, z: at.z });
     const h = opts.height ?? EYE_RATIO * cell;
     const color = opts.color ?? enemyCol;
     // shardCount/shardSize: flaechige Truemmer NUR fuer die 2026-Engine
     // (burstShards -- 1980 zeichnet weiter nur die Linien-Splitter).
-    bursts.push(
-      { born: sceneT, center: [at.x, h, at.z], seed: 11, count: 24, speed: 3.5 * cell, life: 1.2, size: 0.16 * cell, color, shardCount: 9, shardSize: 0.38 * cell },
-      { born: sceneT, center: [at.x, h, at.z], seed: 47, count: 16, speed: 2.5 * cell, life: 0.9, size: 0.12 * cell, color: SHOT_COLOR },
-    );
+    pushBurst({ born: sceneT, center: [at.x, h, at.z], seed: 11, count: 24, speed: 3.5 * cell, life: 1.2, size: 0.16 * cell, color, shardCount: 9, shardSize: 0.38 * cell });
+    pushBurst({ born: sceneT, center: [at.x, h, at.z], seed: 47, count: 16, speed: 2.5 * cell, life: 0.9, size: 0.12 * cell, color: SHOT_COLOR });
     rollOsc.kick(CRASH_SHAKE_ROLL);
     pitchOsc.kick(CRASH_SHAKE_PITCH);
   }
@@ -232,32 +193,58 @@ export function createPlaying(game) {
   function spawnShotEvent(ev) {
     const h = EYE_RATIO * cell;
     const hs = SPINNER.height * cell; // Spinner leben unterhalb der Augenhoehe
+    // Sound spielen UND fuer das Replay festhalten (dort mappt die
+    // Wiedergabe den Namen zurueck auf den Patch).
+    const sfx = (name, patch) => {
+      game.audio?.play(patch());
+      recEvent('sound', { name });
+    };
     if (ev.type === 'wall' || ev.type === 'shield') {
-      game.audio?.play(poofPatch());
-      bursts.push({ born: sceneT, center: [ev.x, ev.type === 'shield' ? hs : h, ev.z], seed: burstSeq++, count: 8, speed: 1.2 * cell, life: 0.35, size: 0.07 * cell, color: SHOT_COLOR });
+      sfx('poof', poofPatch);
+      pushBurst({ born: sceneT, center: [ev.x, ev.type === 'shield' ? hs : h, ev.z], seed: burstSeq++, count: 8, speed: 1.2 * cell, life: 0.35, size: 0.07 * cell, color: SHOT_COLOR });
     } else if (ev.type === 'spike') {
-      game.audio?.play(clinkPatch());
-      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 6, speed: 1.4 * cell, life: 0.3, size: 0.06 * cell, color: spinnerCol });
+      sfx('clink', clinkPatch);
+      pushBurst({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 6, speed: 1.4 * cell, life: 0.3, size: 0.06 * cell, color: spinnerCol });
     } else if (ev.type === 'spinner') {
       // Ohne Truemmer-Platten (Boris): Spinner sind reine LINIEN-Wesen --
       // flaechige Truemmer passen zu Tankern und Flippern, nicht hier.
-      game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: spinnerCol });
+      sfx('boom', boomPatch);
+      pushBurst({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: spinnerCol });
     } else if (ev.type === 'zap') {
-      game.audio?.play(poofPatch());
-      bursts.push({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 10, speed: 1.8 * cell, life: 0.4, size: 0.08 * cell, color: SHOT_COLOR });
+      sfx('poof', poofPatch);
+      pushBurst({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 10, speed: 1.8 * cell, life: 0.4, size: 0.08 * cell, color: SHOT_COLOR });
     } else if (ev.type === 'flipper') {
-      game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: burstSeq++, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: NEON_MAGENTA, shardCount: 6, shardSize: 0.3 * cell });
+      sfx('boom', boomPatch);
+      pushBurst({ born: sceneT, center: [ev.x, h, ev.z], seed: burstSeq++, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: NEON_MAGENTA, shardCount: 6, shardSize: 0.3 * cell });
     } else {
       // Tanker-Abschuss: Funken-Splitter + flaechige Truemmer (nur 2026).
-      game.audio?.play(boomPatch());
-      bursts.push({ born: sceneT, center: [ev.x, h, ev.z], seed: burstSeq++, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: enemyCol, shardCount: 6, shardSize: 0.3 * cell });
+      sfx('boom', boomPatch);
+      pushBurst({ born: sceneT, center: [ev.x, h, ev.z], seed: burstSeq++, count: 18, speed: 2.5 * cell, life: 0.8, size: 0.13 * cell, color: enemyCol, shardCount: 6, shardSize: 0.3 * cell });
     }
   }
 
   function recordState() {
     game.playerState = { px, pz, yaw };
+  }
+
+  let lastSpeed = 0; // erreichtes Tempo (normiert) -- fuer Motor-Klang im Replay
+
+  // Ein Replay-Sample dieses Frames (core/recorder.js tastet selbst auf
+  // seine Rate ab). Die Feind-Listen klont der Recorder -- hier nur zeigen.
+  function recordFrameNow(dt) {
+    if (!game.recording) return;
+    recordFrame(game.recording, dt, {
+      px, pz, yaw,
+      roll: bank + rollOsc.x + gyro.roll,
+      pitch: pitchOsc.x,
+      bank,
+      steer: drive ? driveState.steer : walkState.steer,
+      speed: lastSpeed,
+      shots: shotsState ? shotsState.shots : [],
+      foeShots,
+      enemies: game.enemies, spinners: game.spinners,
+      flippers: game.flippers, pulsars: game.pulsars,
+    });
   }
 
   // Fahr-Modus: ein Simulationsschritt (Vortrieb, Lenken, Abprall + Effekte).
@@ -293,7 +280,7 @@ export function createPlaying(game) {
     bank += (-BANK_MAX * turn * speed01 - bank) * (1 - Math.exp(-dt / BANK_TAU));
     rollOsc.step(dt);
     pitchOsc.step(dt);
-    waves = waves.filter((w) => sceneT - w.born < WAVE_LIFE);
+    waves = waves.filter((w) => sceneT - w.born < WAVE_FX.life);
   }
 
   // Aufprall: Wellenzuege auf der getroffenen Wand + mechanische Schwingung
@@ -305,11 +292,11 @@ export function createPlaying(game) {
     // Der Feder-Impuls selbst steckt schon in der Pose (drive.js).
     bump = { at: sceneT, axis: col.axis, side: col.side, impact: col.impact,
       x: px, z: pz, point: col.point };
-    const wave = collisionWave(maze, col, { unit, eye: EYE_RATIO * cell });
-    for (let i = 0; i < WAVE_PULSES; i++) {
-      // Nur der ERSTE Wellenzug blitzt weiss auf -- ein Blitz pro Treffer.
-      waves.push({ wave, born: sceneT + i * WAVE_PULSE_DELAY, strength: col.impact * (1 - i / WAVE_PULSES), flash: i === 0 });
-    }
+    // Fuers Replay reicht die komplette Kollisions-Meldung (reine Daten):
+    // die Wiedergabe baut die Wellenzuege mit collisionWaveSet nach und
+    // spielt das Brutzeln; die 2026-Wiedergabe macht daraus Blitz + Funken.
+    recEvent('collision', { col });
+    waves.push(...collisionWaveSet(maze, col, sceneT, { unit, cell }));
     // Roll-Richtung aus der Anlaufrichtung relativ zur Wandnormalen (deterministisch).
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
     const [nx, nz] = col.axis === 'x' ? [-col.side, 0] : [0, -col.side];
@@ -322,14 +309,8 @@ export function createPlaying(game) {
     enter() {
       maze = game.maze ?? generateMaze(11, {});
       face = game.dockFace ?? SIDE_FACES[0];
-      cell = cellSize(maze);
-      unit = unitSize(maze);
-      walls = faceWalls(maze, face, WALL_RATIO * cell);
-      footprints = faceFootprints(maze, face);
-      goalInset = GOAL_INSET_RATIO * cell;
-      goalRect = goalZone(maze, unit, goalInset);
-      goalSegs = faceSegments(goalMarkerSegments(goalRect), face);
-      localFoot = wallFootprints(maze, { unit });
+      statics = buildEgoStatics(maze, face);
+      ({ cell, unit } = statics);
       const cfg = levelConfig(game.level);
       drive = !!cfg?.drive;
       shoot = !!cfg?.shoot;
@@ -391,6 +372,15 @@ export function createPlaying(game) {
         pz = cz;
         yaw = startFacingYaw(maze);
         game.trail = [[px, pz]]; // abgelaufener Weg (praezise Flaechenpunkte)
+        game.recording = null;   // frischer Anlauf = frische Aufzeichnung
+      }
+      // Replay-Aufzeichnung des Laufs: frisch anlegen bzw. bei Fortsetzung
+      // nahtlos weiterschreiben (die Zeitachse ist die reine Begehungs-Zeit,
+      // Karten-Besuche fehlen -- der ganze Lauf am Stueck).
+      if (!game.recording) {
+        game.recording = createRecording({
+          level: game.level, seed: maze.seed, drive, shoot, rainbow,
+        });
       }
       game.resume = false;
       reached = false;
@@ -427,8 +417,10 @@ export function createPlaying(game) {
         gyroStep(gyro, dt);
         rollOsc.step(dt);
         pitchOsc.step(dt);
-        waves = waves.filter((w) => sceneT - w.born < WAVE_LIFE);
+        waves = waves.filter((w) => sceneT - w.born < WAVE_FX.life);
         bursts = bursts.filter((b) => sceneT - b.born < b.life);
+        lastSpeed = 0;
+        recordFrameNow(dt); // die Explosion gehoert mit ins Replay
         if (crashT >= CRASH_TIME) game.dispatch(GameEvent.EXIT);
         return;
       }
@@ -452,10 +444,11 @@ export function createPlaying(game) {
 
       if (drive) {
         updateDrive(turn, dt);
+        lastSpeed = reached ? 0 : driveState.vel / DRIVE.cruise;
         // Motor-Klang: Tonhoehe/Pegel folgen dem Tempo, das Sirren der
         // Kurvenneigung (bank ist schon weich nachgefuehrt).
         game.audio?.engine(engineParams('drive', {
-          speed: reached ? 0 : driveState.vel / DRIVE.cruise,
+          speed: lastSpeed,
           bank: Math.abs(bank) / BANK_MAX,
         }));
       } else {
@@ -471,11 +464,13 @@ export function createPlaying(game) {
           // Kamera-Impuls + Licht-Blitz an der Wand.
           const { axis, side, impact } = res.collision;
           bump = { at: sceneT, axis, side, impact, x: px, z: pz };
+          recEvent('bump', { axis, side, impact, x: px, z: pz });
         }
+        lastSpeed = res.speed / WALK.speed;
         // Kaum merkliches Gleiten: nur das ERREICHTE Tempo klingt -- an der
         // Wand angedrueckt ist es still, obwohl die Taste gehalten wird.
         game.audio?.engine(engineParams('walk', {
-          speed: res.speed / WALK.speed,
+          speed: lastSpeed,
           steer: Math.abs(walkState.steer),
         }));
       }
@@ -513,6 +508,7 @@ export function createPlaying(game) {
         // Schuss von der Spike-Spitze -- das Duell, nicht die Ferne.
         if (spinnerFire(spinners, foeShots, dt, foeRng, { px, pz, yaw }, cell).length) {
           game.audio?.play(whirrPatch());
+          recEvent('sound', { name: 'whirr' });
         }
       }
 
@@ -554,6 +550,7 @@ export function createPlaying(game) {
           if (touch) {
             const dur = startSpin(gyro, foeRng);
             game.audio?.play(gyroPatch(dur));
+            recEvent('gyro', { dur });
           }
         }
       }
@@ -564,6 +561,7 @@ export function createPlaying(game) {
         const steer = drive ? driveState.steer : walkState.steer;
         if (keys.has(' ') && !reached && fireShot(shotsState, { px, pz, yaw }, steer)) {
           game.audio?.play(shotPatch());
+          recEvent('sound', { name: 'shot' });
         }
         // Treffer-Kette eigener Projektile: erst die heranfliegenden Spinner-
         // Schuesse abfangen, dann Flipper (nur in Seiten-Stellung), dann
@@ -589,12 +587,14 @@ export function createPlaying(game) {
 
       // Streng: die Kante des Zielfelds reicht nicht, man muss mindestens
       // GOAL_INSET_RATIO der Feldgroesse "drinnen" stehen (= das Boden-Quadrat).
-      if (!reached && inGoalZone(maze, px, pz, unit, goalInset)) {
+      if (!reached && inGoalZone(maze, px, pz, unit, statics.goalInset)) {
         reached = true;
         reachedAt = sceneT; // ab hier: weisses Aufstrahlen + Erloeschen
         game.reachedGoal = true; // die Karte bietet dann kein Weiterspielen mehr an
         game.audio?.play(fanfarePatch()); // drei aufsteigende Toene zum weissen Aufblitzen
+        recEvent('reached', {});
       }
+      recordFrameNow(dt);
       if (reached) {
         reachedTime += dt;
         if (reachedTime >= GOAL_AUTO_EXIT) game.dispatch(GameEvent.EXIT);
@@ -636,219 +636,16 @@ export function createPlaying(game) {
       if (drive) {
         renderer.pushSway(swayTransform(bank + rollOsc.x + gyro.roll, pitchOsc.x, { height: renderer.height, fov: camera.fov }));
       }
-      const pose = egoPose(face, px, pz, yaw, cell);
-      const view = renderFaceWalls(renderer, walls, footprints, camera, pose, { far: FAR_RATIO * cell, near });
-
-      // Sternenhimmel (ab Level 4): weltfeste Sterne in der Level-Farbe --
-      // beim Drehen zieht der Himmel vorbei, das macht jede Drehung
-      // spuerbar. Sichtbar nur OBERHALB der Wand-Silhouette in der
-      // jeweiligen Richtung (skylineElevation-Raycast); als Bildschirm-
-      // Kreuzchen gezeichnet, nach Funkel-Stufe gebatcht (ein Stroke pro
-      // Stufe). Innerhalb des Sway: die Kurvenneigung kippt den Himmel mit.
-      if (stars) {
-        const starBuckets = new Map();
-        const skyOpts = { unit, cell, eye: EYE_RATIO * cell, wallHeight: WALL_RATIO * cell };
-        const R = STARS.dist * cell;
-        for (const st of stars) {
-          if (st.el <= skylineElevation(maze, px, pz, st.az, skyOpts) + STARS.margin) continue;
-          const dir = starDirection(st.az, st.el);
-          const p = renderer.worldToScreen(faceLocalToWorld(
-            px + dir[0] * R, EYE_RATIO * cell + dir[1] * R, pz + dir[2] * R, face, CUBE_SIZE), camera);
-          if (!p) continue;
-          const r = st.size;
-          const q = Math.ceil(starTwinkle(st, sceneT) * FLICKER_STEPS) / FLICKER_STEPS;
-          // BUNTE Sterne (ab Level 26, rainbowStars): jeder Stern behaelt
-          // seine deterministische Arcade-Farbe (tint) -- gebatcht wird
-          // dann pro Farbe UND Funkel-Stufe (ein Stroke pro Kombination).
-          const color = rainbow ? FIREWORK_COLORS[st.tint % FIREWORK_COLORS.length] : null;
-          bucketAdd(starBuckets, color ? color + '|' + q : q, [
-            [[p.x - r, p.y], [p.x + r, p.y]],
-            [[p.x, p.y - r], [p.x, p.y + r]],
-          ]);
-        }
-        for (const [key, segs] of starBuckets) {
-          const [color, q] = typeof key === 'string' ? key.split('|') : [undefined, key];
-          renderer.drawPolylines(segs, { intensity: Number(q), lineWidth: 1, color });
-        }
-      }
-
-      // Ziel-Leuchtfeuer. Boden-Quadrat: normale Kanten-Verdeckung, aber
-      // verdeckt doppelt so hell wie Wandkanten. Near-Plane wie bei den
-      // Waenden skalieren (man faehrt direkt darueber).
-      renderFaceOverlay(renderer, goalSegs, camera, view, { intensity: GOAL_MARKER_INT, dim: GOAL_OCC_DIM });
-
-      // Strahlen: wandern auf der Quadratkante (am Ziel eingefroren) und
-      // flimmern. Verdeckung analytisch pro Strahl (beamOcclusionCut): unter
-      // der Wand-Sichtlinie gedimmt durchscheinend, darueber frei strahlend.
-      // Am Ziel blitzen alle weiss auf und erloeschen in GOAL_FLASH_TIME.
-      const flashAge = sceneT - reachedAt;
-      if (!reached || flashAge < GOAL_FLASH_TIME) {
-        const beamH = BEAM_HEIGHT_RATIO * cell;
-        const feet = goalBeamFeet(goalRect, {
-          perEdge: BEAM_PER_EDGE, rate: BEAM_WANDER_RATE,
-          time: reached ? reachedAt : sceneT, // eingefroren beim Erloeschen
-        });
-        if (reached) {
-          // Weisses Aufstrahlen: alle Strahlen gleich hell -> EIN Stroke.
-          const segs = faceSegments(feet.map(([bx, bz]) => [[bx, 0, bz], [bx, beamH, bz]]), face);
-          renderer.renderScene({ segments: segs, intensity: 1 - flashAge / GOAL_FLASH_TIME },
-            camera, { near: near, color: FLASH_COLOR, glow: FLASH_GLOW });
-        } else {
-          // Flacker-Wert auf FLICKER_STEPS Stufen gerundet, pro Stufe EIN
-          // Stroke (statt bis zu 2 pro Strahl) -- sichtbar und verdeckt
-          // getrennt gebuendelt, deren Helligkeits-Faktoren bleiben exakt.
-          const visBuckets = new Map();
-          const dimBuckets = new Map();
-          for (let i = 0; i < feet.length; i++) {
-            const [bx, bz] = feet[i];
-            const cut = Math.min(beamH, beamOcclusionCut(localFoot, [px, pz], feet[i], {
-              eye: EYE_RATIO * cell, wallHeight: WALL_RATIO * cell,
-            }));
-            const qf = Math.ceil(beamFlicker(i, sceneT) * FLICKER_STEPS) / FLICKER_STEPS;
-            if (cut > 0) bucketAdd(dimBuckets, qf, faceSegments([[[bx, 0, bz], [bx, cut, bz]]], face));
-            if (cut < beamH) bucketAdd(visBuckets, qf, faceSegments([[[bx, cut, bz], [bx, beamH, bz]]], face));
-          }
-          for (const [qf, segments] of visBuckets) {
-            renderer.renderScene({ segments, intensity: BEAM_MAX_INT * qf }, camera, { near: near });
-          }
-          for (const [qf, segments] of dimBuckets) {
-            renderer.renderScene({ segments, intensity: GOAL_OCC_DIM * BEAM_MAX_INT * qf }, camera, { near: near });
-          }
-        }
-      }
-
-      // Ziel-FEUERWERK (world/fireworks.js): waehrend die Ziel-Strahlen weiss
-      // verloeschen, spriessen rund ums Ziel viele senkrechte Strahlen aus
-      // dem Boden -- jeder schaltet von unsichtbar durch die klassischen
-      // Arcade-Farben nach Weiss und verschwindet. Keine Verdeckung (es
-      // strahlt UEBER die Waende) und pro Farbe + Helligkeits-Stufe EIN
-      // Stroke (shadowBlur-Batching wie bei den Ziel-Strahlen).
-      if (reached) {
-        const beams = fireworkBeams(sceneT - reachedAt, {
-          seed: maze.seed,
-          center: [(goalRect.x0 + goalRect.x1) / 2, (goalRect.z0 + goalRect.z1) / 2],
-          spread: FIREWORK_SPREAD * cell,
-          height: FIREWORK_HEIGHT * cell,
-        });
-        if (beams.length) {
-          const buckets = new Map();
-          for (const b of beams) {
-            const q = Math.ceil(b.intensity * FLICKER_STEPS) / FLICKER_STEPS;
-            bucketAdd(buckets, b.color + '|' + q,
-              faceSegments([[[b.x, 0, b.z], [b.x, b.top, b.z]]], face));
-          }
-          for (const [key, segments] of buckets) {
-            const [color, q] = key.split('|');
-            renderer.renderScene({ segments, intensity: Number(q) }, camera,
-              { near: near, color, glow: FLASH_GLOW });
-          }
-        }
-      }
-
-      // Kollisionswellen auf der Wand (camera.basis steht nach renderFaceWalls).
-      // Jeder Wellenzug beginnt als weisses Blitz-Kreuz am Auftreffpunkt und
-      // laeuft dann gruen auseinander: das Weiss wird als Overlay darueber-
-      // gezeichnet und blendet in FLASH_TIME aus.
-      for (const wv of waves) {
-        const age = sceneT - wv.born;
-        const geo = waveSegments(wv.wave, age, {
-          height: WALL_RATIO * cell, speed: WAVE_SPEED_RATIO * cell,
-          life: WAVE_LIFE, arm: WAVE_ARM_RATIO * cell,
-        });
-        if (!geo) continue;
-        // Beim Aufprall ist die Wand naeher als die Standard-Near des
-        // Renderers -- ohne den near-Override wuerde das Kreuz weggeclippt.
-        const segments = faceSegments(geo.segments, face);
-        renderer.renderScene({ segments, intensity: geo.fade * wv.strength }, camera, { near });
-        const whiteness = wv.flash ? (1 - age / FLASH_TIME) * wv.strength : 0;
-        if (whiteness > 0.01) {
-          renderer.renderScene({ segments, intensity: whiteness }, camera, { near, color: FLASH_COLOR, glow: FLASH_GLOW });
-        }
-      }
-
-      // Feinde: rote pulsierende Rauten, mit derselben Hidden-Line-Dimmung
-      // wie die Waende -- verdeckt schimmern sie staerker durch als normale
-      // Kanten (man ahnt die Gefahr hinterm Eck).
-      const aliveEnemies = enemies.filter((e) => e.alive);
-      if (aliveEnemies.length) {
-        const segs = [];
-        for (const e of aliveEnemies) {
-          segs.push(...enemySegments(e, sceneT, { cell, px, pz, height: EYE_RATIO * cell }));
-        }
-        renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
-          intensity: 0.95, dim: ENEMY_OCC_DIM, color: enemyCol, glow: ENEMY_GLOW,
-        });
-      }
-
-      // Spinner: rotierende Spiralen samt Spike in der Level-Spinner-Farbe
-      // (16-20 gruen auf Blau, ab 21 gelb auf Gruen), gleiche Hidden-Line-
-      // Behandlung wie die Rauten (verdeckt schimmern sie durch die Wand --
-      // man ahnt den Spike hinter der Ecke).
-      const aliveSpinners = spinners.filter((s) => s.alive);
-      if (aliveSpinners.length) {
-        const segs = [];
-        for (const s of aliveSpinners) {
-          segs.push(...spinnerSegments(s, sceneT, { cell }));
-        }
-        renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
-          intensity: 0.95, dim: ENEMY_OCC_DIM, color: spinnerCol, glow: ENEMY_GLOW,
-        });
-      }
-
-      // Flipper: magenta X-Konturen im Gang-Querschnitt, Hidden-Line wie die
-      // anderen Feinde (verdeckt schimmern sie durch die Wand).
-      const aliveFlippers = flippers.filter((f) => f.alive);
-      if (aliveFlippers.length) {
-        const segs = [];
-        for (const f of aliveFlippers) {
-          segs.push(...flipperSegments(f, { cell }));
-        }
-        renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
-          intensity: 0.95, dim: ENEMY_OCC_DIM, color: NEON_MAGENTA, glow: ENEMY_GLOW,
-        });
-      }
-
-      // Pulsare: gelbe pulsierende Zackenlinien im Gang-Querschnitt, gleiche
-      // Hidden-Line-Behandlung wie die anderen Feinde.
-      if (pulsars.length) {
-        const segs = [];
-        for (const p of pulsars) {
-          segs.push(...pulsarSegments(p, sceneT, { cell }));
-        }
-        renderFaceOverlay(renderer, faceSegments(segs, face), camera, view, {
-          intensity: 0.95, dim: ENEMY_OCC_DIM, color: ARCADE_YELLOW, glow: ENEMY_GLOW,
-        });
-      }
-
-      // Spinner-Schuesse: sirrende Funken-Sterne in FLIRRENDEN Farben -- die
-      // Arcade-Palette schaltet hart (1981 gab es kein Blenden). Wenige
-      // Schuesse unterwegs -> ein Stroke pro Schuss ist ok.
-      for (const s of foeShots) {
-        const color = FIREWORK_COLORS[
-          Math.floor(sceneT * FOE_SHOT_FLICKER + (s.phase ?? 0)) % FIREWORK_COLORS.length];
-        renderer.renderScene(
-          { segments: faceSegments(spinnerShotSegments(s, sceneT, { cell }), face) },
-          camera, { near, color, glow: 10 });
-      }
-
-      // Projektile: weisse rotierende Sterne. Keine Verdeckung noetig -- sie
-      // fliegen im eigenen Sichtgang und verpuffen an der ersten Wand.
-      if (shotsState && shotsState.shots.length) {
-        const segs = [];
-        for (const s of shotsState.shots) {
-          segs.push(...shotSegments(s, sceneT, { cell, yaw, height: EYE_RATIO * cell }));
-        }
-        renderer.renderScene({ segments: faceSegments(segs, face) }, camera,
-          { near, color: SHOT_COLOR, glow: 10 });
-      }
-
-      // Splitter-Explosionen (Verpuffen, Feind-Abschuss, Crash).
-      for (const b of bursts) {
-        const geo = burstSegments(sceneT - b.born, b);
-        if (!geo) continue;
-        renderer.renderScene({ segments: faceSegments(geo.segments, face), intensity: geo.fade },
-          camera, { near, color: b.color, glow: 10 });
-      }
+      // Die komplette Welt (Waende, Sterne, Ziel, Feuerwerk, Wellen, Feinde,
+      // Schuesse, Splitter) zeichnet der gemeinsame Welt-Zeichner -- exakt
+      // derselbe Code laeuft in der REPLAY-Szene (scenes/egoWorld.js).
+      renderEgoWorld(renderer, camera, {
+        maze, face, statics, px, pz, yaw, t: sceneT, near,
+        stars, rainbow, reached, reachedAt, waves,
+        enemies, spinners, flippers, pulsars, foeShots,
+        shots: shotsState ? shotsState.shots : [],
+        bursts, enemyCol, spinnerCol,
+      });
 
       // Fadenkreuz: zeigt die aktuelle ZIELRICHTUNG der Projektile -- bei
       // Geradeausflug exakt die Blickrichtung, beim Lenken schlaegt es weiter
