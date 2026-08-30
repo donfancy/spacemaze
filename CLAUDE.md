@@ -142,7 +142,17 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   hohe Kameras überglühen (Karten-Glow-Regel) → `RCAM_GLOW` blendet
   setLineGlow Richtung Diagramm-Normierung; Tanker-Meshes hängen an der
   IDENTITÄT der enemies-Liste → Replay führt STABILE Puppen
-  (`syncPuppets`) und eine stabile gameLike-Fassade.
+  (`syncPuppets`) und eine stabile gameLike-Fassade. Alle Übergänge
+  SMOOTH: Rein-/Rausschwenk (1.2 s/1.0 s, Falling/Rising-Rezeptur, EINE
+  umkehrbare Uhr) + 0.8-s-Kamera-Blenden (`computeReplayCamera` liefert
+  Posen pur, die Blende lerpt/slerpt inkl. fov/Nebel/Glow; Gleiter
+  blendet per Kamera-ABSTAND aus). QUATERNION-ALIASING-FALLE:
+  `q.slerpQuaternions(a, b, t)` mit q === b zerstört das Ziel (Three.js
+  kopiert erst a nach this) — der Slerp steht still und springt am
+  Blenden-Ende (Blickrichtungs-Cut, nur die Position flog weich, denn
+  lerpVectors liest vor dem Schreiben); Fix: a in place slerpen, dann
+  kopieren. `backend.debugCamera()` = Debug-Haken für Kamera-
+  Stetigkeitsmessungen per CDP.
   ATTRACT-MODE: 30 s Idle im Orbit → Autopilot-Demo (`world/autopilot.js`
   pur: pure-pursuit auf findPath, tippt game.keys — die Demo läuft durch
   die UNVERÄNDERTE Spiel-Logik; `keyForTurn` = Inverse des
