@@ -8,7 +8,7 @@ export const State = {
   FALLING: 'FALLING',           // Schwenk aus der Kartensicht in die Ego-Begehung
   PLAYING: 'PLAYING',           // Spielablauf
   RISING: 'RISING',             // Rueckschwenk aus der Begehung zur Kartensicht
-  MAP: 'MAP',                   // Kartensicht mit abgelaufenem Weg (Q: weiter, X: Ende)
+  MAP: 'MAP',                   // Kartensicht mit abgelaufenem Weg (S: weiter, X: Ende)
   REPLAY: 'REPLAY',             // Wiedergabe des aufgezeichneten Laufs (R auf der Karte)
 };
 
@@ -16,9 +16,9 @@ export const GameEvent = {
   START: 'START',           // Spieler drueckt S im Startscreen (bzw. in der Demo)
   MAZE_READY: 'MAZE_READY', // Labyrinth-Erzeugung fertig -> Reinfallen
   FALL_DONE: 'FALL_DONE',   // Reinfall-Schwenk abgeschlossen -> Spielablauf
-  EXIT: 'EXIT',             // Spiel verlassen (Q im Spiel, X auf der Karte/im Replay)
+  EXIT: 'EXIT',             // eine Ebene raus (X -- im Spiel, auf der Karte, im Replay)
   RISE_DONE: 'RISE_DONE',   // Rueckschwenk abgeschlossen -> Kartensicht
-  RESUME: 'RESUME',         // Q auf der Karte (Ziel noch offen) -> zurueck ins Labyrinth
+  RESUME: 'RESUME',         // S auf der Karte (Ziel noch offen) -> zurueck ins Labyrinth
   REPLAY: 'REPLAY',         // R auf der Karte -> Wiedergabe des Laufs
 };
 

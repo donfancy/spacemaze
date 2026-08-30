@@ -96,13 +96,13 @@ test('Playing: Wand-Auftreffen landet als Flanke in viewState().bump', () => {
 
   // Stur geradeaus laufen: spaetestens an der Labyrinth-Grenze steht eine
   // Wand frontal im Weg (Blick ist beim Start achsparallel).
-  g.keys.add('W');
+  g.keys.add('ArrowUp');
   let view = null;
   for (let t = 0; t < 15 && !view?.bump; t += 1 / 60) {
     g.update(1 / 60);
     view = g.current.viewState();
   }
-  g.keys.delete('W');
+  g.keys.delete('ArrowUp');
 
   const b = view.bump;
   assert.ok(b, 'Wand-Beruehrung wurde aufgezeichnet');
@@ -342,7 +342,7 @@ test('Falling/Rising/Map: viewState traegt Schwenk-Fortschritt und Ziellage', ()
 
   advance(g, 2.0); // -> PLAYING
   assert.equal(g.stateKey, State.PLAYING);
-  g.handleKey('Q'); // Abheben (Level 1: sofort)
+  g.handleKey('X'); // Abheben (Level 1: sofort)
   assert.equal(g.stateKey, State.RISING);
   g.update(0.5);
   const vr = g.current.viewState();

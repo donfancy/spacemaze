@@ -26,13 +26,13 @@ test('steerHintKeys ist die Inverse von gyroTurn (alle vier Stellungen)', () => 
 });
 
 test('playHint: Steuer-Zeile je Modus, Wortlaut der 1980-Version', () => {
-  assert.equal(playHint({}), 'ARROWS MOVE - Q MAP');
+  assert.equal(playHint({}), 'ARROWS MOVE - X MAP');
   assert.equal(playHint({ drive: true }),
-    'LEFT/RIGHT STEER - UP BOOST - DOWN ALIGN - Q MAP');
+    'LEFT/RIGHT STEER - UP BOOST - DOWN ALIGN - X MAP');
   assert.equal(playHint({ drive: true, shoot: true }),
-    'LEFT/RIGHT STEER - UP BOOST - DOWN ALIGN - SPACE FIRE - Q MAP');
+    'LEFT/RIGHT STEER - UP BOOST - DOWN ALIGN - SPACE FIRE - X MAP');
   assert.equal(playHint({ drive: true, shoot: true, orient: 1 }),
-    'DOWN/UP STEER - LEFT BOOST - RIGHT ALIGN - SPACE FIRE - Q MAP');
+    'DOWN/UP STEER - LEFT BOOST - RIGHT ALIGN - SPACE FIRE - X MAP');
 });
 
 test('assistHintKeys ist die Inverse von gyroDirs (alle vier Stellungen)', () => {
@@ -46,14 +46,14 @@ test('assistHintKeys ist die Inverse von gyroDirs (alle vier Stellungen)', () =>
 });
 
 test('mapHint: Q nur solange das Ziel offen ist, nach Game Over Retry', () => {
-  assert.equal(mapHint({}), 'Q RETURN  X EXIT');
-  assert.equal(mapHint({ gameOver: true }), 'Q RETRY  X EXIT');
+  assert.equal(mapHint({}), 'S RETURN  X EXIT');
+  assert.equal(mapHint({ gameOver: true }), 'S RETRY  X EXIT');
   assert.equal(mapHint({ reachedGoal: true }), 'X EXIT');
 });
 
 test('mapHint bietet R an, sobald eine Aufzeichnung abspielbar ist', () => {
-  assert.equal(mapHint({ replay: true }), 'Q RETURN  R REPLAY  X EXIT');
-  assert.equal(mapHint({ gameOver: true, replay: true }), 'Q RETRY  R REPLAY  X EXIT');
+  assert.equal(mapHint({ replay: true }), 'S RETURN  R REPLAY  X EXIT');
+  assert.equal(mapHint({ gameOver: true, replay: true }), 'S RETRY  R REPLAY  X EXIT');
   assert.equal(mapHint({ reachedGoal: true, replay: true }), 'R REPLAY  X EXIT');
 });
 

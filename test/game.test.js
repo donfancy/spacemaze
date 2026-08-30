@@ -190,8 +190,8 @@ test('voller Zyklus Start -> (Andocken) -> MazeGen -> Playing -> Start', () => {
   advance(g, r, 0.1);
   assert.ok(r.calls > 0);
 
-  // Q -> Rueckschwenk (nahtlos) -> Karte.
-  g.handleKey('Q');
+  // X -> Rueckschwenk (nahtlos) -> Karte.
+  g.handleKey('X');
   advance(g, r, 0.1);
   assert.equal(g.stateKey, State.RISING);
   advance(g, r, 2.0);
@@ -292,8 +292,8 @@ test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry',
   assert.equal(g.stateKey, State.MAP);
   assert.equal(g.gameOver, true, 'Karte zeigt GAME OVER');
 
-  // Q auf der Karte: Retry -- frischer Fall zum Start, Feinde neu aufgestellt.
-  g.handleKey('Q');
+  // S auf der Karte: Retry -- frischer Fall zum Start, Feinde neu aufgestellt.
+  g.handleKey('S');
   assert.equal(g.stateKey, State.FALLING);
   assert.equal(g.resume, false, 'Retry ist KEINE Fortsetzung (zurueck auf S)');
   advance(g, r, 2.0);
@@ -346,10 +346,10 @@ test('Level 6 (schmale Waende, Fahrt): faehrt von selbst los, gelenkt wird mit l
   g.keys.delete('ArrowLeft');
   assert.ok(g.playerState.yaw > yawBefore, 'links lenken erhoeht yaw');
 
-  // Q im Fahrt-Modus: erst abbremsen (Zustand bleibt Playing), dann abheben.
-  g.handleKey('Q');
+  // X im Fahrt-Modus: erst abbremsen (Zustand bleibt Playing), dann abheben.
+  g.handleKey('X');
   advance(g, r, 0.1);
-  assert.equal(g.stateKey, State.PLAYING, 'direkt nach Q wird noch gebremst');
+  assert.equal(g.stateKey, State.PLAYING, 'direkt nach X wird noch gebremst');
   advance(g, r, 1.0); // ausrollen (~0.4 s) + kurzer Halt (0.2 s) -> Abheben
   assert.equal(g.stateKey, State.RISING, 'nach dem Ausrollen hebt es ab');
 });
@@ -392,21 +392,21 @@ test('Playing zeichnet den Weg praezise auf (echte Positionen, Endpunkt beim Ver
   assert.equal(g.trail.length, 1); // exakt die Startposition
   const [sx, sz] = g.trail[0];
 
-  g.keys.add('W'); // vorwaerts in den ersten Gang
+  g.keys.add('ArrowUp'); // vorwaerts in den ersten Gang
   advance(g, r, 0.5);
-  g.keys.delete('W');
+  g.keys.delete('ArrowUp');
 
   assert.ok(g.trail.length >= 2, 'Bewegung erzeugt Wegpunkte');
   const end = g.trail[g.trail.length - 1];
   assert.ok(Math.hypot(end[0] - sx, end[1] - sz) > 0, 'Weg entfernt sich vom Start');
 
-  // Q -> exit() haelt die letzte Position exakt fest (= Spielerlage fuer den Rueckschwenk).
-  g.handleKey('Q');
+  // X -> exit() haelt die letzte Position exakt fest (= Spielerlage fuer den Rueckschwenk).
+  g.handleKey('X');
   const last = g.trail[g.trail.length - 1];
   assert.ok(Math.hypot(last[0] - g.playerState.px, last[1] - g.playerState.pz) < 1e-9);
 });
 
-test('Q auf der Karte setzt das Spiel an der Spielerlage fort (Weg bleibt)', () => {
+test('S auf der Karte setzt das Spiel an der Spielerlage fort (Weg bleibt)', () => {
   const g = new Game();
   const r = fakeRenderer();
   g.dispatch(GameEvent.START);
@@ -414,17 +414,17 @@ test('Q auf der Karte setzt das Spiel an der Spielerlage fort (Weg bleibt)', () 
   assert.equal(g.stateKey, State.PLAYING);
   const mazeBefore = g.maze;
 
-  g.keys.add('W'); // ein Stueck laufen
+  g.keys.add('ArrowUp'); // ein Stueck laufen
   advance(g, r, 0.4);
-  g.keys.delete('W');
+  g.keys.delete('ArrowUp');
   const ps = { ...g.playerState };
   const trailLen = g.trail.length;
 
-  g.handleKey('Q'); // -> Rueckschwenk -> Karte
+  g.handleKey('X'); // -> Rueckschwenk -> Karte
   advance(g, r, 2.0);
   assert.equal(g.stateKey, State.MAP);
 
-  g.handleKey('Q'); // Ziel noch offen -> nahtlos zurueckfallen
+  g.handleKey('S'); // Ziel noch offen -> nahtlos zurueckfallen
   advance(g, r, 0.05);
   assert.equal(g.stateKey, State.FALLING);
   advance(g, r, 2.0);
@@ -438,7 +438,7 @@ test('Q auf der Karte setzt das Spiel an der Spielerlage fort (Weg bleibt)', () 
   assert.ok(!g.resume, 'resume-Flag wurde verbraucht');
 });
 
-test('am Ziel bietet die Karte kein Weiterspielen an: Q bleibt, X beendet', () => {
+test('am Ziel bietet die Karte kein Weiterspielen an: S tut nichts, X beendet', () => {
   const g = new Game();
   const r = fakeRenderer();
   g.dispatch(GameEvent.START);
@@ -448,9 +448,9 @@ test('am Ziel bietet die Karte kein Weiterspielen an: Q bleibt, X beendet', () =
   assert.equal(g.stateKey, State.MAP);
 
   g.reachedGoal = true; // Ziel erreicht (Abkuerzung statt Labyrinth-Navigation)
-  g.handleKey('Q');
+  g.handleKey('S');
   advance(g, r, 0.1);
-  assert.equal(g.stateKey, State.MAP, 'Q tut am Ziel nichts');
+  assert.equal(g.stateKey, State.MAP, 'S tut am Ziel nichts');
 
   g.handleKey('X');
   advance(g, r, 1.2); // Ausblenden (~0,9s) + nahtloser Wechsel
@@ -469,7 +469,7 @@ test('X auf der Karte: Ausblenden, Abdock-Flug, dann reagiert der Startscreen wi
   g.handleKey('X'); // Karte blendet aus (~0,9s), Eingaben sind dabei gesperrt
   advance(g, r, 0.5);
   assert.equal(g.stateKey, State.MAP);
-  g.handleKey('Q'); // wird waehrend des Ausblendens ignoriert
+  g.handleKey('S'); // wird waehrend des Ausblendens ignoriert
   advance(g, r, 0.05);
   assert.equal(g.stateKey, State.MAP);
 

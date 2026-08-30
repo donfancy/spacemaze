@@ -11,21 +11,22 @@ import { TANKER_RED, mixColors } from '../render/colors.js';
 // Die Lenk-Tasten folgen der Blick-Verdrehung (Pulsar-Rotation, orient) --
 // auch Boost/Ausrichten (Fahrt-Modus) rotieren mit dem Tastenkreuz.
 export function playHint({ drive, shoot, orient } = {}) {
-  if (!drive && !shoot) return 'ARROWS MOVE - Q MAP';
+  if (!drive && !shoot) return 'ARROWS MOVE - X MAP';
   const { boost, align } = assistHintKeys(orient);
   const assist = boost + ' BOOST - ' + align + ' ALIGN - ';
   return steerHintKeys(orient) + ' STEER - ' + assist
-    + (shoot ? 'SPACE FIRE - ' : '') + 'Q MAP';
+    + (shoot ? 'SPACE FIRE - ' : '') + 'X MAP';
 }
 
-// Hinweis-Zeile der Karte: Q nur solange das Ziel offen ist; nach Game
-// Over wird Q zum Retry. `replay` (es gibt eine abspielbare Aufzeichnung)
-// bietet R an -- der Aufrufer reicht dafuer hasRecording(game.recording).
+// Hinweis-Zeile der Karte: S nur solange das Ziel offen ist; nach Game
+// Over wird S zum Retry (S = "starten", die Stringenz-Regel). `replay`
+// (es gibt eine abspielbare Aufzeichnung) bietet R an -- der Aufrufer
+// reicht dafuer hasRecording(game.recording).
 export function mapHint({ reachedGoal, gameOver, replay } = {}) {
   const r = replay ? 'R REPLAY  ' : '';
   return reachedGoal ? r + 'X EXIT'
-    : gameOver ? 'Q RETRY  ' + r + 'X EXIT'
-      : 'Q RETURN  ' + r + 'X EXIT';
+    : gameOver ? 'S RETRY  ' + r + 'X EXIT'
+      : 'S RETURN  ' + r + 'X EXIT';
 }
 
 // Steuer-Zeile der Wiedergabe. `cams` nur in der 2026-Engine (die

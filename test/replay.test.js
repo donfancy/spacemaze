@@ -37,16 +37,16 @@ function advance(game, renderer, seconds, dt = 1 / 60) {
 }
 
 // Bis zur Karte spielen: Start -> MazeGen -> Falling -> Playing (ein Stueck
-// laufen) -> Q -> Rising -> Map. Liefert das Game.
+// laufen) -> X -> Rising -> Map. Liefert das Game.
 function playToMap(r, walkSeconds = 0.8) {
   const g = new Game();
   g.dispatch(GameEvent.START);
   advance(g, r, 0.8 + 4.5 + 2.0); // -> Playing
   assert.equal(g.stateKey, State.PLAYING);
-  g.keys.add('W');
+  g.keys.add('ArrowUp');
   advance(g, r, walkSeconds);
-  g.keys.delete('W');
-  g.handleKey('Q');
+  g.keys.delete('ArrowUp');
+  g.handleKey('X');
   advance(g, r, 2.0); // Rueckschwenk -> Karte
   assert.equal(g.stateKey, State.MAP);
   return g;
@@ -142,19 +142,19 @@ test('Resume haengt an dieselbe Aufnahme an, Retry beginnt eine neue', () => {
   const dur1 = recordingDuration(g.recording);
   const rec1 = g.recording;
 
-  // Q (Ziel offen) -> Fortsetzung: gleiche Aufnahme, Dauer waechst.
-  g.handleKey('Q');
+  // S (Ziel offen) -> Fortsetzung: gleiche Aufnahme, Dauer waechst.
+  g.handleKey('S');
   advance(g, r, 2.0); // Reinfallen -> Playing
   assert.equal(g.stateKey, State.PLAYING);
   assert.equal(g.recording, rec1, 'Fortsetzung schreibt dieselbe Aufnahme weiter');
-  g.keys.add('W');
+  g.keys.add('ArrowUp');
   advance(g, r, 0.5);
-  g.keys.delete('W');
+  g.keys.delete('ArrowUp');
   assert.ok(recordingDuration(g.recording) > dur1 + 0.3, 'Dauer waechst nahtlos');
 
   // Game Over erzwingen waere hier umstaendlich -- der frische Anlauf
   // (kein resume) reicht: zurueck zur Karte, Startscreen, neues Spiel.
-  g.handleKey('Q');
+  g.handleKey('X');
   advance(g, r, 2.0);
   g.handleKey('X');
   advance(g, r, 1.2);

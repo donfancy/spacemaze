@@ -23,7 +23,7 @@ export const DRIVE = {
                    // in ~0.3 s statt sofort maximal zu sein (und ebenso zurueck)
   accel: 2.0,      // Beschleunigungs-Rampe (Gangbreiten/s^2): Anfahren nach dem
                    // Reinfallen und Erholung nach dem Abprall
-  brake: 4.0,      // Brems-Rampe (Gangbreiten/s^2): Q -> kurz abbremsen
+  brake: 4.0,      // Brems-Rampe (Gangbreiten/s^2): X -> kurz abbremsen
   bounce: 0.6,     // Abfeder-Staerke: Netto-Tempo weg von der Wand direkt nach
                    // dem Treffer, Anteil der REISEgeschwindigkeit
   pushDecay: 3.0,  // Abklingrate des Feder-Impulses (Gangbreiten/s^2)
@@ -47,7 +47,7 @@ export function rampToward(value, target, rate, dt) {
 // Ein Simulationsschritt. pose = {px,pz,yaw}, turn in [-1,1] (links positiv,
 // gleiche Konvention wie die Tank-Steuerung). opts = { unit, cell, radius,
 // targetSpeed? } -- targetSpeed (Gangbreiten/s, Standard cruise) erlaubt das
-// Abbremsen vor dem Abheben (Q): 0 uebergeben, bis vel 0 erreicht.
+// Abbremsen vor dem Abheben (X): 0 uebergeben, bis vel 0 erreicht.
 // Liefert { px, pz, yaw, collision }; collision ist null oder
 // { axis:'x'|'z', side:+1|-1, plane, wallCell:[gx,gy], point:[lx,lz], impact }
 // mit plane = Welt-Koordinate der getroffenen Wandebene und impact in 0..1

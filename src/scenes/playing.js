@@ -5,12 +5,12 @@
 //     Wandkontakt federt zurueck, loest Kollisionswellen auf der Wand und
 //     mechanische Kamera-Schwingungen aus, Kurven neigen die Kamera.
 // Zeichnet den abgelaufenen Weg auf (game.trail) und merkt die Spielerlage
-// (game.playerState) fuer den Rueckschwenk. Q -> zurueck zur Karte; am Ziel
+// (game.playerState) fuer den Rueckschwenk. X -> zurueck zur Karte; am Ziel
 // loest der Rueckschwenk nach 20 s automatisch aus.
 // Ab Level 11 (Level-Eigenschaften `enemies`/`shoot`): rote Rauten-Feinde
 // (world/enemies.js), Schiessen mit Space (world/shots.js, Tempest-Regel,
 // Fadenkreuz mit Lenk-Ausschlag); Feindberuehrung = krachende Explosion und
-// Game Over -> Karte (Q dort: Level-Neustart).
+// Game Over -> Karte (S dort: Level-Neustart).
 // Ab Level 16 (`spinners`): gruene Spiral-Spinner an den End-Waenden langer
 // Gaenge (world/spinners.js) -- ihr Spike ist eine Einbahn-Sperre: frontal
 // sperrt die Spitze den Gang und will per Dauerfeuer gekuerzt werden
@@ -85,7 +85,7 @@ export const BANK_MAX = 0.2;  // rad: maximale Kurvenneigung
 const BANK_TAU = 0.22;        // s: Ein-/Ausschwenkzeit der Neigung
 const SHAKE_ROLL = 1.6;       // rad/s Roll-Impuls bei vollem Aufprall
 const SHAKE_PITCH = 0.8;      // rad/s Nick-Impuls bei vollem Aufprall
-const BRAKE_HOLD = 0.2;       // s Stillstand nach dem Bremsen (Q), bevor es abhebt
+const BRAKE_HOLD = 0.2;       // s Stillstand nach dem Bremsen (X), bevor es abhebt
 
 // Kampf-Levels (ab Level 11): Feinde, Schiessen, Game Over.
 const SHOT_COLOR = '#ffffff';    // Splitter-Weiss (Verpuffen, Crash-Beiklang)
@@ -119,7 +119,7 @@ export function createPlaying(game) {
   let bank = 0;      // aktuelle Kurvenneigung (rad)
   let waves = [];    // aktive Kollisionswellen {wave, born, strength}
   let sceneT = 0;    // Szenenzeit fuer die Wellen-Alter
-  let braking = false;  // Q gedrueckt: erst abbremsen, dann abheben
+  let braking = false;  // X gedrueckt: erst abbremsen, dann abheben
   let brakeHold = 0;    // s Stillstand vor dem Abheben (kurzer Beat)
   let bump = null;      // letzte Wand-Beruehrung (Flanke aus walk.js) -- fuer
                         // das 2026-Bump-Feedback (viewState), 1980 nutzt Sound
@@ -174,7 +174,7 @@ export function createPlaying(game) {
     crash = true;
     crashT = 0;
     crashPos = { x: at.x, z: at.z };
-    game.gameOver = true; // Karte zeigt GAME OVER, Q startet den Level neu
+    game.gameOver = true; // Karte zeigt GAME OVER, S startet den Level neu
     if (opts.kill) opts.kill.alive = false;
     game.audio?.engine(null);
     game.audio?.play(crashPatch());
@@ -266,7 +266,7 @@ export function createPlaying(game) {
     }
     const res = driveStep(maze, driveState, { px, pz, yaw }, turn, dt, {
       unit, cell, radius: RADIUS_RATIO * cell,
-      targetSpeed: braking || reached ? 0 // Q: erst ausrollen ...
+      targetSpeed: braking || reached ? 0 // X: erst ausrollen ...
         : boost ? DRIVE.boost * DRIVE.cruise : undefined,
     });
     px = res.px;
@@ -447,10 +447,10 @@ export function createPlaying(game) {
         ? autopilotStep(ap, { px, pz, yaw }, { drive, shoot, orient: gyro.orient }).keys
         : game.keys;
       const dirs = {
-        left: keys.has('ArrowLeft') || keys.has('A'),
-        right: keys.has('ArrowRight') || keys.has('D'),
-        up: keys.has('ArrowUp') || keys.has('W'),
-        down: keys.has('ArrowDown') || keys.has('S'),
+        left: keys.has('ArrowLeft'),
+        right: keys.has('ArrowRight'),
+        up: keys.has('ArrowUp'),
+        down: keys.has('ArrowDown'),
       };
       // Tasten-Eingabe: im Fahrt-Modus rotiert das GANZE Kreuz "logisch"
       // unter der aktuellen Blick-Verdrehung (gyroDirs -- ohne Pulsar-
@@ -780,7 +780,7 @@ export function createPlaying(game) {
     },
 
     onKey(key) {
-      if (key !== 'Q' || crash) return; // waehrend der Explosion kein Abheben mehr
+      if (key !== 'X' || crash) return; // waehrend der Explosion kein Abheben mehr
       if (drive && !reached) {
         braking = true; // Fahrt-Modus: erst abbremsen, updateDrive hebt dann ab
       } else {

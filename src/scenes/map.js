@@ -1,6 +1,6 @@
 // Zustand "Karte": nach dem Rueckschwenk steht die Kartensicht still und zeigt das
 // flache Labyrinth mit S/G und dem abgelaufenen Weg. Solange das Ziel offen ist,
-// faellt man mit Q zurueck ins Labyrinth und spielt weiter; X beendet zum
+// faellt man mit S zurueck ins Labyrinth und spielt weiter; X beendet zum
 // Startscreen (nach 5 Minuten automatisch): Karteninhalt blendet aus, nur der
 // Rahmen (= die Wuerfelflaeche) bleibt, dann uebernimmt der Startscreen nahtlos
 // mit dem rueckwaertigen Andock-Flug (game.undock).
@@ -124,7 +124,7 @@ export function createMap(game) {
 
     onKey(key) {
       if (exiting) return; // waehrend des Ausblendens keine Eingaben mehr
-      if (key === 'Q' && !game.reachedGoal) {
+      if (key === 'S' && !game.reachedGoal) {
         // Weiterspielen: nahtlos zurueck ins Labyrinth fallen -- zur gemerkten
         // Spielerlage; nach Game Over dagegen frischer Versuch vom Start
         // (gleiche Maze, Weg und Feinde werden in Playing neu aufgesetzt).

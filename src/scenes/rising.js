@@ -1,5 +1,5 @@
 // Zustand "Rueckschwenk": das Reinfallen rueckwaerts. Aus der Ego-Lage (wo der
-// Spieler Q drueckte bzw. das Ziel erreichte) schwenkt die Kamera harmonisch
+// Spieler X drueckte bzw. das Ziel erreichte) schwenkt die Kamera harmonisch
 // zurueck in die Kartensicht; die Waende schrumpfen dabei wieder flach, Rahmen,
 // S/G und der abgelaufene Weg blenden ein. Danach -> Kartenzustand.
 // Nach einem Game Over (Feindberuehrung) geht derselbe Schwenk deutlich

@@ -10,7 +10,7 @@
 // keine Determinismus-Fallen.
 //
 // Die Zeitachse ist die kumulierte BEGEHUNGS-Zeit des Laufs: mehrteilige
-// Laeufe (Q -> Karte -> Q zurueck) haengen nahtlos aneinander, die
+// Laeufe (X -> Karte -> S zurueck) haengen nahtlos aneinander, die
 // Karten-Besuche fehlen (Boris' Wunsch: der ganze Lauf am Stueck).
 
 export const RECORDER = {

@@ -1,7 +1,7 @@
 // Zustand "Replay": Wiedergabe des aufgezeichneten Laufs (R auf der Karte).
 // Die Zeit ist hier nur ein ZEIGER in die Aufnahme (core/recorder.js):
 // Space pausiert, links/rechts schalten das Tempo durch (1/2/4/8x, auch
-// rueckwaerts), R/X/Q zurueck zur Karte. Sounds und Effekte kommen aus der
+// rueckwaerts), X zurueck zur Karte. Sounds und Effekte kommen aus der
 // Event-Spur; der Motor-Klang folgt den aufgezeichneten Kanaelen -- beides
 // nur bei normalem Vorwaertslauf (1x), Spulen ist stumm.
 //
@@ -380,7 +380,7 @@ export function createReplay(game) {
         camPrev = REPLAY_CAMS[game.replayCam % REPLAY_CAMS.length];
         camT = 0;
         game.replayCam = (game.replayCam + 1) % REPLAY_CAMS.length;
-      } else if (key === 'R' || key === 'X' || key === 'Q') {
+      } else if (key === 'X') {
         exiting = true; // weicher Rausschwenk, dispatch kommt aus update()
         game.audio?.play(risePatch(EXIT_DUR * trans));
       }
