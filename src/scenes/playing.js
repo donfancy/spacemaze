@@ -40,11 +40,13 @@ import { DRIVE, createDriveState, driveStep } from '../world/drive.js';
 import { WALK, createWalkState, walkStep } from '../world/walk.js';
 import { ENEMY, enemiesStep, enemyHit } from '../world/enemies.js';
 import {
-  SPINNER, spinnersStep, spinnerShotHit, spinnerPlayerHit,
+  SPINNER, spinnersStep, spinnerShotHit, spinnerPlayerHit, spinnerTip,
   spinnerFire, spinnerShotsStep, spinnerShotPlayerHit, spinnerShotIntercept,
+  spinnerShotPos,
 } from '../world/spinners.js';
 import {
   FLIPPER, flippersStep, flipperPlayerHit, flipperShotHit, spawnFlipperPair,
+  flipperPos,
 } from '../world/flippers.js';
 import { pulsarsStep, pulsarPlayerTouch } from '../world/pulsars.js';
 import { createGyro, startSpin, gyroStep, gyroDirs, shortestRoll } from '../world/gyro.js';
@@ -443,8 +445,21 @@ export function createPlaying(game) {
       }
 
       // Attract-Mode: die Tasten kommen vom Autopiloten, nicht vom Spieler.
+      // Er bekommt die sichtbaren Ziele mit (Tanker, Spinner-SPITZEN --
+      // die Spitze ist das Gefaehrliche und Beschossene --, Flipper,
+      // sirrende Spinner-Schuesse) und feuert nur bei Feind in Sicht.
+      // Pulsare sind KEIN Ziel: unzerstoerbar, und ihre Blick-Rotation
+      // ist Teil der Demo-Show.
       const keys = game.demo && ap
-        ? autopilotStep(ap, { px, pz, yaw }, { drive, shoot, orient: gyro.orient }).keys
+        ? autopilotStep(ap, { px, pz, yaw }, {
+          drive, shoot, orient: gyro.orient,
+          foes: shoot ? [
+            ...enemies.filter((e) => e.alive).map((e) => [e.x, e.z]),
+            ...spinners.filter((s) => s.alive).map(spinnerTip),
+            ...flippers.filter((f) => f.alive).map(flipperPos),
+            ...foeShots.map(spinnerShotPos),
+          ] : null,
+        }).keys
         : game.keys;
       const dirs = {
         left: keys.has('ArrowLeft'),

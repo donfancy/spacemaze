@@ -193,9 +193,17 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Stetigkeitsmessungen per CDP.
   ATTRACT-MODE: 30 s Idle im Orbit → Autopilot-Demo (`world/autopilot.js`
   pur: pure-pursuit auf findPath, tippt game.keys — die Demo läuft durch
-  die UNVERÄNDERTE Spiel-Logik; `keyForTurn` = Inverse des
-  gyroTurn-Mappings; Kampf: Dauerfeuer, Demo-Tod ist arcade-ok;
-  Durchkommens-Tests Tank + Fahrt). Rotation 3/7/12/17/22/27, immer OHNE
+  die UNVERÄNDERTE Spiel-Logik; `keyForTurn`/`keyForRole` = Inverse des
+  gyroTurn-/gyroDirs-Mappings; PROFI-FAHRSTIL 30.8.2026: im Fahrt-Modus
+  lenkt der Autopilot nur echte Kurven selbst (driveSteer 0.35 rad),
+  sonst hält der Ausricht-Assistent (logisch ↓) die Spur — kein
+  Schlingerkurs; gefeuert wird NUR bei Feind in Sicht (`foeInSight`:
+  fireDist 7 Gangbreiten + Blickkegel 0.5 rad; playing.js reicht Tanker,
+  Spinner-SPITZEN, Flipper + sirrende Schüsse als `mode.foes` — Pulsare
+  NICHT: unzerstörbar, ihre Rotation ist Teil der Show); auf freier
+  Geraden ≥ boostRun 3 Gangbreiten ohne Feind BOOSTET er (logisch ↑,
+  Brems-Rampe schafft den Abbau vor Kurve/Duell); Demo-Tod ist
+  arcade-ok; Durchkommens-Tests Tank + Fahrt). Rotation 3/7/12/17/22/27, immer OHNE
   Ton (`audio.setSuppressed`, unabhängig von M) und ohne Controls: ←/→
   ändern nur die AUSWAHL (`displayLevel` in hud.js), ↑/↓ Engine live, Rest
   geschluckt (game.demoKey; main.js hält User-Tasten aus game.keys).
@@ -254,8 +262,9 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   rotiert das GANZE Tastenkreuz (`gyroDirs` in gyro.js, gleiche
   Herleitung wie LEFT_KEY — bei 90° lenken ↓/↑ und ←/→ sind
   Boost/Ausrichten); Steuer-Zeile zeigt alles an (`assistHintKeys`,
-  playHint). Der Autopilot drückt im Fahrt-Modus nur Lenk-Tasten — Demos
-  boosten nicht. `world/waves.js`: Kollisionswellen starten als weißes Blitz-Kreuz am
+  playHint). Der Autopilot nutzt beide wie ein Profi: Ausrichten statt
+  Zickzack-Lenken, Boost auf freier Geraden (s. ATTRACT-MODE).
+  `world/waves.js`: Kollisionswellen starten als weißes Blitz-Kreuz am
   Sichtlinien-Auftreffpunkt, Arme wachsen mit, an die zusammenhängende Kontur-
   Fläche geklippt. FALLE (10.7.2026 gefixt): `collisionInfo` braucht die Lage
   ZUM ZEITPUNKT der Blockade (x wird vor z bewegt — blockiert x, zieht z im
