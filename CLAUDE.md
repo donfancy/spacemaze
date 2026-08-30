@@ -13,13 +13,51 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Inkrementell: einfach anfangen, dann komplexere Levels, durch Tests abgesichert.
 
 ## Konventionen
+- TASTEN-STRINGENZ (30.8.2026, Boris): S = IMMER Starten/Weiterspielen
+  (Startscreen, Demo, Karte: Resume/Retry), X = IMMER Exit/eine Ebene raus
+  (Begehung → Karte, Karte → Orbit, Replay → Karte), R = Replay (nur Karte),
+  I = Info-Seite "HOW TO PLAY" (Startscreen; X schliesst auch sie).
+  Q und die WASD-Aliase sind KOMPLETT entfernt.
+- INFO-SEITE (30.8.2026): Inhalt als reine Daten `INFO_TITLE`/`INFO_LINES`
+  in core/hud.js (EINE Quelle beider Engines); Startscreen zeichnet sie im
+  Orbit ueber dem gedimmten Wuerfel (1980) bzw. als DOM-Panel (2026,
+  `infoEl` in backend.js), "PRESS S" blinkt weiter, "I INFO" als dezenter
+  Hinweis unten. Manuell geoeffnet haelt sie die Attract-Uhr an; der
+  Attract-Mode zeigt sie automatisch in der Orbit-Pause zwischen den Demos
+  (viewState().info, in der Demo geschluckte Tasten unveraendert).
+- TITEL-DISPLAY "SPACE MAZE" (30.8.2026, Tempest-Hommage): `world/title.js`
+  (pur, testbar): Phasen-Uhr TITLE {assemble 3s, hold 3.4s, finale 1.6s},
+  5x7-Voxel-Schrift `titleCells` mit HALBER Wort-Luecke (Boris' Spec),
+  Farb-Zyklus ueber FIREWORK_COLORS, Finale weiss. Laeuft STUMM beim
+  allerersten Laden (bootPlayed) und in jeder Attract-Pause: RUHIGE
+  Nur-Wuerfel-Zeit (ORBIT_CALM 7s, nur zwischen den Demos -- die erste
+  Sequenz nach DEMO_IDLE beginnt direkt mit dem Titel, die Ruhe war die
+  Idle-Zeit) -> TITEL (8s) -> HOW TO PLAY (ATTRACT_INFO 6s) -> Demo
+  (attractWait ueberbrueckt die erste Runde vor game.beginDemo; jede
+  Taste raeumt Titel + Wartesequenz weg). 1980: Zoom aus der Tiefe (titleZoom) +
+  2 Echo-Konturen in Nachbarfarben (titleColor(t, ring)), Wuerfel dimmt
+  (drawCube-dim), Blitz via renderer.flash. 2026: InstancedMesh-Voxel
+  fliegen von der Wuerfel-Oberflaeche (voxelOrigin) in eine
+  KAMERA-VERANKERTE Schrift-Ebene (TITLE_DIST 2.0 -- MUSS am inneren
+  Orbit-Radius vor dem Wuerfel liegen, Winkelgroesse ist distanz-invariant
+  weil die Voxel-Groesse aus dem Sichtfeld kommt), zerbersten im Finale
+  (voxelBurst) + DOM-Blitz; Wuerfel-Kanten dimmen auf 0.3. Voxel-LOOK
+  (Boris' Tuning 30.8.): Flaechen tragen den Farbzyklus LUMINANZ-NORMIERT
+  unter der Bloom-Schwelle (TITLE_BODY_LUM 0.4 -- roher HDR-Zyklus liess
+  den Schriftzug "pumpen"), dazu WEISSE Glut-Kanten (dyn. LineSegments,
+  12 Kanten/Voxel, 0.42 > 0.41 gegen Z-Fighting); NUR das Finale geht
+  als weisser Overflow in den Bloom. Jeder Voxel poppt erst beim EIGENEN
+  Abheben auf (voxelSize 0 bis zum Start -- sonst steht der Schriftzug
+  vorab als Mini-Voxel-Teppich auf der Wuerfel-Oberflaeche). Sichtpruefung:
+  Scratchpad-Skript cdp-title.mjs (CDP-Muster, Viewport-FALLE:
+  Emulation.setDeviceMetricsOverride erst NACH der ersten Navigation).
 - ES-Module, kein Build-Tool beim Entwickeln. Code-Kommentare auf Deutsch
   (ASCII, Umlaute umschreiben: ae/oe/ue). Antworten an Boris auf Deutsch, duzen.
 - Tests mit `node:test` (zero dependencies).
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 432 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 448 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -129,7 +167,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Pause und Vor-/RÜCKspulen sind reine Zeiger-Bewegung, kein Re-Simulieren
   (Ringpuffer ~10 min). Resume schreibt dieselbe Aufnahme nahtlos weiter
   (ganzer Lauf am Stück), frischer Anlauf/Retry beginnt neu. R auf der
-  Karte → State REPLAY: Space Pause, ←/→ Tempo-Leiter ±1/2/4/8x, R/X/Q
+  Karte → State REPLAY: Space Pause, ←/→ Tempo-Leiter ±1/2/4/8x, X
   zurück; Sounds/Motor nur bei 1x vorwärts (aus der Event-Spur). Die
   1980-Wiedergabe nutzt EXAKT den Welt-Zeichner der Live-Begehung:
   `scenes/egoWorld.js` (aus playing.render gehoben — Beginn der
@@ -169,8 +207,8 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   (neue Übergänge MAP/MAZE_GEN --START--> MAZE_GEN).
 - **Der komplette Zyklus läuft**: Startscreen (Level-Auswahl per Pfeiltasten) →
   andocken → Labyrinth wächst → Reinfallen → Ego-Begehung (Tank-Steuerung,
-  Hidden Lines) → Q/20s → Rückschwenk → Karte mit Weg. Auf der Karte: solange
-  das Ziel offen ist, fällt Q zurück an die Spielerlage (Weg bleibt, `RESUME`/
+  Hidden Lines) → X/20s → Rückschwenk → Karte mit Weg. Auf der Karte: solange
+  das Ziel offen ist, fällt S zurück an die Spielerlage (Weg bleibt, `RESUME`/
   `game.resume`); X (oder 5 min) → Karte blendet aus (Rahmen bleibt), dann
   Abdock-Flug zurück in den Orbit (`game.undock`, Startscreen-Phase `undocking`,
   `orbitTimeFacing`) — symmetrisch zum Andocken.
@@ -197,7 +235,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Reisegeschwindigkeit (`bounce` — NICHT proportional zur Wucht, sonst
   „zittert" man an der Wand). Alle Übergänge als RAMPEN (linear ratenbegrenzt,
   `rampToward`): Lenkrate fährt von 0 hoch (`steerRamp`), Tempo mit konstanter
-  Beschleunigung (`accel` — gilt auch fürs Losfahren nach dem Reinfallen), Q
+  Beschleunigung (`accel` — gilt auch fürs Losfahren nach dem Reinfallen), X
   bremst erst (`brake` + kurzer Halt `BRAKE_HOLD`, abgehoben wird erst, wenn
   auch der Feder-Impuls abgeklungen ist), dann Abheben. Am ZIEL steht der
   Wagen sofort (vel/push hart 0), aber `driveStep` läuft weiter: die Lenkung
@@ -272,7 +310,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   den Linien „durchgestrichen", sagt Boris); S/G-Marker skalieren mit der
   projizierten Gangbreite (`drawFaceMarker`, sonst passen sie bei n=35
   nicht ins Raster);
-  Q dort = Retry (gleiche Maze, `game.resume` bleibt false → frischer Fall zum
+  S dort = Retry (gleiche Maze, `game.resume` bleibt false → frischer Fall zum
   Start, Feinde neu). SHOOTING (`world/shots.js`): Space-Dauerfeuer, Tempest-
   Regel max 8 unterwegs, Projektile = weiße rotierende Sterne (Billboard),
   verpuffen an Wänden (Substeps gegen Tunneln durch 1-Einheit-Wände!),

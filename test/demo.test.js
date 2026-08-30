@@ -38,11 +38,13 @@ function advance(game, renderer, seconds, dt = 1 / 60) {
   }
 }
 
-// Bis in die Demo-Ego-Ansicht laufen lassen (Idle 30s -> Andocken ->
-// MazeGen -> Reinfallen -> Playing).
+// Bis in die Demo-Ego-Ansicht laufen lassen (Idle 30s -> Attract-Sequenz
+// TITEL 8s + HOW TO PLAY 6s -> Andocken -> MazeGen -> Reinfallen -> Playing).
+// Schrittweise bis zum jeweiligen Meilenstein, nicht auf feste Sekunden --
+// die Idle-Uhr kann aus dem Test schon vorgelaufen sein.
 function idleIntoDemo(g, r) {
-  advance(g, r, 31); // Idle-Schwelle + Andock-Beginn
-  assert.equal(g.demo, true, 'nach 30s Idle laeuft die Demo');
+  for (let t = 0; t < 50 && !g.demo; t += 0.5) advance(g, r, 0.5);
+  assert.equal(g.demo, true, 'nach Idle + Attract-Sequenz laeuft die Demo');
   for (let t = 0; t < 40 && g.stateKey !== State.PLAYING; t += 0.5) advance(g, r, 0.5);
   assert.equal(g.stateKey, State.PLAYING, 'die Demo erreicht die Ego-Ansicht');
 }
@@ -83,9 +85,9 @@ test('Pfeiltasten in der Demo aendern nur die Auswahl, Q/X tun nichts', () => {
   assert.equal(g.level, demoLevel, 'das Demo-Level bleibt unberuehrt');
   assert.equal(displayLevel(g), 3);
 
-  g.handleKey('Q'); // keine Controls in der Demo
+  g.handleKey('X'); // keine Controls in der Demo
   advance(g, r, 0.1);
-  assert.equal(g.stateKey, State.PLAYING, 'Q wird in der Demo geschluckt');
+  assert.equal(g.stateKey, State.PLAYING, 'X wird in der Demo geschluckt');
 });
 
 test('S in der Demo: Karte heilt zu, dann Fraesen des GEWAEHLTEN Levels', () => {
@@ -122,8 +124,9 @@ test('der Demo-Zyklus laeuft weiter: Karte -> Orbit -> naechste Demo', () => {
   assert.equal(g.stateKey, State.STARTSCREEN);
   assert.equal(g.demo, true, 'der Zyklus haelt die Demo am Leben');
 
-  // Abdock-Flug (~1.6s) + kurze Schleifen-Pause (7s) -> naechste Demo.
-  for (let t = 0; t < 15 && g.stateKey !== State.MAZE_GEN; t += 0.5) advance(g, r, 0.5);
+  // Abdock-Flug (~1.6s) + Attract-Pause (Ruhe 7s + Titel 8s + Info 6s)
+  // -> naechste Demo.
+  for (let t = 0; t < 28 && g.stateKey !== State.MAZE_GEN; t += 0.5) advance(g, r, 0.5);
   assert.equal(g.stateKey, State.MAZE_GEN, 'die naechste Demo beginnt von selbst');
   assert.notEqual(g.level, firstDemoLevel, 'die Rotation nimmt das naechste Demo-Level');
 });

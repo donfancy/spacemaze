@@ -31,11 +31,18 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { State } from '../core/states.js';
 import {
   playHint, mapHint, replayHint, replayStatus, gameOverColor, blinkOn, displayLevel,
+  INFO_TITLE, INFO_LINES,
 } from '../core/hud.js';
 import { hasRecording } from '../core/recorder.js';
+import {
+  TITLE, titleCells, voxelOrigin, voxelProgress, voxelBurst, voxelSize,
+  titleColor, titleFlash,
+} from '../world/title.js';
 import { levelColor, levelConfig, enemyColor, spinnerColor } from '../core/levels.js';
-import { PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA, diagramBoost } from '../render/colors.js';
-import { EYE_RATIO, cellSize } from '../scenes/mazeView.js';
+import {
+  PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA, diagramBoost, linearLuminance,
+} from '../render/colors.js';
+import { EYE_RATIO, cellSize, CUBE_SIZE } from '../scenes/mazeView.js';
 import { burstSegments, burstShards, burstGlow } from '../world/burst.js';
 import { ENEMY } from '../world/enemies.js';
 import { SHOTS, aimYaw, shotSegments } from '../world/shots.js';
@@ -275,6 +282,22 @@ export function createBackend2026(container = document.body) {
     'font-size:min(5vh,42px);letter-spacing:.18em;');
   const headline = overlay('left:0;right:0;top:12vh;text-align:center;' +
     'font-size:min(7vh,52px);letter-spacing:.18em;');
+  // Info-Seite "HOW TO PLAY" (I im Startscreen, Attract-Pause): Inhalt aus
+  // core/hud.js (INFO_TITLE/INFO_LINES), einmal statisch aufgebaut.
+  const infoEl = overlay('left:50%;top:50%;transform:translate(-50%,-52%);' +
+    'font-size:min(2.4vh,18px);letter-spacing:.14em;line-height:2;' +
+    'background:rgba(0,10,4,.55);padding:2.5vh 4vw;border:1px solid rgba(80,255,140,.3);');
+  infoEl.innerHTML =
+    `<div style="text-align:center;font-size:1.5em;margin-bottom:.7em">${INFO_TITLE}</div>` +
+    '<table style="border-spacing:1.6em .1em">' +
+    INFO_LINES.map(([key, text]) =>
+      `<tr><td style="text-align:right">${key}</td>` +
+      `<td style="opacity:${key ? 1 : 0.6}">${text}</td></tr>`).join('') +
+    '</table>';
+  infoEl.style.display = 'none';
+  // Dezenter Hinweis auf die Info-Seite, ganz unten (wie 1980).
+  const infoHint = overlay('left:0;right:0;bottom:2.5vh;text-align:center;' +
+    'font-size:min(1.8vh,14px);letter-spacing:.18em;opacity:.5;');
 
   // Weisser Einschlag-Blitz des Crashs (Stufe 4) -- das 2026-Pendant zu
   // renderer.flash; liegt UNTER dem Fade (der Szenen-Uebergang deckt alles).
@@ -301,6 +324,139 @@ export function createBackend2026(container = document.body) {
   }
   function setHtml(el, html) {
     if (el._t !== html) { el._t = html; el.innerHTML = html; }
+  }
+
+  // --- Titel-Display "SPACE MAZE" (world/title.js): dicke Voxel-Lettern -------
+  // Die Bloecke starten AUF der Wuerfel-Oberflaeche (voxelOrigin, jeder poppt
+  // erst beim eigenen Abheben auf -- voxelSize) und fliegen gestaffelt in
+  // eine kamera-verankerte Schrift-Ebene (immer lesbar, obwohl der Orbit
+  // weiterlaeuft). Look nach der 2026-Wand-Aesthetik (Boris' Spec): dunkle
+  // FARBIGE Flaechen (luminanz-normiert UNTER der Bloom-Schwelle -- der
+  // rohe HDR-Farbzyklus liess den Schriftzug "pumpen") + weisse GLUT-Kanten;
+  // erst das Finale geht als weisser Overflow in den Bloom (voxelBurst
+  // zerbirst, dazu der DOM-Blitz flashEl).
+  // Abstand der Schrift-Ebene vor der Kamera: nah genug, dass sie auch am
+  // inneren Orbit-Radius (5.85-1.6 = 4.25) VOR dem Wuerfel liegt (halbe
+  // Raumdiagonale 2.08) -- die Winkelgroesse ist distanz-unabhaengig, weil
+  // die Voxel-Groesse aus dem Sichtfeld an dieser Distanz berechnet wird.
+  const TITLE_DIST = 2.0;
+  const TITLE_BODY_LUM = 0.4;   // Flaechen-Luminanz (Bloom-Schwelle: 0.85)
+  const TITLE_EDGE_BOOST = 1.4; // weisse Kanten-Glut waehrend des Zyklus
+  let title3d = null;
+  function useTitle() {
+    if (title3d) return title3d;
+    const cells = titleCells();
+    let minX = Infinity;
+    let maxX = -Infinity;
+    for (const c of cells) { minX = Math.min(minX, c.x); maxX = Math.max(maxX, c.x); }
+    const bodyMat = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(0.82, 0.82, 0.82), bodyMat, cells.length,
+    );
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false; // Instanzen wandern weit, die Huelle stimmt nie
+    start.scene.add(mesh);
+    // Weisse Glut-Kanten: EIN dynamisches LineSegments (12 Kanten je Voxel),
+    // pro Frame aus Position/Drehung/Groesse gefuellt -- gleiche Bauart wie
+    // die Feind-Linien der Welt.
+    const edgePos = new Float32Array(cells.length * 12 * 2 * 3);
+    const edgeGeo = new THREE.BufferGeometry();
+    edgeGeo.setAttribute('position',
+      new THREE.BufferAttribute(edgePos, 3).setUsage(THREE.DynamicDrawUsage));
+    const edgeMat = new THREE.LineBasicMaterial({ color: hdr('#ffffff', TITLE_EDGE_BOOST) });
+    const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+    edges.frustumCulled = false;
+    start.scene.add(edges);
+    // Einheits-Ecken (Bit-Index xyz) + die 12 Kanten (genau 1 Bit Differenz);
+    // 0.42 statt 0.41 (halber 0.82-Koerper): Kanten liegen knapp AUSSEN,
+    // sonst perlt Z-Fighting (Startscreen-Wuerfel-Regel).
+    const corners = [];
+    for (let k = 0; k < 8; k++) {
+      corners.push(new THREE.Vector3(
+        (k & 1) ? 0.42 : -0.42, (k & 2) ? 0.42 : -0.42, (k & 4) ? 0.42 : -0.42));
+    }
+    const edgePairs = [];
+    for (let a = 0; a < 8; a++) {
+      for (let b = a + 1; b < 8; b++) {
+        const d = a ^ b;
+        if (d === 1 || d === 2 || d === 4) edgePairs.push([a, b]);
+      }
+    }
+    title3d = {
+      mesh, bodyMat, edges, edgeMat, edgeGeo, edgePos, corners, edgePairs,
+      rot: corners.map(() => new THREE.Vector3()),
+      cells, span: maxX - minX + 1,
+      m: new THREE.Matrix4(), v: new THREE.Vector3(),
+      s: new THREE.Vector3(),
+    };
+    return title3d;
+  }
+
+  function updateTitle(view) {
+    const tt = view?.titleT;
+    if (tt == null) {
+      if (title3d) {
+        title3d.mesh.visible = false;
+        title3d.edges.visible = false;
+      }
+      return;
+    }
+    const t3 = useTitle();
+    t3.mesh.visible = true;
+    t3.edges.visible = true;
+    camera.updateMatrixWorld();
+    // Voxel-Groesse aus dem Sichtfeld: der Schriftzug fuellt ~78% der Breite.
+    const visW = 2 * TITLE_DIST * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect;
+    const vox = (0.78 * visW) / t3.span;
+    const half = CUBE_SIZE * 0.5;
+    // Farben: Zyklus auf den FLAECHEN (luminanz-normiert, bloom-frei),
+    // Kanten konstant weiss-gluehend; Finale = alles weisser Overflow.
+    if (tt >= TITLE.assemble + TITLE.hold) {
+      const flash = titleFlash(tt);
+      t3.bodyMat.color.set('#ffffff').multiplyScalar(1.2 + 1.8 * flash);
+      t3.edgeMat.color.set('#ffffff').multiplyScalar(2.2 + 2.0 * flash);
+    } else {
+      const hex = titleColor(tt);
+      const boost = Math.min(2.5, TITLE_BODY_LUM / Math.max(linearLuminance(hex), 1e-3));
+      t3.bodyMat.color.set(hex).multiplyScalar(boost);
+      t3.edgeMat.color.set('#ffffff').multiplyScalar(TITLE_EDGE_BOOST);
+    }
+    // Gedrehte Einheits-Ecken einmal pro Frame (alle Voxel teilen die Drehung).
+    for (let k = 0; k < 8; k++) t3.rot[k].copy(t3.corners[k]).applyQuaternion(camera.quaternion);
+    for (let i = 0; i < t3.cells.length; i++) {
+      const cell = t3.cells[i];
+      const p = voxelProgress(tt, i);
+      const burst = voxelBurst(tt, i, cell);
+      // Ziel: Zelle in der kamera-verankerten Ebene (+ Finale-Versatz).
+      t3.v.set((cell.x + burst.dx) * vox, (cell.y + burst.dy) * vox,
+        -TITLE_DIST + burst.dz * vox);
+      camera.localToWorld(t3.v);
+      if (p < 1) {
+        // Anflug: Lerp von der Wuerfel-Oberflaeche zur Zielzelle.
+        const o = voxelOrigin(i);
+        t3.v.multiplyScalar(p);
+        t3.v.x += o.x * half * (1 - p);
+        t3.v.y += o.y * half * (1 - p);
+        t3.v.z += o.z * half * (1 - p);
+      }
+      const scale = Math.max(vox * burst.fade * voxelSize(tt, i), 1e-6);
+      t3.m.compose(t3.v, camera.quaternion, t3.s.setScalar(scale));
+      t3.mesh.setMatrixAt(i, t3.m);
+      // Kanten des Voxels: Position + gedrehte Ecke x Groesse.
+      const base = i * 72;
+      for (let e = 0; e < 12; e++) {
+        const [a, b] = t3.edgePairs[e];
+        const o6 = base + e * 6;
+        t3.edgePos[o6] = t3.v.x + t3.rot[a].x * scale;
+        t3.edgePos[o6 + 1] = t3.v.y + t3.rot[a].y * scale;
+        t3.edgePos[o6 + 2] = t3.v.z + t3.rot[a].z * scale;
+        t3.edgePos[o6 + 3] = t3.v.x + t3.rot[b].x * scale;
+        t3.edgePos[o6 + 4] = t3.v.y + t3.rot[b].y * scale;
+        t3.edgePos[o6 + 5] = t3.v.z + t3.rot[b].z * scale;
+      }
+    }
+    t3.mesh.instanceMatrix.needsUpdate = true;
+    t3.edgeGeo.attributes.position.needsUpdate = true;
   }
 
   // --- Startscreen-Szene (Prototyp-Optik), einmal lazy gebaut -----------------
@@ -1439,9 +1595,14 @@ export function createBackend2026(container = document.body) {
     const [px, py, pz] = view.pose.position;
     camera.position.set(px, py, pz);
     camera.rotation.set(view.pose.pitch, view.pose.yaw, 0);
-    start.edgeMat.color.set(view.color ?? PHOSPHOR_GREEN).multiplyScalar(EGO_BOOST);
+    // Waehrend des Titel-Displays dimmt der Wuerfel ab (wie 1980) -- die
+    // Voxel-Lettern stehen sonst gegen seine hellen Leuchtkanten.
+    const cubeDim = view.titleT != null ? 0.3 : 1;
+    start.edgeMat.color.set(view.color ?? PHOSPHOR_GREEN)
+      .multiplyScalar(EGO_BOOST * cubeDim);
     twinkleMats(start.starMats, game.time);
     start.scene.backgroundRotation.y = game.time * SKY_DRIFT;
+    updateTitle(view); // Titel-Display (Boot + Attract) -- versteckt sich selbst
   }
 
   // Maze-Wachstum: Draufsicht, die Boden-Kontur frisst sich in der
@@ -1943,9 +2104,16 @@ export function createBackend2026(container = document.body) {
     const orbiting = view?.phase === 'orbiting';
     const overlayOn = orbiting || game.demo;
     const blink = orbiting ? view.blink : blinkOn(game.time);
-    setText(title, overlayOn ? `LEVEL ${displayLevel(game)}` : '');
+    // Info-Seite (I bzw. Attract-Pause): ersetzt Level-Auswahl + Schalter,
+    // "PRESS S" blinkt darunter weiter (wie 1980). Waehrend des
+    // Titel-Displays weichen ALLE Mitte-Texte den Voxel-Lettern.
+    const infoOn = view?.info === true;
+    const titleOn = view?.titleT != null;
+    infoEl.style.display = infoOn ? '' : 'none';
+    setText(infoHint, orbiting && !infoOn && !titleOn ? 'I INFO' : '');
+    setText(title, overlayOn && !infoOn && !titleOn ? `LEVEL ${displayLevel(game)}` : '');
     setText(press, overlayOn && blink ? 'PRESS S TO START' : '');
-    if (overlayOn) {
+    if (overlayOn && !infoOn && !titleOn) {
       const dim = (eng) => (game.engine === eng ? 1 : 0.3);
       setHtml(switchLine,
         `<span style="opacity:${dim('1980')}">1980</span>` +
@@ -1988,9 +2156,13 @@ export function createBackend2026(container = document.body) {
       // auch in der Wiedergabe (dort haengt crash.t am Replay-Zeiger).
       const pv = game.stateKey === State.PLAYING || game.stateKey === State.REPLAY
         ? view : null;
+      // Titel-Finale (Startscreen): weisser Goal-Glanz-Blitz ueber den
+      // zerberstenden Voxel-Lettern.
+      const tFlash = game.stateKey === State.STARTSCREEN && view?.titleT != null
+        ? 0.8 * titleFlash(view.titleT) : 0;
       flashEl.style.opacity = pv?.crash && pv.crash.t < CRASH_FLASH
         ? String(0.95 * (1 - pv.crash.t / CRASH_FLASH) ** 2)
-        : '0';
+        : String(tFlash);
     },
 
     // Live-Engine-Schalter (Stufe 3): main.js blendet die ganze 2026-Ausgabe
@@ -2030,8 +2202,9 @@ export function createBackend2026(container = document.body) {
         themeHex = null;
       }
       if (start) {
-        disposeWorld(start); // traversiert start.scene genauso
+        disposeWorld(start); // traversiert start.scene genauso (inkl. Titel-Mesh)
         start = null;
+        title3d = null;
       }
       composer.dispose(); // inkl. eigener RenderTargets
       target.dispose();

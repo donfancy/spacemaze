@@ -28,9 +28,16 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
 
 ## Steuerung (aktueller Stand)
 
-- Startbildschirm: `↑/↓/←/→` Level wählen (1–25), `S` startet (Andock-Flug an den Würfel)
-- Im Labyrinth (Ego-Ansicht, Tank-Steuerung, Level 1–5): `↑/W` vor, `↓/S` zurück,
-  `←/A`/`→/D` drehen, `Q` Rückschwenk zur Karte (am Ziel automatisch nach 20 s);
+- Beim Laden läuft einmal das TITEL-DISPLAY: „SPACE MAZE" im Tempest-Stil
+  (1980: aus der Tiefe heranfliegend mit Echo-Konturen und Arcade-
+  Farbwechseln; 2026: dicke Voxel-Buchstaben, die aus dem Würfel
+  zusammenfliegen und im weißen Goal-Glanz zerbersten). Der Attract-Mode
+  zeigt es als Auftakt jeder Demo-Pause: Titel → HOW TO PLAY → Demo
+- Startbildschirm: `←/→` Level wählen, `↑/↓` Engine 1980/2026, `S` startet
+  (Andock-Flug an den Würfel), `I` zeigt die Info-Seite „HOW TO PLAY"
+  (alle Tasten; `X` oder `I` schließt)
+- Im Labyrinth (Ego-Ansicht, Tank-Steuerung, Level 1–5): `↑` vor, `↓` zurück,
+  `←`/`→` drehen, `X` Rückschwenk zur Karte (am Ziel automatisch nach 20 s);
   Anfahren, Bremsen und Drehen laufen über Beschleunigungs-Rampen
 - `M` schaltet den Sound stumm/laut (alles synthetisch per Web Audio: leises
   Fahrgeräusch, dumpfer Bump an der Wand, ab Level 6 Motor + Kurven-Sirren und
@@ -56,7 +63,7 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
 - Ab Level 11 Kampf-Modus: das Labyrinth wird größer und hat (per Generator-Bias)
   längere gerade Gangstücke; darin schweben pulsierende **rote Rauten** —
   Berührung ist ein krachendes GAME OVER, das den Spieler zur Karte
-  hinausschleudert (dort `Q` = neuer Versuch). `Space` feuert (Dauerfeuer
+  hinausschleudert (dort `S` = neuer Versuch). `Space` feuert (Dauerfeuer
   erlaubt, aber wie bei Tempest: max. 8 Schuss gleichzeitig unterwegs);
   die weißen rotierenden Projektil-Sterne verpuffen an Wänden, Treffer lassen
   Rauten in Splitter zerplatzen. Ein Fadenkreuz zeigt die Zielrichtung: bei
@@ -93,7 +100,7 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
   ist und man zur Gegenseite rüberzieht
 - Auf der Karte: lebende Tanker erscheinen als kleine Kreuze in ihrer
   Level-Farbe (rot, ab 26 blau), Spinner ebenso, Flipper magenta, Pulsare
-  gelb; `Q`
+  gelb; `S`
   weiterspielen (fällt zurück an die Spielerlage, solange das
   Ziel offen ist; nach GAME OVER: Neustart des Levels vom Start), `X` beenden
   (nach 5 min automatisch) — die Karte blendet aus und die Kamera fliegt
@@ -187,7 +194,7 @@ Zustände (der komplette Zyklus läuft):
 
 ```
 STARTSCREEN → MAZE_GEN → FALLING → PLAYING → RISING → MAP → STARTSCREEN
-                              ↑ (Q: RESUME, solange das Ziel offen ist) ↲
+                              ↑ (S: RESUME, solange das Ziel offen ist) ↲
 ```
 
 Die Übergänge sind nahtlos inszeniert (Andock-/Abdock-Flug, Rein-/Rausschwenk

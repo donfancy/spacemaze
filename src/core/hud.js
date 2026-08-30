@@ -50,6 +50,23 @@ export function replayStatus({ t, duration, speed, paused } = {}) {
   return ('REPLAY ' + fmt(t) + ' / ' + fmt(duration) + '  ' + tempo).trimEnd();
 }
 
+// Info-Seite "HOW TO PLAY" (I im Startscreen; der Attract-Mode zeigt sie
+// zwischen den Demos): EINE Datenquelle fuer beide Engines. Zeilen als
+// [Taste(n), Wirkung]; leere Taste = Fortsetzungszeile. Das Wording folgt
+// der Tasten-Stringenz-Regel (S start, X exit, R replay).
+export const INFO_TITLE = 'HOW TO PLAY';
+export const INFO_LINES = [
+  ['ARROWS', 'MOVE + STEER'],
+  ['', 'LEVEL 6+: UP BOOST, DOWN ALIGN'],
+  ['SPACE', 'FIRE (LEVEL 11+)'],
+  ['S', 'START + RESUME + RETRY'],
+  ['X', 'EXIT'],
+  ['R', 'REPLAY (ON MAP)'],
+  ['C', 'CAMERA (IN REPLAY)'],
+  ['M', 'SOUND'],
+  ['I', 'THIS PAGE'],
+];
+
 // "PRESS S TO START"-Blinken: EINE Formel fuer Startscreen (1980 + 2026)
 // und das Demo-Overlay des Attract-Mode -- sonst blinkt es asynchron.
 export function blinkOn(t) {
