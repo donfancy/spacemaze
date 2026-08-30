@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 394 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 423 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -122,6 +122,41 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   false`: der Nebel wusch die dunklen Flächen auf Wand-Hintergrund, von
   weitem blieben nur die HDR-Kanten (Drahtgitter-Look); Kanten behalten den
   Nebel als Tiefen-Hinweis.
+- **REPLAY-MODUS + ATTRACT-MODE (30.8.2026, beide Engines):**
+  `core/recorder.js` (pur): die Begehung zeichnet 30-Hz-Zustands-Snapshots
+  (Spieler-Kanäle; Schüsse per `phase` interpoliert; Feind-Listen geklont)
+  plus eine EVENT-Spur (bump/collision/reached/crash/gyro/burst/sound) auf —
+  Pause und Vor-/RÜCKspulen sind reine Zeiger-Bewegung, kein Re-Simulieren
+  (Ringpuffer ~10 min). Resume schreibt dieselbe Aufnahme nahtlos weiter
+  (ganzer Lauf am Stück), frischer Anlauf/Retry beginnt neu. R auf der
+  Karte → State REPLAY: Space Pause, ←/→ Tempo-Leiter ±1/2/4/8x, R/X/Q
+  zurück; Sounds/Motor nur bei 1x vorwärts (aus der Event-Spur). Die
+  1980-Wiedergabe nutzt EXAKT den Welt-Zeichner der Live-Begehung:
+  `scenes/egoWorld.js` (aus playing.render gehoben — Beginn der
+  playing-Zerlegung; buildEgoStatics/renderEgoWorld/collisionWaveSet).
+  2026 (`drawReplay` in backend.js): C schaltet ego/chase/bird/total/orbit —
+  Außen-Kameras sind reine Funktionen der interpolierten Pose (spulen
+  deterministisch mit), der Spieler fliegt als TEMPEST-GLEITER
+  (`world/glider.js` pur: Dart mit Heck-Kerbe/Kiel/Flosse, dunkler Körper
+  unter Glut-Kanten, bank-Neigung; verschwindet im Crash-Moment). FALLEN:
+  hohe Kameras überglühen (Karten-Glow-Regel) → `RCAM_GLOW` blendet
+  setLineGlow Richtung Diagramm-Normierung; Tanker-Meshes hängen an der
+  IDENTITÄT der enemies-Liste → Replay führt STABILE Puppen
+  (`syncPuppets`) und eine stabile gameLike-Fassade.
+  ATTRACT-MODE: 30 s Idle im Orbit → Autopilot-Demo (`world/autopilot.js`
+  pur: pure-pursuit auf findPath, tippt game.keys — die Demo läuft durch
+  die UNVERÄNDERTE Spiel-Logik; `keyForTurn` = Inverse des
+  gyroTurn-Mappings; Kampf: Dauerfeuer, Demo-Tod ist arcade-ok;
+  Durchkommens-Tests Tank + Fahrt). Rotation 3/7/12/17/22/27, immer OHNE
+  Ton (`audio.setSuppressed`, unabhängig von M) und ohne Controls: ←/→
+  ändern nur die AUSWAHL (`displayLevel` in hud.js), ↑/↓ Engine live, Rest
+  geschluckt (game.demoKey; main.js hält User-Tasten aus game.keys).
+  Overlay (LEVEL/Schalter/PRESS S, `blinkOn` aus hud.js) bleibt die ganze
+  Demo: 1980 `scenes/demoOverlay.js`, 2026 DOM. Zyklus: Ziel (6 s
+  Feuerwerk)/Game Over → Karte (5 s) → Abdocken → Orbit (7 s) → nächste
+  Demo. S in der Demo = Boris' Übergang: hinauf zur Karte, Fläche HEILT
+  zu (2026: Kanäle → Platte), dann normales Fräsen des GEWÄHLTEN Levels
+  (neue Übergänge MAP/MAZE_GEN --START--> MAZE_GEN).
 - **Der komplette Zyklus läuft**: Startscreen (Level-Auswahl per Pfeiltasten) →
   andocken → Labyrinth wächst → Reinfallen → Ego-Begehung (Tank-Steuerung,
   Hidden Lines) → Q/20s → Rückschwenk → Karte mit Weg. Auf der Karte: solange
