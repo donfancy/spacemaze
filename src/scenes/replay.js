@@ -21,11 +21,18 @@ import { SIDE_FACES } from '../world/cubeFaces.js';
 import { STARS, createStars } from '../world/stars.js';
 import { swayTransform } from '../render/sway.js';
 import { levelConfig, spinnerColor, enemyColor } from '../core/levels.js';
+import { spinnerMarkers } from '../world/spinners.js';
+import { flipperMarkers } from '../world/flippers.js';
+import { pulsarMarkers } from '../world/pulsars.js';
+import { NEON_MAGENTA, ARCADE_YELLOW } from '../render/colors.js';
 import {
-  bumpPatch, sizzlePatch, fanfarePatch, engineParams,
+  bumpPatch, sizzlePatch, fanfarePatch, engineParams, fallPatch, risePatch,
   shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch, whirrPatch, gyroPatch,
 } from '../sound/patches.js';
-import { NEAR_RATIO } from './mazeView.js';
+import {
+  WALL_RATIO, FAR_RATIO, NEAR_RATIO, faceWalls,
+  egoPose, mapPose, blendPose, renderFaceWalls, drawMapOverlay, drawEnemyMarkers,
+} from './mazeView.js';
 import {
   buildEgoStatics, renderEgoWorld, collisionWaveSet, WAVE_TOTAL_LIFE,
 } from './egoWorld.js';
@@ -38,6 +45,18 @@ const START_SPEED = SPEEDS.indexOf(1);
 const BURST_LIFE_MAX = 1.3;  // laengste Burst-Lebensdauer (Crash 1.2) + Luft
 const BUMP_WINDOW = 0.6;     // s: so lange wirkt eine Bump-/Kollisions-Flanke nach
 const CRASH_FLASH = 0.18;    // s: weisser Einschlag-Blitz (wie playing)
+
+// Weiche Uebergaenge (Boris' Wunsch "alles smooth"): Rein-/Rausschwenk wie
+// Falling/Rising (Karte <-> Wiedergabe-Kamera, Waende wachsen, Marker
+// blenden, Whoosh), Kamera-Wechsel als eigene Blende (nur 2026 sichtbar).
+const ENTER_DUR = 1.2;       // s: Karte -> Wiedergabe
+const EXIT_DUR = 1.0;        // s: Wiedergabe -> Karte
+const CAM_BLEND = 0.8;       // s: Kamera-Modus-Wechsel (C)
+
+function easeInOut(t) {
+  const c = t < 0 ? 0 : t > 1 ? 1 : t;
+  return 0.5 - 0.5 * Math.cos(Math.PI * c);
+}
 
 // Kamera-Modi der 2026-Wiedergabe (C schaltet durch; 1980 bleibt Ego).
 export const REPLAY_CAMS = ['ego', 'chase', 'bird', 'total', 'orbit'];
@@ -78,6 +97,10 @@ export function createReplay(game) {
   let speedIdx = START_SPEED;
   let paused = false;
   let cur = null;    // interpoliertes Sample zu tau
+  let trans = 0;     // Rein-/Rausschwenk 0..1 (0 = Kartensicht, 1 = drin)
+  let exiting = false; // X gedrueckt: trans laeuft zurueck, dann EXIT
+  let camT = 1;      // Kamera-Blende (C): 0 -> 1 seit dem letzten Wechsel
+  let camPrev = null; // voriger Kamera-Modus waehrend der Blende
   let puppets = null; // stabile Tanker-Liste (2026-Rebuild-Schluessel ist
                       // die Array-IDENTITAET -- pro Frame nur Felder kopieren)
   const waveCache = new Map(); // Kollisions-Event -> fertige Wellenzuege
@@ -167,10 +190,15 @@ export function createReplay(game) {
       tau = start();
       speedIdx = START_SPEED;
       paused = false;
+      trans = 0;
+      exiting = false;
+      camT = 1;
+      camPrev = null;
       puppets = null;
       waveCache.clear();
       cur = rec ? sampleAt(rec, tau) : null;
       syncPuppets();
+      if (cur) game.audio?.play(fallPatch(ENTER_DUR)); // Schwenk-Whoosh hinein
     },
 
     exit() {
@@ -181,6 +209,26 @@ export function createReplay(game) {
       if (!rec || !cur) {
         // Ohne Aufnahme (Direkteinstieg) sofort zurueck zur Karte.
         game.dispatch(GameEvent.EXIT);
+        return;
+      }
+      // Rein-/Rausschwenk: eine Uhr, die in beide Richtungen laeuft --
+      // ein X mitten im Reinschwenk kehrt einfach um (kein Sprung).
+      if (exiting) {
+        trans -= dt / EXIT_DUR;
+        if (trans <= 0) {
+          game.dispatch(GameEvent.EXIT);
+          return;
+        }
+      } else if (trans < 1) {
+        trans = Math.min(1, trans + dt / ENTER_DUR);
+      }
+      camT = Math.min(1, camT + dt / CAM_BLEND);
+      // Waehrend der Schwenks steht der Zeiger (die Wiedergabe beginnt,
+      // wenn die Kamera angekommen ist).
+      if (trans < 1 || exiting) {
+        cur = sampleAt(rec, tau);
+        syncPuppets();
+        game.audio?.engine(null);
         return;
       }
       if (!paused) {
@@ -214,6 +262,28 @@ export function createReplay(game) {
       if (!cur) return;
       const near = NEAR_RATIO * cell;
       const d = derived();
+
+      // Rein-/Rausschwenk (1980): exakt die Falling/Rising-Optik -- Pose
+      // blendet zwischen Kartensicht und Ego-Lage des Zeigers, die Waende
+      // wachsen mit, Karten-Overlay und Feind-Kreuze blenden gegenlaeufig.
+      const e = easeInOut(trans);
+      if (e < 1) {
+        const pose = blendPose(
+          mapPose(face, camera.fov),
+          egoPose(face, cur.px, cur.pz, cur.yaw, cell), e);
+        const fn = pose.forward[0] * face.normal[0] + pose.forward[1] * face.normal[1]
+          + pose.forward[2] * face.normal[2];
+        const walls = faceWalls(maze, face, WALL_RATIO * cell * e);
+        renderFaceWalls(renderer, walls, statics.footprints, camera, pose, {
+          far: FAR_RATIO * cell, near, occWeight: 1 - Math.abs(fn),
+        });
+        drawMapOverlay(renderer, maze, face, camera, game.trail, 1 - e);
+        drawEnemyMarkers(renderer, puppets, face, camera, cell, 1 - e, enemyCol);
+        drawEnemyMarkers(renderer, spinnerMarkers(cur.spinners), face, camera, cell, 1 - e, spinnerCol);
+        drawEnemyMarkers(renderer, flipperMarkers(cur.flippers), face, camera, cell, 1 - e, NEON_MAGENTA);
+        drawEnemyMarkers(renderer, pulsarMarkers(cur.pulsars), face, camera, cell, 1 - e, ARCADE_YELLOW);
+        return; // HUD erst, wenn die Kamera angekommen ist (wie Falling)
+      }
 
       // Blick-Verdrehung/Kurvenneigung wie live: Bildraum-Sway, die
       // 3D-Kamera bleibt horizontal (Hidden-Lines-Regel 4).
@@ -285,11 +355,17 @@ export function createReplay(game) {
         replay: {
           t: tau - start(), duration: duration() - start(),
           speed: speed(), paused, cam: REPLAY_CAMS[game.replayCam % REPLAY_CAMS.length],
+          // Weiche Uebergaenge (2026 blendet damit Kamera + Welt-Kleid):
+          // viewE 0 = Kartensicht, 1 = ganz drin; camPrev/camE = laufende
+          // Kamera-Modus-Blende.
+          viewE: easeInOut(trans),
+          camPrev, camE: easeInOut(camT),
         },
       };
     },
 
     onKey(key) {
+      if (exiting) return; // waehrend des Rausschwenks keine Eingaben mehr
       if (key === ' ') {
         paused = !paused;
       } else if (key === 'ArrowRight') {
@@ -299,10 +375,14 @@ export function createReplay(game) {
         if (speedIdx > 0) speedIdx--;
         paused = false;
       } else if (key === 'C') {
-        // Kamera-Modus (nur 2026 sichtbar -- 1980 bleibt Ego, s.o.).
+        // Kamera-Modus (nur 2026 sichtbar -- 1980 bleibt Ego, s.o.):
+        // weich ueberblendet, camPrev ist der Ausgangspunkt der Blende.
+        camPrev = REPLAY_CAMS[game.replayCam % REPLAY_CAMS.length];
+        camT = 0;
         game.replayCam = (game.replayCam + 1) % REPLAY_CAMS.length;
       } else if (key === 'R' || key === 'X' || key === 'Q') {
-        game.dispatch(GameEvent.EXIT); // zurueck zur Karte
+        exiting = true; // weicher Rausschwenk, dispatch kommt aus update()
+        game.audio?.play(risePatch(EXIT_DUR * trans));
       }
     },
   };

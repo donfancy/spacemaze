@@ -1708,71 +1708,133 @@ export function createBackend2026(container = document.body) {
     return replayGame;
   }
 
-  // Kamera der Wiedergabe: Ego wie im Spiel; die Aussen-Kameras sind reine
-  // Funktionen der (interpolierten) Pose und der Wiedergabe-Zeit -- damit
-  // spult die Kamera deterministisch mit (kein Nachschwingen beim Scrubben).
-  function applyReplayCamera(view) {
+  // Kamera-Pose EINES Wiedergabe-Modus (Position + Quaternion in pos/quat,
+  // Rueckgabe: fov). Reine Funktion der (interpolierten) Pose und der
+  // Wiedergabe-Zeit -- damit spult die Kamera deterministisch mit UND die
+  // weichen Blenden (C-Wechsel, Rein-/Rausschwenk) koennen zwei Posen
+  // mischen, ohne die echte Kamera anzufassen.
+  const rcEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+  const rcPosA = new THREE.Vector3();
+  const rcQuatA = new THREE.Quaternion();
+  const rcPosB = new THREE.Vector3();
+  const rcQuatB = new THREE.Quaternion();
+
+  function computeReplayCamera(view, cam, pos, quat) {
     const U = UNITS_PER_CELL;
     const k = world.kLocal;
     const px = view.px * k;
     const pz = view.pz * k;
     const yaw = view.yaw;
-    const cam = view.replay.cam;
-    setFov(RCAM_FOV[cam] ?? EGO_FOV);
-    camera.up.set(0, 1, 0);
+    if (cam === 'ego') {
+      // Ego: exakt die Spiel-Kamera (inkl. Gyro-Roll als echtem Roll).
+      pos.set(px, EYE, pz);
+      rcEuler.set(view.pitch, yaw, -view.roll);
+      quat.setFromEuler(rcEuler);
+      return RCAM_FOV.ego;
+    }
+    scratchCam.up.set(0, 1, 0);
     if (cam === 'chase') {
       // Hinter (+forward-Gegenrichtung) und ueber dem Gleiter, Blick voraus.
-      camera.position.set(
+      scratchCam.position.set(
         px + Math.sin(yaw) * RCAM.chaseBack * U,
         EYE + RCAM.chaseUp * U,
         pz + Math.cos(yaw) * RCAM.chaseBack * U);
-      camera.lookAt(
+      scratchCam.lookAt(
         px - Math.sin(yaw) * RCAM.chaseAhead * U, EYE,
         pz - Math.cos(yaw) * RCAM.chaseAhead * U);
     } else if (cam === 'bird') {
-      camera.position.set(
+      scratchCam.position.set(
         px + Math.sin(yaw) * RCAM.birdBack * U,
         EYE + RCAM.birdUp * U,
         pz + Math.cos(yaw) * RCAM.birdBack * U);
-      camera.lookAt(px, EYE, pz);
+      scratchCam.lookAt(px, EYE, pz);
     } else if (cam === 'total') {
       const c = world.total / 2;
-      camera.position.set(c, RCAM.totalUp * world.total, c + RCAM.totalBack * world.total);
-      camera.lookAt(c, 0, c);
-    } else if (cam === 'orbit') {
+      scratchCam.position.set(c, RCAM.totalUp * world.total, c + RCAM.totalBack * world.total);
+      scratchCam.lookAt(c, 0, c);
+    } else { // 'orbit'
       const a = view.sceneT * RCAM.orbitRate;
-      camera.position.set(
+      scratchCam.position.set(
         px + Math.cos(a) * RCAM.orbitRadius * U,
         EYE + RCAM.orbitUp * U,
         pz + Math.sin(a) * RCAM.orbitRadius * U);
-      camera.lookAt(px, EYE, pz);
-    } else {
-      // Ego: exakt die Spiel-Kamera (inkl. Gyro-Roll als echtem Roll).
-      camera.position.set(px, EYE, pz);
-      camera.rotation.set(view.pitch, yaw, -view.roll);
+      scratchCam.lookAt(px, EYE, pz);
     }
+    pos.copy(scratchCam.position);
+    quat.copy(scratchCam.quaternion);
+    return RCAM_FOV[cam] ?? EGO_FOV;
   }
 
   // Nebel pro Kamera: nah an der Ego-Hoehe voll, hohe Kameras klarer
   // (die Totale saehe sonst nur Waschgrau).
   const RCAM_FOG = { ego: 1, chase: 1, bird: 0.45, total: 0, orbit: 0.8 };
+  // Naeher als das darf die Kamera dem Gleiter nicht kommen, sonst blendet
+  // er aus (Gangbreiten) -- die Ego-Kamera sitzt IN ihm, und die Blenden
+  // Richtung Ego fliegen durch ihn hindurch.
+  const GLIDER_HIDE_DIST = 1.0;
 
   function drawReplay(game, color, view) {
     if (!view?.maze) return drawPlaceholder(game);
     ensureWorld(game, view.maze, color);
     resetWorldFrame();
     const gameLike = replayGameLike(game, view);
-    const cam = view.replay.cam;
-    setLineGlow(RCAM_GLOW[cam] ?? 0);
-    world.scene.fog.density = FOG_DENSITY * (RCAM_FOG[cam] ?? 1);
-    world.headlight.intensity = HEADLIGHT_INTENSITY;
-    setWallHeight(world, 1);
+    const rp = view.replay;
+    const lerp = (a, b, f) => a + (b - a) * f;
+
+    // Ziel-Kamera in rcPosB/rcQuatB -- inkl. laufender Kamera-Modus-Blende
+    // (C): Position lerpt, Orientierung slerpt, fov/Nebel/Glow blenden mit.
+    let fov = computeReplayCamera(view, rp.cam, rcPosB, rcQuatB);
+    let glow = RCAM_GLOW[rp.cam] ?? 0;
+    let fogF = RCAM_FOG[rp.cam] ?? 1;
+    if (rp.camPrev && rp.camE < 1) {
+      const fovA = computeReplayCamera(view, rp.camPrev, rcPosA, rcQuatA);
+      rcPosB.lerpVectors(rcPosA, rcPosB, rp.camE);
+      rcQuatB.slerpQuaternions(rcQuatA, rcQuatB, rp.camE);
+      fov = lerp(fovA, fov, rp.camE);
+      glow = lerp(RCAM_GLOW[rp.camPrev] ?? 0, glow, rp.camE);
+      fogF = lerp(RCAM_FOG[rp.camPrev] ?? 1, fogF, rp.camE);
+    }
+
+    // Rein-/Rausschwenk (viewE < 1): von der Karten-Draufsicht zur
+    // Wiedergabe-Kamera -- dieselbe Rezeptur wie Falling/Rising (Waende
+    // wachsen, Platte/Kanaele und Karten-Kleid blenden gegenlaeufig).
+    const e = rp.viewE ?? 1;
+    if (e < 1) {
+      const c = world.total / 2;
+      rcPosA.set(c, topDownDist(), c);
+      rcPosB.lerpVectors(rcPosA, rcPosB, e);
+      rcQuatB.slerpQuaternions(topQuaternion(), rcQuatB, e);
+      fov = lerp(TOP_FOV, fov, e);
+      glow = lerp(1, glow, e); // Karten-Glow (Diagramm-Normierung) -> Kamera-Glow
+      fogF *= e;
+      setPlate(1 - e, 1 - e);
+      world.gridMat.opacity = 0.8 * e;
+    }
+    setLineGlow(glow);
+    world.scene.fog.density = FOG_DENSITY * fogF;
+    world.headlight.intensity = HEADLIGHT_INTENSITY * e;
+    setWallHeight(world, e);
     // Von oben sind die Waende sonst hohl (offene Kaesten): in der
-    // Wiedergabe tragen sie Deckel (world3d.js, wallCaps).
-    world.wallCaps.visible = true;
-    setMarkerFade(world, 0);
-    updateFoeMarkers(gameLike, 0);
-    updateTrail(null, 0);
+    // Wiedergabe tragen sie Deckel (world3d.js, wallCaps) -- erst ab etwas
+    // Hoehe, ganz flach laegen sie auf der Platte (Z-Fighting).
+    world.wallCaps.visible = e > 0.05;
+    setMarkerFade(world, 1 - e);
+    updateFoeMarkers(gameLike, 1 - e);
+    updateTrail(game.trail, 1 - e);
+
+    camera.position.copy(rcPosB);
+    camera.quaternion.copy(rcQuatB);
+    setFov(fov);
+    world.headlight.position.set(camera.position.x, camera.position.y + 2, camera.position.z);
+
+    // Welt-Inhalt (Feinde, Schuesse, Effekte, Gleiter) erst, wenn die
+    // Kamera angekommen ist -- waehrend der Schwenks stehen wie bei
+    // Falling/Rising die Feind-Kreuze (gleiche Bildsprache).
+    if (e < 1) {
+      animateWorld(gameLike, view, DIAGRAM_BEACON + (1 - DIAGRAM_BEACON) * e);
+      world.beaconCone.material.opacity *= e;
+      return;
+    }
 
     const k = world.kLocal;
     updateTankers(gameLike, view);
@@ -1795,21 +1857,20 @@ export function createBackend2026(container = document.body) {
         Math.min(CRASH_LIGHT * fadeL, CRASH_LIGHT_CAP * Math.max(d2, 1));
     }
 
-    // Der Gleiter fliegt in allen Aussen-Kameras (Ego: unsichtbar, man
-    // sitzt ja drin); Kurvenneigung aus dem aufgezeichneten bank-Kanal.
-    if (cam !== 'ego') {
-      const glider = ensureGlider(color);
-      glider.group.position.set(view.px * k, GLIDER.height * UNITS_PER_CELL, view.pz * k);
-      glider.group.rotation.set(0, view.yaw, -(view.bank ?? 0) * GLIDER.bankGain);
-      glider.mirrorObj.position.copy(glider.group.position);
-      glider.mirrorObj.rotation.copy(glider.group.rotation);
-      // Ab dem Crash-Moment verschwindet der Gleiter in der Explosion.
-      glider.group.visible = !view.crash;
-      glider.mirrorObj.visible = !view.crash;
-    }
+    // Der Gleiter fliegt in den Aussen-Kameras; Kurvenneigung aus dem
+    // aufgezeichneten bank-Kanal. Sichtbarkeit per KAMERA-ABSTAND statt
+    // Modus-Name: die Blenden Richtung Ego fliegen in ihn hinein -- kurz
+    // davor blendet er aus (und im Crash-Moment verschwindet er sowieso).
+    const glider = ensureGlider(color);
+    glider.group.position.set(view.px * k, GLIDER.height * UNITS_PER_CELL, view.pz * k);
+    glider.group.rotation.set(0, view.yaw, -(view.bank ?? 0) * GLIDER.bankGain);
+    glider.mirrorObj.position.copy(glider.group.position);
+    glider.mirrorObj.rotation.copy(glider.group.rotation);
+    const showGlider = !view.crash
+      && camera.position.distanceTo(glider.group.position) > GLIDER_HIDE_DIST * UNITS_PER_CELL;
+    glider.group.visible = showGlider;
+    glider.mirrorObj.visible = showGlider;
 
-    applyReplayCamera(view);
-    world.headlight.position.set(camera.position.x, camera.position.y + 2, camera.position.z);
     animateWorld(gameLike, view);
   }
 
@@ -1845,7 +1906,8 @@ export function createBackend2026(container = document.body) {
           replay: hasRecording(game.recording),
         });
       case State.REPLAY:
-        return view?.replay
+        // HUD erst, wenn der Reinschwenk angekommen ist (wie 1980).
+        return view?.replay && view.replay.viewE >= 0.999
           ? replayStatus(view.replay) + '  -  ' + replayHint({ cams: true })
           : '';
       default:
@@ -1859,8 +1921,10 @@ export function createBackend2026(container = document.body) {
     // Der Karten-Hinweis blendet mit der Karte aus (wie 1980: intensity*fade).
     label.style.opacity = mapView ? String(mapView.fade) : '1';
 
-    // Fortschritts-Linie der Wiedergabe (nur im REPLAY-Zustand).
-    const rp = game.stateKey === State.REPLAY ? sceneView?.replay : null;
+    // Fortschritts-Linie der Wiedergabe (nur im REPLAY-Zustand, nicht
+    // waehrend der Rein-/Rausschwenks).
+    const rpView = game.stateKey === State.REPLAY ? sceneView?.replay : null;
+    const rp = rpView && rpView.viewE >= 0.999 ? rpView : null;
     progressEl.style.display = rp ? '' : 'none';
     if (rp) {
       const p = rp.duration > 1e-9 ? rp.t / rp.duration : 0;

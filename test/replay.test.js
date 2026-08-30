@@ -63,6 +63,12 @@ test('die Begehung zeichnet auf; die Karte bietet R an und startet die Wiedergab
   g.handleKey('R');
   assert.equal(g.stateKey, State.REPLAY);
 
+  // Reinschwenk (1.2s): der Zeiger steht, die Kamera faehrt hinein.
+  const vIn = g.current.viewState();
+  assert.ok(vIn.replay.viewE < 1, 'der Reinschwenk laeuft');
+  advance(g, r, 1.3);
+  assert.equal(g.current.viewState().replay.viewE, 1, 'Schwenk angekommen');
+
   // Wiedergabe laeuft mit 1x: der Zeiger wandert, es wird gezeichnet.
   const v0 = g.current.viewState();
   assert.ok(v0.replay, 'viewState traegt die Wiedergabe-Infos');
@@ -80,8 +86,10 @@ test('die Begehung zeichnet auf; die Karte bietet R an und startet die Wiedergab
   assert.ok(Math.hypot(vEnd.px - g.playerState.px, vEnd.pz - g.playerState.pz) < 1e-6,
     'Endposition = letzte Spielerlage');
 
-  // X -> zurueck zur Karte (Weg/Status unveraendert).
+  // X -> weicher Rausschwenk (1s), dann zurueck zur Karte.
   g.handleKey('X');
+  assert.equal(g.stateKey, State.REPLAY, 'der Rausschwenk laeuft noch');
+  advance(g, r, 1.2);
   assert.equal(g.stateKey, State.MAP);
   assert.ok(hasRecording(g.recording), 'die Aufnahme bleibt fuer weitere Replays');
 });
@@ -90,6 +98,7 @@ test('Pause, Vorspulen und Rueckspulen bewegen nur den Zeiger', () => {
   const r = fakeRenderer();
   const g = playToMap(r);
   g.handleKey('R');
+  advance(g, r, 1.3); // Reinschwenk abwarten
 
   advance(g, r, 0.3);
   const t0 = g.current.viewState().replay.t;
@@ -154,6 +163,31 @@ test('Resume haengt an dieselbe Aufnahme an, Retry beginnt eine neue', () => {
   advance(g, r, 0.8 + 4.5 + 2.0);
   assert.equal(g.stateKey, State.PLAYING);
   assert.notEqual(g.recording, rec1, 'frischer Anlauf = frische Aufnahme');
+});
+
+test('weiche Uebergaenge: Kamera-Blende laeuft, Rausschwenk kehrt mitten im Reinschwenk um', () => {
+  const r = fakeRenderer();
+  const g = playToMap(r);
+
+  // X mitten im Reinschwenk: die Uhr kehrt einfach um -> schnell zurueck.
+  g.handleKey('R');
+  advance(g, r, 0.4);
+  const mid = g.current.viewState().replay.viewE;
+  assert.ok(mid > 0 && mid < 1, 'mitten im Reinschwenk');
+  g.handleKey('X');
+  advance(g, r, 0.6);
+  assert.equal(g.stateKey, State.MAP, 'Umkehr braucht nur den Rest des Wegs');
+
+  // Kamera-Blende: C setzt camPrev und blendet in CAM_BLEND (0.8s) ueber.
+  g.handleKey('R');
+  advance(g, r, 1.3);
+  g.handleKey('C');
+  const v = g.current.viewState().replay;
+  assert.equal(v.cam, 'chase');
+  assert.equal(v.camPrev, 'ego');
+  assert.ok(v.camE < 1, 'die Blende laeuft');
+  advance(g, r, 0.9);
+  assert.equal(g.current.viewState().replay.camE, 1, 'Blende angekommen');
 });
 
 test('die Wiedergabe zeigt Statuszeile und Fortschritt', () => {
