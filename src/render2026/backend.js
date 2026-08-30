@@ -1789,7 +1789,10 @@ export function createBackend2026(container = document.body) {
     if (rp.camPrev && rp.camE < 1) {
       const fovA = computeReplayCamera(view, rp.camPrev, rcPosA, rcQuatA);
       rcPosB.lerpVectors(rcPosA, rcPosB, rp.camE);
-      rcQuatB.slerpQuaternions(rcQuatA, rcQuatB, rp.camE);
+      // ALIASING-FALLE: slerpQuaternions(a, b, t) kopiert ZUERST a nach
+      // this -- mit this === b waere das Ziel zerstoert und die Blende
+      // stuende still (Cut am Ende). Darum a IN PLACE slerpen, dann kopieren.
+      rcQuatB.copy(rcQuatA.slerp(rcQuatB, rp.camE));
       fov = lerp(fovA, fov, rp.camE);
       glow = lerp(RCAM_GLOW[rp.camPrev] ?? 0, glow, rp.camE);
       fogF = lerp(RCAM_FOG[rp.camPrev] ?? 1, fogF, rp.camE);
@@ -1803,7 +1806,9 @@ export function createBackend2026(container = document.body) {
       const c = world.total / 2;
       rcPosA.set(c, topDownDist(), c);
       rcPosB.lerpVectors(rcPosA, rcPosB, e);
-      rcQuatB.slerpQuaternions(topQuaternion(), rcQuatB, e);
+      // Gleiche Aliasing-Falle wie bei der Kamera-Blende (s.o.):
+      // Draufsicht-Quat in place zum Ziel slerpen, dann uebernehmen.
+      rcQuatB.copy(topQuaternion().slerp(rcQuatB, e));
       fov = lerp(TOP_FOV, fov, e);
       glow = lerp(1, glow, e); // Karten-Glow (Diagramm-Normierung) -> Kamera-Glow
       fogF *= e;
@@ -1992,6 +1997,17 @@ export function createBackend2026(container = document.body) {
     // (Canvas + Overlays) ein/aus, ohne sie wegzuwerfen.
     setVisible(v) {
       root.style.display = v ? '' : 'none';
+    },
+
+    // Debug-Haken fuer die CDP-Sichtpruefung: Kamera-Pose des letzten
+    // Frames -- damit laesst sich die STETIGKEIT der Schwenks/Blenden
+    // numerisch messen (ein Cut ist ein Sprung in der Zeitreihe).
+    debugCamera() {
+      return {
+        pos: camera.position.toArray(),
+        quat: camera.quaternion.toArray(),
+        fov: curFov,
+      };
     },
 
     resize(cssWidth, cssHeight, dpr = 1) {
