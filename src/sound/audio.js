@@ -53,7 +53,16 @@ export function createAudioOutput() {
   // ist asynchron -- der allererste Sound der Session (Level-Tick) fiele
   // sonst still aus. Die bei currentTime geplanten Knoten spielen beim
   // Resume korrekt los; der Context existiert erst nach einer User-Geste.
+  // Attract-Mode (Demo): komplette Unterdrueckung unabhaengig vom M-Mute --
+  // die Demo laeuft IMMER ohne Ton (Boris' Spec), M bleibt unberuehrt.
+  let suppressed = false;
+  function setSuppressed(v) {
+    suppressed = !!v;
+    if (suppressed) engine(null); // laufender Motor blendet aus
+  }
+
   function play(patch) {
+    if (suppressed) return;
     if (!ctx || ctx.state === 'closed') return;
     const t0 = ctx.currentTime;
     for (const v of patch.voices) {
@@ -122,6 +131,7 @@ export function createAudioOutput() {
   // Motor-Parameter nachfuehren (engineParams aus patches.js); null = ausblenden.
   // Wird pro Frame aufgerufen -- setTargetAtTime glaettet die Uebergaenge.
   function engine(params) {
+    if (suppressed) params = null; // Demo: Motor bleibt/geht auf still
     if (!ready()) return;
     const t = ctx.currentTime;
     if (!params) {
@@ -154,5 +164,5 @@ export function createAudioOutput() {
     return muted;
   }
 
-  return { unlock, play, engine, toggleMuted, get muted() { return muted; } };
+  return { unlock, play, engine, toggleMuted, setSuppressed, get muted() { return muted; } };
 }

@@ -17,6 +17,7 @@
 // localStorage und laedt/zeigt das 2026-Backend live).
 
 import { GameEvent } from '../core/states.js';
+import { blinkOn, displayLevel } from '../core/hud.js';
 import { stepLevel, levelColor, MIN_LEVEL, MAX_LEVEL } from '../core/levels.js';
 import { ENGINE_1980, ENGINE_2026 } from '../core/engine.js';
 import { PHOSPHOR_GREEN, mixColors } from '../render/colors.js';
@@ -30,10 +31,14 @@ import { pickDockFace, faceDockPose, SIDE_FACES } from '../world/cubeFaces.js';
 import { CUBE_SIZE } from './mazeView.js';
 
 const HIDDEN_DIM = 0.3;     // Grunddimmung verdeckter Kanten
-// "PRESS S TO START"-Blinken: Periode/Anteil sichtbar -- EINE Formel fuer
-// render() und viewState(), sonst blinken 1980 und 2026 asynchron.
-const blinkOn = (t) => (t % 1.1) < 0.72;
+// "PRESS S TO START"-Blinken: blinkOn kommt aus core/hud.js -- EINE Formel
+// fuer render(), viewState() und das Demo-Overlay des Attract-Mode.
 const DOCK_DURATION = 1.6;  // Sekunden fuer das Andocken
+// Attract-Mode (Demo): ohne Tastendruck startet nach IDLE Sekunden eine
+// Autopilot-Demo; laeuft der Demo-Zyklus schon (Rueckkehr in den Orbit),
+// geht es nach der kurzen Schleifen-Pause weiter.
+const DEMO_IDLE = 30;
+const DEMO_LOOP_IDLE = 7;
 const UNDOCK_DURATION = DOCK_DURATION; // Rueckflug symmetrisch gleich lang
 // Hoehe leicht begrenzt (max ~31 Grad), damit immer eine SEITENflaeche zugewandt
 // ist -- dort dockt die Kamera ohne Gimbal-Rollen an.
@@ -54,6 +59,22 @@ export function createStartscreen(game) {
   let undockT = 0;
   let undockStart = null;
   let undockTarget = null;
+  let idle = 0; // Sekunden ohne Tastendruck im Orbit (Attract-Mode-Uhr)
+
+  // Andocken einleiten (S bzw. Demo-Start): zugewandte Flaeche waehlen und
+  // den Flug beginnen -- aus onKey gehoben, der Attract-Mode braucht ihn auch.
+  function startDock() {
+    const o = orbitCamera(t, ORBIT_OPTS);
+    // Blickrichtung zur Wuerfelmitte -> zugewandte Seitenflaeche waehlen.
+    const viewDir = normalize([-o.position[0], -o.position[1], -o.position[2]]);
+    const face = pickDockFace(viewDir);
+    game.dockFace = face;
+    dockTarget = faceDockPose(face, CUBE_SIZE, camera.fov, 0.85);
+    dockStart = { position: o.position, yaw: o.yaw, pitch: o.pitch };
+    phase = 'docking';
+    dockT = 0;
+    game.audio?.play(dockPatch(DOCK_DURATION)); // dezentes Herangleiten
+  }
 
   function applyPose(pose) {
     camera.position = pose.position;
@@ -104,6 +125,7 @@ export function createStartscreen(game) {
       undockT = 0;
       undockStart = null;
       undockTarget = null;
+      idle = 0;
 
       if (game.undock) {
         // Rueckweg von der Karte: Abdock-Flug von der Andock-Pose zu der Stelle
@@ -122,10 +144,22 @@ export function createStartscreen(game) {
     update(dt) {
       if (phase === 'undocking') {
         undockT += dt;
-        if (undockT >= UNDOCK_DURATION) phase = 'orbiting'; // t steht schon richtig
+        if (undockT >= UNDOCK_DURATION) {
+          phase = 'orbiting'; // t steht schon richtig
+          idle = 0;
+        }
         return; // t (Orbit-Uhr) steht waehrend des Flugs
       }
       t += dt;
+      // Attract-Mode: nach IDLE Sekunden ohne Taste startet die Demo (bzw.
+      // die naechste Runde des laufenden Demo-Zyklus nach kurzer Pause).
+      if (phase === 'orbiting') {
+        idle += dt;
+        if (idle >= (game.demo ? DEMO_LOOP_IDLE : DEMO_IDLE)) {
+          game.beginDemo();
+          startDock();
+        }
+      }
       if (phase === 'docking') {
         dockT += dt;
         if (dockT >= DOCK_DURATION) {
@@ -147,8 +181,9 @@ export function createStartscreen(game) {
       const h = renderer.height;
       const size = Math.max(18, Math.min(42, h * 0.05));
 
-      // Level-Auswahl oberhalb des Wuerfels (links/rechts aendert sie).
-      renderer.drawText(`LEVEL ${game.level}`, {
+      // Level-Auswahl oberhalb des Wuerfels (links/rechts aendert sie) --
+      // waehrend der Demo die gemerkte AUSWAHL, nicht das Demo-Level.
+      renderer.drawText(`LEVEL ${displayLevel(game)}`, {
         x: w / 2,
         y: Math.max(48, h * 0.14),
         size,
@@ -186,6 +221,7 @@ export function createStartscreen(game) {
     },
 
     onKey(key) {
+      idle = 0; // jede Taste haelt den Attract-Mode fern
       if (phase !== 'orbiting') return;
       if (key === 'ArrowRight' || key === 'ArrowLeft') {
         // Level waehlen; nur ein ECHTER Wechsel tickt (an den Raendern still).
@@ -205,16 +241,7 @@ export function createStartscreen(game) {
           game.audio?.play(tickPatch(next === ENGINE_2026 ? 1 : 0));
         }
       } else if (key === 'S') {
-        const o = orbitCamera(t, ORBIT_OPTS);
-        // Blickrichtung zur Wuerfelmitte -> zugewandte Seitenflaeche waehlen.
-        const viewDir = normalize([-o.position[0], -o.position[1], -o.position[2]]);
-        const face = pickDockFace(viewDir);
-        game.dockFace = face;
-        dockTarget = faceDockPose(face, CUBE_SIZE, camera.fov, 0.85);
-        dockStart = { position: o.position, yaw: o.yaw, pitch: o.pitch };
-        phase = 'docking';
-        dockT = 0;
-        game.audio?.play(dockPatch(DOCK_DURATION)); // dezentes Herangleiten
+        startDock();
       }
     },
 

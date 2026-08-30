@@ -7,8 +7,10 @@
 // states.js und ist dort getestet.
 
 import { State, GameEvent, nextState } from './states.js';
-import { levelColor, levelConfig } from './levels.js';
+import { levelColor, levelConfig, stepLevel } from './levels.js';
+import { ENGINE_1980, ENGINE_2026 } from './engine.js';
 import { PHOSPHOR_GREEN } from '../render/colors.js';
+import { drawDemoOverlay } from '../scenes/demoOverlay.js';
 import { createEnemies } from '../world/enemies.js';
 import { createSpinners } from '../world/spinners.js';
 import { createFlippers } from '../world/flippers.js';
@@ -22,6 +24,11 @@ import { createPlaying } from '../scenes/playing.js';
 import { createRising } from '../scenes/rising.js';
 import { createMap } from '../scenes/map.js';
 import { createReplay } from '../scenes/replay.js';
+
+// Demo-Rotation des Attract-Mode: ein "cooles Spiel" pro Spielstufe --
+// Blockwelt, Fahrt, Kampf, Spinner, Flipper, Pulsare (Seeds wuerfelt
+// MazeGen ohnehin frisch, jede Demo sieht anders aus).
+const DEMO_LEVELS = [3, 7, 12, 17, 22, 27];
 
 export class Game {
   constructor(options = {}) {
@@ -54,6 +61,12 @@ export class Game {
                               // Playing schreibt sie, R auf der Karte spielt sie ab;
                               // ein frischer Anlauf (auch Retry) beginnt eine neue
     this.replayCam = 0;       // Kamera-Modus der Wiedergabe (REPLAY_CAMS, nur 2026)
+    this.demo = false;        // Attract-Mode: Autopilot spielt, ohne Ton, das
+                              // Startscreen-Overlay (PRESS S / Level-Wahl) bleibt
+    this.demoSavedLevel = null; // die AUSWAHL des Spielers waehrend der Demo
+                              // (game.level traegt derweil das Demo-Level)
+    this.demoIndex = 0;       // rotiert durch DEMO_LEVELS
+    this.demoStart = false;   // S in der Demo: zur Karte, Flaeche heilen, Fraesen
 
     // Szenen-Handler. Jede Szene: { enter?, exit?, update?(dt), render?(r), onKey?(key) }.
     this.scenes = {
@@ -90,7 +103,61 @@ export class Game {
   }
 
   handleKey(key) {
+    // Attract-Mode: die Demo hat KEINE Controls -- nur die Level-Wahl
+    // (links/rechts), der Engine-Schalter (hoch/runter) und S wirken.
+    if (this.demo) {
+      this.demoKey(key);
+      return;
+    }
     this.current.onKey?.(key);
+  }
+
+  // --- Attract-Mode (Animate): Autopilot-Demos aus dem Startscreen heraus ---
+
+  // Startet die naechste Demo-Runde: die Spieler-AUSWAHL bleibt gemerkt
+  // (Anzeige + das, was S startet), game.level traegt derweil das Demo-Level
+  // aus der Rotation. Ton komplett aus (unabhaengig vom M-Mute).
+  beginDemo() {
+    if (!this.demo) this.demoSavedLevel = this.level;
+    this.demo = true;
+    this.demoStart = false;
+    this.keys.clear(); // dem Autopiloten gehoeren die Tasten
+    this.level = DEMO_LEVELS[this.demoIndex++ % DEMO_LEVELS.length];
+    this.audio?.setSuppressed?.(true);
+  }
+
+  // S in der Demo: zurueck zur gemerkten Auswahl, Demo beenden und -- je
+  // nach Zustand -- den nahtlosen Weg ins normale Fraesen einleiten:
+  // aus der Ego-Demo hinauf zur Karte, die Flaeche heilt zu, dann waechst
+  // das gewaehlte Level (Boris' Spec). Ton wieder an.
+  startFromDemo() {
+    this.level = this.demoSavedLevel ?? this.level;
+    this.demoSavedLevel = null;
+    this.demo = false;
+    this.audio?.setSuppressed?.(false);
+    if (this.stateKey === State.STARTSCREEN) {
+      // Demo-Pause im Orbit: ganz normaler Andock-Start.
+      this.current.onKey?.('S');
+    } else if (this.stateKey === State.MAZE_GEN) {
+      this.dispatch(GameEvent.START); // Re-Enter: frisches Maze im Wahl-Level
+    } else {
+      // Ego/Schwenk/Karte: die Szenen leiten ueber die Karte zum Fraesen
+      // (playing hebt ab, map heilt die Flaeche und dispatcht START).
+      this.demoStart = true;
+      if (this.stateKey === State.PLAYING) this.dispatch(GameEvent.EXIT);
+    }
+  }
+
+  demoKey(key) {
+    if (key === 'ArrowRight' || key === 'ArrowLeft') {
+      // Auswahl aendern -- die Demo laeuft ungestoert weiter.
+      this.demoSavedLevel = stepLevel(this.demoSavedLevel ?? this.level,
+        key === 'ArrowRight' ? +1 : -1);
+    } else if (key === 'ArrowUp' || key === 'ArrowDown') {
+      this.engine = key === 'ArrowUp' ? ENGINE_2026 : ENGINE_1980; // live umblenden
+    } else if (key === 'S') {
+      this.startFromDemo();
+    }
   }
 
   // Feinde des Levels fuer dieses Labyrinth (neu) wuerfeln -- deterministisch
@@ -144,6 +211,13 @@ export class Game {
       ? PHOSPHOR_GREEN
       : levelColor(this.level);
     this.current.render?.(renderer);
+
+    // Attract-Mode: das Startscreen-Overlay (LEVEL-Auswahl, Engine-Schalter,
+    // PRESS S TO START) bleibt waehrend der GANZEN Demo sichtbar -- ausser
+    // im Startscreen selbst, der zeichnet es ohnehin.
+    if (this.demo && this.stateKey !== State.STARTSCREEN) {
+      drawDemoOverlay(renderer, this);
+    }
   }
 }
 

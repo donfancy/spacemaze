@@ -47,6 +47,18 @@ export function replayStatus({ t, duration, speed, paused } = {}) {
   return ('REPLAY ' + fmt(t) + ' / ' + fmt(duration) + '  ' + tempo).trimEnd();
 }
 
+// "PRESS S TO START"-Blinken: EINE Formel fuer Startscreen (1980 + 2026)
+// und das Demo-Overlay des Attract-Mode -- sonst blinkt es asynchron.
+export function blinkOn(t) {
+  return (t % 1.1) < 0.72;
+}
+
+// Angezeigtes Level: waehrend der Demo laeuft ein Demo-Level auf game.level,
+// die ANZEIGE (und das, was S startet) ist aber die gemerkte Auswahl.
+export function displayLevel(g) {
+  return g.demo && g.demoSavedLevel != null ? g.demoSavedLevel : g.level;
+}
+
 // GAME-OVER-Puls: die FARBE pulsiert zwischen Feind-Rot und Weiss
 // (1.2 Hz) bei voller Deckkraft -- blosses Helligkeits-Pulsieren wirkte
 // ueber den Labyrinth-Linien "durchgestrichen" (Boris).

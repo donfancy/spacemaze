@@ -48,6 +48,7 @@ import {
 } from '../world/flippers.js';
 import { pulsarsStep, pulsarPlayerTouch } from '../world/pulsars.js';
 import { createGyro, startSpin, gyroStep, gyroTurn, shortestRoll } from '../world/gyro.js';
+import { createAutopilot, autopilotStep } from '../world/autopilot.js';
 import { createShotsState, aimYaw, fireShot, shotsStep } from '../world/shots.js';
 import { PHOSPHOR_GREEN, NEON_MAGENTA, TANKER_RED } from '../render/colors.js';
 import { SHATTER } from '../render/shatter.js';
@@ -69,6 +70,7 @@ import { buildEgoStatics, renderEgoWorld, collisionWaveSet, WAVE_FX } from './eg
 
 const RADIUS_RATIO = 0.25;
 const GOAL_AUTO_EXIT = 20;  // Sekunden am Ziel bis automatischer Rueckschwenk
+const DEMO_GOAL_EXIT = 6;   // Demo: Feuerwerk kurz zeigen, dann weiter im Zyklus
 const TRAIL_DIST_RATIO = 0.2; // Weg-Aufzeichnung: Mindestdistanz in Zellen
 
 // Ziel-Leuchtfeuer, Feuerwerk, Wellen- und Feind-Zeichnung: nach
@@ -145,6 +147,7 @@ export function createPlaying(game) {
   let burstSeq = 0;       // laufender Splitter-Seed (unabhaengig von gerade lebenden Bursts)
   let crash = false;      // Feindberuehrung: Explosion laeuft, dann Game Over
   let crashT = 0;
+  let ap = null;          // Autopilot des Attract-Mode (world/autopilot.js)
   let crashScreen = null; // Einschlag am Bildschirm (fuer den Shatter-Handoff an rising)
   let crashPos = null;    // Einschlag {x,z} -- Zentrum des Bild-Zerberstens
 
@@ -387,6 +390,9 @@ export function createPlaying(game) {
       reachedTime = 0;
       reachedAt = 0;
       game.reachedGoal = false;
+      // Attract-Mode: der Autopilot faehrt den Loesungsweg (die Demo laeuft
+      // durch die unveraenderte Spiel-Logik -- er tippt nur die Tasten).
+      ap = game.demo ? createAutopilot(maze, { unit, cell }) : null;
       recordState();
     },
 
@@ -425,7 +431,17 @@ export function createPlaying(game) {
         return;
       }
 
-      const keys = game.keys;
+      // S in der Demo: sofort abheben -- die Karte heilt die Flaeche und
+      // startet das gewaehlte Level (game.startFromDemo hat es gesetzt).
+      if (game.demoStart) {
+        game.dispatch(GameEvent.EXIT);
+        return;
+      }
+
+      // Attract-Mode: die Tasten kommen vom Autopiloten, nicht vom Spieler.
+      const keys = game.demo && ap
+        ? autopilotStep(ap, { px, pz, yaw }, { drive, shoot, orient: gyro.orient }).keys
+        : game.keys;
       const dirs = {
         left: keys.has('ArrowLeft') || keys.has('A'),
         right: keys.has('ArrowRight') || keys.has('D'),
@@ -597,7 +613,9 @@ export function createPlaying(game) {
       recordFrameNow(dt);
       if (reached) {
         reachedTime += dt;
-        if (reachedTime >= GOAL_AUTO_EXIT) game.dispatch(GameEvent.EXIT);
+        if (reachedTime >= (game.demo ? DEMO_GOAL_EXIT : GOAL_AUTO_EXIT)) {
+          game.dispatch(GameEvent.EXIT);
+        }
       }
     },
 
@@ -681,11 +699,14 @@ export function createPlaying(game) {
         align: 'left', baseline: 'top', intensity: 0.7,
       });
       // Die Steuer-Zeile (core/hud.js, geteilt mit 2026) folgt der Blick-
-      // Verdrehung: bei 90/270 Grad lenkt man mit runter/rauf.
-      renderer.drawText(playHint({ drive, shoot, orient: gyro.orient }), {
-        x: w - 24, y: h - 20, size: 13,
-        align: 'right', baseline: 'bottom', intensity: 0.5,
-      });
+      // Verdrehung: bei 90/270 Grad lenkt man mit runter/rauf. In der Demo
+      // entfaellt sie (keine Controls -- das PRESS-S-Overlay liegt drueber).
+      if (!game.demo) {
+        renderer.drawText(playHint({ drive, shoot, orient: gyro.orient }), {
+          x: w - 24, y: h - 20, size: 13,
+          align: 'right', baseline: 'bottom', intensity: 0.5,
+        });
+      }
 
       // Kompass-Rose rechts unten (oberhalb der Steuerungszeile schwebend).
       const cr = Math.max(26, Math.min(w, h) * 0.05);

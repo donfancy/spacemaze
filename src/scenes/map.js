@@ -21,8 +21,9 @@ import {
   drawMapOverlay, drawEnemyMarkers,
 } from './mazeView.js';
 
-const AUTO_EXIT = 300; // 5 Minuten
-const EXIT_FADE = 0.9; // Sekunden: Karteninhalt blendet aus, der Rahmen bleibt
+const AUTO_EXIT = 300;      // 5 Minuten
+const DEMO_AUTO_EXIT = 5;   // Attract-Mode: kurz die Karte zeigen, dann weiter
+const EXIT_FADE = 0.9;      // Sekunden: Karteninhalt blendet aus, der Rahmen bleibt
 
 export function createMap(game) {
   const camera = createCamera({ fov: Math.PI / 2.4 });
@@ -57,15 +58,25 @@ export function createMap(game) {
 
     update(dt) {
       t += dt;
+      // S in der Demo (game.demoStart): die Karte blendet aus wie beim
+      // Verlassen -- die Flaeche HEILT zu (2026: die Kanaele schliessen
+      // sich, die Platte bleibt) -- aber statt abzudocken beginnt direkt
+      // das normale Fraesen des gewaehlten Levels (Boris' Spec).
+      if (game.demoStart && !exiting) beginExit();
       if (exiting) {
         exitT += dt;
         if (exitT >= EXIT_FADE) {
+          if (game.demoStart) {
+            game.demoStart = false;
+            game.dispatch(GameEvent.START); // Karte -> frisches MazeGen
+            return;
+          }
           game.undock = true; // Startscreen: Andock-Flug rueckwaerts von dieser Flaeche
           game.dispatch(GameEvent.EXIT);
         }
         return;
       }
-      if (t >= AUTO_EXIT) beginExit();
+      if (t >= (game.demo ? DEMO_AUTO_EXIT : AUTO_EXIT)) beginExit();
     },
 
     render(renderer) {
@@ -92,7 +103,8 @@ export function createMap(game) {
       }
 
       // Klein unten rechts (wie die Steuerungszeile in der Ego-Ansicht).
-      if (fade > 0.01) {
+      // In der Demo gibt es keine Karten-Controls -- keine Hinweiszeile.
+      if (fade > 0.01 && !game.demo) {
         renderer.drawText(mapHint({
           reachedGoal: game.reachedGoal, gameOver: game.gameOver,
           replay: hasRecording(game.recording),

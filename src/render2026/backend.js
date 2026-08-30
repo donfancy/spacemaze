@@ -29,7 +29,9 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { State } from '../core/states.js';
-import { playHint, mapHint, replayHint, replayStatus, gameOverColor } from '../core/hud.js';
+import {
+  playHint, mapHint, replayHint, replayStatus, gameOverColor, blinkOn, displayLevel,
+} from '../core/hud.js';
 import { hasRecording } from '../core/recorder.js';
 import { levelColor, levelConfig, enemyColor, spinnerColor } from '../core/levels.js';
 import { PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA, diagramBoost } from '../render/colors.js';
@@ -1824,11 +1826,14 @@ export function createBackend2026(container = document.body) {
       case State.PLAYING: {
         if (view?.crash) return '';
         if (view?.reached) return 'YOU MADE IT';
+        // In der Demo keine Steuer-Zeile (keine Controls).
+        if (game.demo) return 'FIND THE EXIT';
         // Steuer-Zeile aus core/hud.js -- Wortlaut und Lenk-Tasten-Mapping
         // (Pulsar-Rotation) identisch mit der 1980-Engine.
         return 'FIND THE EXIT - ' + playHint(view ?? {});
       }
       case State.MAP:
+        if (game.demo) return ''; // Demo: keine Karten-Controls
         // Wortlaut wie 1980; blendet per Opacity mit aus. R nur, wenn eine
         // Aufzeichnung abspielbar ist (core/recorder.js).
         return mapHint({
@@ -1858,12 +1863,16 @@ export function createBackend2026(container = document.body) {
       progressBar.style.width = (100 * Math.max(0, Math.min(1, p))).toFixed(2) + '%';
     }
 
-    // Startscreen-Texte (nur waehrend des Umtanzens, wie 1980).
+    // Startscreen-Texte: waehrend des Umtanzens (wie 1980) -- und im
+    // Attract-Mode bleiben sie ueber JEDER Szene stehen (Demo-Overlay:
+    // Level-AUSWAHL, Engine-Schalter, blinkendes PRESS S).
     const view = game.stateKey === State.STARTSCREEN ? sceneView : null;
     const orbiting = view?.phase === 'orbiting';
-    setText(title, orbiting ? `LEVEL ${game.level}` : '');
-    setText(press, orbiting && view.blink ? 'PRESS S TO START' : '');
-    if (orbiting) {
+    const overlayOn = orbiting || game.demo;
+    const blink = orbiting ? view.blink : blinkOn(game.time);
+    setText(title, overlayOn ? `LEVEL ${displayLevel(game)}` : '');
+    setText(press, overlayOn && blink ? 'PRESS S TO START' : '');
+    if (overlayOn) {
       const dim = (eng) => (game.engine === eng ? 1 : 0.3);
       setHtml(switchLine,
         `<span style="opacity:${dim('1980')}">1980</span>` +

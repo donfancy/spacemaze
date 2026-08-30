@@ -83,7 +83,9 @@ window.addEventListener('keydown', (e) => {
     audio.toggleMuted();       // globaler Stumm-Schalter -- faellt nicht ins Spiel durch
     return;
   }
-  game.keys.add(key);          // gehaltene Taste (kontinuierliche Steuerung)
+  // Attract-Mode: die Demo-Tasten gehoeren dem Autopiloten -- User-Tasten
+  // landen NICHT in game.keys (handleKey routet S/Pfeile auf die Auswahl).
+  if (!game.demo) game.keys.add(key); // gehaltene Taste (kontinuierliche Steuerung)
   game.handleKey(key);         // diskrete Aktion (S, Q, ...)
   if (key.startsWith('Arrow') || key === ' ') e.preventDefault(); // kein Seiten-Scrollen (Pfeile, Space = Feuer)
 });
