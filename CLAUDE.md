@@ -19,7 +19,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 423 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 432 grün).
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
@@ -201,7 +201,23 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   bremst erst (`brake` + kurzer Halt `BRAKE_HOLD`, abgehoben wird erst, wenn
   auch der Feder-Impuls abgeklungen ist), dann Abheben. Am ZIEL steht der
   Wagen sofort (vel/push hart 0), aber `driveStep` läuft weiter: die Lenkung
-  dreht den Blick — Umschauen wie in der Tank-Steuerung (12.7.2026). `world/waves.js`: Kollisionswellen starten als weißes Blitz-Kreuz am
+  dreht den Blick — Umschauen wie in der Tank-Steuerung (12.7.2026).
+  BOOST + AUSRICHTEN (30.8.2026, alle Fahrt-Level ab 6): ↑ gehalten =
+  doppeltes Tempo (`DRIVE.boost` Faktor, Zieltempo boost×cruise über die
+  vorhandenen Rampen — accel rauf, brake beim Loslassen; Motor-Tonhöhe
+  steigt mit bis speed 2, Lautstärke bleibt beim Cruise-Pegel gedeckelt,
+  `revs` in engineParams). ↓ gehalten = Lenk-Assistent `world/align.js`
+  (pur): lenkt weich auf die MITTE des Gangendes in Blickrichtung
+  (seitlicher Versatz → Schrägkurs zur Mitte, beendet das Wand-Pinball);
+  liefert nur eine turn-Eingabe in [-1,1] durch die normale Lenk-Rampe,
+  greift NICHT quer zum Gang (nächste Achsen-Richtung führt in die Wand →
+  null) und nicht dicht am Ziel (`minDist`, sonst schlägt der Zielwinkel
+  um); Handarbeit (←/→) gewinnt immer. Unter der Pulsar-Verdrehung
+  rotiert das GANZE Tastenkreuz (`gyroDirs` in gyro.js, gleiche
+  Herleitung wie LEFT_KEY — bei 90° lenken ↓/↑ und ←/→ sind
+  Boost/Ausrichten); Steuer-Zeile zeigt alles an (`assistHintKeys`,
+  playHint). Der Autopilot drückt im Fahrt-Modus nur Lenk-Tasten — Demos
+  boosten nicht. `world/waves.js`: Kollisionswellen starten als weißes Blitz-Kreuz am
   Sichtlinien-Auftreffpunkt, Arme wachsen mit, an die zusammenhängende Kontur-
   Fläche geklippt. FALLE (10.7.2026 gefixt): `collisionInfo` braucht die Lage
   ZUM ZEITPUNKT der Blockade (x wird vor z bewegt — blockiert x, zieht z im

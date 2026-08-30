@@ -266,6 +266,13 @@ test('Motor-Parameter: Tonhoehe folgt dem Tempo, Sirren der Kurvenneigung', () =
   assert.ok(fast.motor.freq > slow.motor.freq, 'schneller = hoeher');
   assert.ok(fast.motor.gain > slow.motor.gain, 'schneller = lauter');
   assert.equal(slow.whine.gain, 0, 'geradeaus: kein Sirren');
+  // Boost (speed bis 2): die Tonhoehe steigt weiter, die Lautstaerke bleibt
+  // beim Cruise-Pegel gedeckelt (der Motor war so schon laut genug).
+  const boost = engineParams('drive', { speed: 2, bank: 0 });
+  assert.ok(boost.motor.freq > fast.motor.freq, 'Boost hebt die Motor-Tonhoehe');
+  assert.ok(boost.rumble.cutoff > fast.rumble.cutoff, 'Boost oeffnet das Rumble-Filter');
+  assert.equal(boost.motor.gain, fast.motor.gain, 'Lautstaerke bleibt gedeckelt');
+  assert.equal(boost.rumble.gain, fast.rumble.gain);
   const banked = engineParams('drive', { speed: 1, bank: 1 });
   const light = engineParams('drive', { speed: 1, bank: 0.3 });
   assert.ok(banked.whine.gain > light.whine.gain && light.whine.gain > 0, 'Sirren waechst mit der Neigung');

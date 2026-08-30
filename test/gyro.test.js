@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRng } from '../src/util/rng.js';
-import { GYRO, createGyro, startSpin, gyroStep, gyroTurn, shortestRoll } from '../src/world/gyro.js';
+import { GYRO, createGyro, startSpin, gyroStep, gyroTurn, gyroDirs, shortestRoll } from '../src/world/gyro.js';
 
 const QUARTER = Math.PI / 2;
 const EPS = 1e-9;
@@ -88,6 +88,32 @@ test('gyroTurn: das Mapping folgt der Verdrehung ("druecke den Pfeil zur Zielsei
   assert.equal(gyroTurn(3, only('down')), -1);
   // Gegentasten heben sich auf.
   assert.equal(gyroTurn(1, { left: false, right: false, up: true, down: true }), 0);
+});
+
+test('gyroDirs: das GANZE Tastenkreuz rotiert gemeinsam mit der Verdrehung', () => {
+  // Aufrecht: Identitaet.
+  assert.deepEqual(gyroDirs(0, { left: true, up: true }),
+    { left: true, right: false, up: true, down: false });
+  // 90 Grad: gelenkt wird mit runter/rauf (wie gyroTurn), Boost (logisch up)
+  // wandert auf links, Ausrichten (logisch down) auf rechts.
+  assert.deepEqual(gyroDirs(1, { down: true, left: true }),
+    { left: true, right: false, up: true, down: false });
+  assert.deepEqual(gyroDirs(1, { up: true, right: true }),
+    { left: false, right: true, up: false, down: true });
+  // 180 Grad: alles gespiegelt.
+  assert.deepEqual(gyroDirs(2, { right: true, down: true }),
+    { left: true, right: false, up: true, down: false });
+  // Invarianten: jede physische Taste hat genau EINE Rolle, und gyroTurn
+  // ist exakt links-minus-rechts aus gyroDirs (keine zweite Quelle).
+  for (let orient = 0; orient < 4; orient++) {
+    for (const key of ['left', 'right', 'up', 'down']) {
+      const d = gyroDirs(orient, { [key]: true });
+      assert.equal(Object.values(d).filter(Boolean).length, 1,
+        `orient ${orient}, Taste ${key}: genau eine Rolle`);
+      assert.equal(gyroTurn(orient, { [key]: true }),
+        (d.left ? 1 : 0) - (d.right ? 1 : 0));
+    }
+  }
 });
 
 test('Mapping wechselt erst beim Einrasten: waehrend des Spins bleibt orient alt', () => {

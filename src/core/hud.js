@@ -4,16 +4,18 @@
 // (Boris' Entscheidung, 28.8.2026). Reine Strings/Farben, kein
 // Canvas/DOM -> headless testbar.
 
-import { steerHintKeys } from '../world/gyro.js';
+import { steerHintKeys, assistHintKeys } from '../world/gyro.js';
 import { TANKER_RED, mixColors } from '../render/colors.js';
 
 // Steuer-Zeile der Ego-Ansicht (unten rechts bzw. 2026 im Label).
-// Die Lenk-Tasten folgen der Blick-Verdrehung (Pulsar-Rotation, orient).
+// Die Lenk-Tasten folgen der Blick-Verdrehung (Pulsar-Rotation, orient) --
+// auch Boost/Ausrichten (Fahrt-Modus) rotieren mit dem Tastenkreuz.
 export function playHint({ drive, shoot, orient } = {}) {
-  const keys = steerHintKeys(orient);
-  return shoot ? keys + ' STEER - SPACE FIRE - Q MAP'
-    : drive ? keys + ' STEER - Q MAP'
-      : 'ARROWS MOVE - Q MAP';
+  if (!drive && !shoot) return 'ARROWS MOVE - Q MAP';
+  const { boost, align } = assistHintKeys(orient);
+  const assist = boost + ' BOOST - ' + align + ' ALIGN - ';
+  return steerHintKeys(orient) + ' STEER - ' + assist
+    + (shoot ? 'SPACE FIRE - ' : '') + 'Q MAP';
 }
 
 // Hinweis-Zeile der Karte: Q nur solange das Ziel offen ist; nach Game

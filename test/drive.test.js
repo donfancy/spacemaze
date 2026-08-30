@@ -108,6 +108,36 @@ test('Bremsen (targetSpeed 0): rollt mit der Brems-Rampe aus und bleibt stehen',
   assert.equal(state.vel, 0, 'bleibt stehen');
 });
 
+test('Boost: rampt mit accel aufs Doppelte, Loslassen bremst auf cruise zurueck', () => {
+  const m = corridorMaze();
+  const state = createDriveState();
+  state.vel = DRIVE.cruise;
+  let pose = { px: 3.5, pz: 11.5, yaw: 0 };
+  const dt = 1 / 60;
+  const boosted = { ...OPTS, targetSpeed: DRIVE.boost * DRIVE.cruise };
+  for (let i = 0; i < Math.round(0.3 / dt); i++) {
+    const r = driveStep(m, state, pose, 0, dt, boosted);
+    pose = { px: r.px, pz: r.pz, yaw: r.yaw };
+  }
+  assert.ok(Math.abs(state.vel - (DRIVE.cruise + DRIVE.accel * 0.3)) < 0.01,
+    'Boost beschleunigt mit der accel-Rampe (kein Sprung)');
+  for (let i = 0; i < 60; i++) {
+    const r = driveStep(m, state, pose, 0, dt, boosted);
+    pose = { px: r.px, pz: r.pz, yaw: r.yaw };
+  }
+  assert.equal(state.vel, DRIVE.boost * DRIVE.cruise, 'saettigt exakt beim Doppelten');
+  // Loslassen: Standard-Zieltempo cruise, bergab greift die Brems-Rampe.
+  let backAt = null;
+  for (let i = 0; i < 120; i++) {
+    const r = driveStep(m, state, pose, 0, dt, OPTS);
+    pose = { px: r.px, pz: r.pz, yaw: r.yaw };
+    if (backAt === null && state.vel === DRIVE.cruise) backAt = (i + 1) * dt;
+  }
+  assert.ok(backAt !== null, 'kehrt zur Reisegeschwindigkeit zurueck');
+  const expect = (DRIVE.boost - 1) * DRIVE.cruise / DRIVE.brake;
+  assert.ok(Math.abs(backAt - expect) < 0.05, `Rueckweg ~ dv/brake (${backAt.toFixed(2)}s)`);
+});
+
 test('frontaler Aufprall: Kollision gemeldet, Feder-Impuls drueckt von der Wand weg', () => {
   const m = corridorMaze();
   const state = createDriveState();

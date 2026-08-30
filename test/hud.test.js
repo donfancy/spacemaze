@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { playHint, mapHint, replayHint, replayStatus, gameOverColor } from '../src/core/hud.js';
-import { gyroTurn, steerHintKeys } from '../src/world/gyro.js';
+import { gyroTurn, gyroDirs, steerHintKeys, assistHintKeys } from '../src/world/gyro.js';
 import { TANKER_RED } from '../src/render/colors.js';
 
 test('steerHintKeys ist die Inverse von gyroTurn (alle vier Stellungen)', () => {
@@ -27,11 +27,22 @@ test('steerHintKeys ist die Inverse von gyroTurn (alle vier Stellungen)', () => 
 
 test('playHint: Steuer-Zeile je Modus, Wortlaut der 1980-Version', () => {
   assert.equal(playHint({}), 'ARROWS MOVE - Q MAP');
-  assert.equal(playHint({ drive: true }), 'LEFT/RIGHT STEER - Q MAP');
+  assert.equal(playHint({ drive: true }),
+    'LEFT/RIGHT STEER - UP BOOST - DOWN ALIGN - Q MAP');
   assert.equal(playHint({ drive: true, shoot: true }),
-    'LEFT/RIGHT STEER - SPACE FIRE - Q MAP');
+    'LEFT/RIGHT STEER - UP BOOST - DOWN ALIGN - SPACE FIRE - Q MAP');
   assert.equal(playHint({ drive: true, shoot: true, orient: 1 }),
-    'DOWN/UP STEER - SPACE FIRE - Q MAP');
+    'DOWN/UP STEER - LEFT BOOST - RIGHT ALIGN - SPACE FIRE - Q MAP');
+});
+
+test('assistHintKeys ist die Inverse von gyroDirs (alle vier Stellungen)', () => {
+  for (let orient = 0; orient < 4; orient++) {
+    const { boost, align } = assistHintKeys(orient);
+    assert.ok(gyroDirs(orient, { [boost.toLowerCase()]: true }).up,
+      `orient ${orient}: die angezeigte Boost-Taste (${boost}) boostet`);
+    assert.ok(gyroDirs(orient, { [align.toLowerCase()]: true }).down,
+      `orient ${orient}: die angezeigte Ausricht-Taste (${align}) richtet aus`);
+  }
 });
 
 test('mapHint: Q nur solange das Ziel offen ist, nach Game Over Retry', () => {

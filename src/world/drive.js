@@ -16,6 +16,8 @@ import { mazeMetric } from './metric.js';
 
 export const DRIVE = {
   cruise: 1.5,     // Reisegeschwindigkeit (Gangbreiten/s)
+  boost: 2.0,      // Boost-FAKTOR (Pfeil hoch gehalten): Zieltempo boost*cruise,
+                   // rauf mit der accel-Rampe, beim Loslassen mit brake zurueck
   turn: 3.0,       // maximale Lenkrate (rad/s)
   steerRamp: 3.5,  // Lenk-RAMPE (1/s): die Gierrate beschleunigt von 0 auf voll
                    // in ~0.3 s statt sofort maximal zu sein (und ebenso zurueck)

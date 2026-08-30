@@ -25,9 +25,9 @@
 // die Schuessen nach oben/unten ausweichen. Beruehrung toetet NICHT: die
 // Blickachse ROTIERT um 270/360/450 Grad (world/gyro.js, als Bildraum-Roll
 // im Sway -- die 3D-Kamera bleibt horizontal!) und das Spiel laeuft in der
-// verdrehten Welt weiter; gelenkt wird "logisch" mit dem Pfeil, der auf dem
-// Bildschirm in die gewuenschte Richtung zeigt (gyroTurn, wechselt beim
-// Einrasten).
+// verdrehten Welt weiter; gesteuert wird "logisch" mit dem Pfeil, der auf dem
+// Bildschirm in die gewuenschte Richtung zeigt -- das GANZE Tastenkreuz
+// inkl. Boost/Ausrichten rotiert mit (gyroDirs, wechselt beim Einrasten).
 
 import { GameEvent } from '../core/states.js';
 import { playHint } from '../core/hud.js';
@@ -47,7 +47,8 @@ import {
   FLIPPER, flippersStep, flipperPlayerHit, flipperShotHit, spawnFlipperPair,
 } from '../world/flippers.js';
 import { pulsarsStep, pulsarPlayerTouch } from '../world/pulsars.js';
-import { createGyro, startSpin, gyroStep, gyroTurn, shortestRoll } from '../world/gyro.js';
+import { createGyro, startSpin, gyroStep, gyroDirs, shortestRoll } from '../world/gyro.js';
+import { alignTurn } from '../world/align.js';
 import { createAutopilot, autopilotStep } from '../world/autopilot.js';
 import { createShotsState, aimYaw, fireShot, shotsStep } from '../world/shots.js';
 import { PHOSPHOR_GREEN, NEON_MAGENTA, TANKER_RED } from '../render/colors.js';
@@ -251,7 +252,9 @@ export function createPlaying(game) {
   }
 
   // Fahr-Modus: ein Simulationsschritt (Vortrieb, Lenken, Abprall + Effekte).
-  function updateDrive(turn, dt) {
+  // boost (Pfeil hoch gehalten): Zieltempo boost*cruise, die vorhandenen
+  // Rampen (accel rauf, brake beim Loslassen) machen den Uebergang smooth.
+  function updateDrive(turn, dt, boost) {
     // Am Ziel haelt der Wagen sofort (Tempo und Feder-Impuls hart auf 0),
     // aber driveStep laeuft weiter: bei Tempo 0 bewegt er nichts und
     // kollidiert nicht, doch die Lenk-Rampe dreht den Blick -- man kann
@@ -263,7 +266,8 @@ export function createPlaying(game) {
     }
     const res = driveStep(maze, driveState, { px, pz, yaw }, turn, dt, {
       unit, cell, radius: RADIUS_RATIO * cell,
-      targetSpeed: braking || reached ? 0 : undefined, // Q: erst ausrollen ...
+      targetSpeed: braking || reached ? 0 // Q: erst ausrollen ...
+        : boost ? DRIVE.boost * DRIVE.cruise : undefined,
     });
     px = res.px;
     pz = res.pz;
@@ -448,18 +452,30 @@ export function createPlaying(game) {
         up: keys.has('ArrowUp') || keys.has('W'),
         down: keys.has('ArrowDown') || keys.has('S'),
       };
-      // Lenk-Eingabe: im Fahrt-Modus "logisch" unter der aktuellen Blick-
-      // Verdrehung (gyroTurn -- ohne Pulsar-Beruehrung ist orient 0 und es
-      // bleibt beim gewohnten links/rechts); die Rotation selbst laeuft als
-      // reine Zeitfunktion weiter und rastet im 90-Grad-Raster ein.
+      // Tasten-Eingabe: im Fahrt-Modus rotiert das GANZE Kreuz "logisch"
+      // unter der aktuellen Blick-Verdrehung (gyroDirs -- ohne Pulsar-
+      // Beruehrung ist orient 0 und alles bleibt beim Gewohnten):
+      // links/rechts lenken, up = BOOST (doppeltes Tempo, solange gehalten),
+      // down = AUSRICHTEN (Lenk-Assistent auf die Gangende-Mitte). Die
+      // Rotation selbst laeuft als reine Zeitfunktion weiter und rastet im
+      // 90-Grad-Raster ein.
       gyroStep(gyro, dt);
-      const turn = drive
-        ? gyroTurn(gyro.orient, dirs)
-        : (dirs.left ? 1 : 0) - (dirs.right ? 1 : 0);
+      const gd = drive ? gyroDirs(gyro.orient, dirs) : dirs;
+      let turn = (gd.left ? 1 : 0) - (gd.right ? 1 : 0);
+      let boost = false;
+      if (drive) {
+        boost = gd.up;
+        // Ausrichten nur, wenn nicht von Hand gelenkt wird -- Handarbeit
+        // gewinnt; der Assistent liefert null, wenn quer zum Gang nichts
+        // Sinnvolles auszurichten ist.
+        if (gd.down && turn === 0) {
+          turn = alignTurn(maze, { px, pz, yaw }, { unit, cell }) ?? 0;
+        }
+      }
       const prevX = px, prevZ = pz; // Lage VOR dem Schritt (Spike-Kreuzungs-Check)
 
       if (drive) {
-        updateDrive(turn, dt);
+        updateDrive(turn, dt, boost);
         lastSpeed = reached ? 0 : driveState.vel / DRIVE.cruise;
         // Motor-Klang: Tonhoehe/Pegel folgen dem Tempo, das Sirren der
         // Kurvenneigung (bank ist schon weich nachgefuehrt).

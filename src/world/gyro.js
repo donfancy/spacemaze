@@ -69,12 +69,29 @@ export function gyroStep(g, dt) {
 // oben -- man drueckt den Pfeil, der auf die gewuenschte Seite zeigt.
 const LEFT_KEY = ['left', 'down', 'right', 'up'];
 
+// Das GANZE Tastenkreuz unter der eingerasteten Stellung: alle vier Pfeile
+// rotieren gemeinsam (dieselbe Herleitung wie LEFT_KEY -- die Rolle, die
+// aufrecht auf "up" liegt, wandert bei 90 Grad dorthin, wo "up" auf dem
+// verdrehten Bildschirm erscheint: nach links). Damit folgen auch Boost
+// (logisch up) und Ausrichten (logisch down, Fahrt-Modus ab Level 6) der
+// Verdrehung, exakt wie die Lenk-Tasten. keys = physische Tasten
+// { left, right, up, down }, Ergebnis = logische Rollen.
+export function gyroDirs(orient, keys) {
+  const k = orient & 3;
+  return {
+    left: !!keys[LEFT_KEY[k]],
+    right: !!keys[LEFT_KEY[(k + 2) % 4]],
+    up: !!keys[LEFT_KEY[(k + 3) % 4]],
+    down: !!keys[LEFT_KEY[(k + 1) % 4]],
+  };
+}
+
 // Lenk-Eingabe (turn in [-1,1], links positiv wie ueberall) aus den vier
 // Richtungs-Tasten unter der eingerasteten Stellung `orient` (0..3).
 // keys = { left, right, up, down } (Booleans).
 export function gyroTurn(orient, keys) {
-  const k = orient & 3;
-  return (keys[LEFT_KEY[k]] ? 1 : 0) - (keys[LEFT_KEY[(k + 2) % 4]] ? 1 : 0);
+  const d = gyroDirs(orient, keys);
+  return (d.left ? 1 : 0) - (d.right ? 1 : 0);
 }
 
 // Winkel auf den KUERZESTEN Weg normalisieren ([-PI, PI)): der Rueckschwenk
@@ -90,4 +107,14 @@ export function shortestRoll(angle) {
 export function steerHintKeys(orient) {
   const k = (orient ?? 0) & 3;
   return LEFT_KEY[k].toUpperCase() + '/' + LEFT_KEY[(k + 2) % 4].toUpperCase();
+}
+
+// Anzeige der Boost-/Ausrichten-Tasten (logisch up/down im Fahrt-Modus) --
+// dieselbe Rotation wie gyroDirs, garantiert die Inverse des Mappings.
+export function assistHintKeys(orient) {
+  const k = (orient ?? 0) & 3;
+  return {
+    boost: LEFT_KEY[(k + 3) % 4].toUpperCase(),
+    align: LEFT_KEY[(k + 1) % 4].toUpperCase(),
+  };
 }

@@ -365,11 +365,16 @@ export function engineParams(mode, input = {}) {
       whine: { freq: 200, gain: 0 },
     };
   }
+  // Boost (Pfeil hoch, ab 30.8.2026): speed geht bis 2 (doppelte Reise-
+  // geschwindigkeit). Die TONHOEHE steigt voll mit -- der Boost ist hoerbar
+  // -- aber die LAUTSTAERKE bleibt beim Cruise-Pegel gedeckelt (clamp01),
+  // der Motor war Boris schon bei einfachem Tempo laut genug.
+  const revs = Math.min(2, Math.max(0, input.speed ?? 0));
   return {
     // Grund-Fahrton bewusst zurueckhaltend (war Boris zu laut) -- die
     // Ereignisse (Brutzeln) und das Kurven-Sirren tragen den Charakter.
-    motor: { shape: 'sawtooth', freq: 45 + 55 * speed, gain: 0.04 * speed },
-    rumble: { cutoff: 250 + 450 * speed, gain: 0.05 * speed },
+    motor: { shape: 'sawtooth', freq: 45 + 55 * revs, gain: 0.04 * speed },
+    rumble: { cutoff: 250 + 450 * revs, gain: 0.05 * speed },
     whine: { freq: 220 + 240 * bank, gain: 0.06 * bank },
   };
 }
