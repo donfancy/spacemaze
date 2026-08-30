@@ -382,6 +382,7 @@ export function createBackend2026(container = document.body) {
     world.fireworkLines?.hide();
     for (const m of world.foeMarks ?? []) m?.hide();
     if (world.minimap) world.minimap.group.visible = false;
+    if (world.wallCaps) world.wallCaps.visible = false;
     if (world.glider) {
       world.glider.group.visible = false;
       world.glider.mirrorObj.visible = false;
@@ -1766,6 +1767,9 @@ export function createBackend2026(container = document.body) {
     world.scene.fog.density = FOG_DENSITY * (RCAM_FOG[cam] ?? 1);
     world.headlight.intensity = HEADLIGHT_INTENSITY;
     setWallHeight(world, 1);
+    // Von oben sind die Waende sonst hohl (offene Kaesten): in der
+    // Wiedergabe tragen sie Deckel (world3d.js, wallCaps).
+    world.wallCaps.visible = true;
     setMarkerFade(world, 0);
     updateFoeMarkers(gameLike, 0);
     updateTrail(null, 0);

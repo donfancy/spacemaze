@@ -236,6 +236,40 @@ function buildWallsAndLines(world, maze) {
   world.borderLines = new THREE.LineSegments(borderGeo, world.lineMat);
   scene.add(world.borderLines);
 
+  // WAND-DECKEL: horizontale Quads auf Wandkronen-Hoehe ueber allen
+  // geschlossenen Grid-Zellen (zeilenweise zu Laeufen zusammengefasst).
+  // Von OBEN gesehen (Replay-Aussenkameras: Vogel/Totale/Orbit/Verfolger)
+  // waeren die Waende sonst hohl -- man blickte in die leeren Kaesten
+  // (Boris' Befund). Standard UNSICHTBAR: die Draufsichten zeigen die
+  // Platte, die Schwenks den Crossfade -- nur die Wiedergabe schaltet die
+  // Deckel an (backend.drawReplay). In der wallGroup wachsen sie mit der
+  // Wandhoehe mit; das geteilte wallMat (polygonOffset) laesst die auf den
+  // Deckel-Kanten liegenden Wandkronen-Linien sauber gewinnen.
+  const cp = [];
+  const cn = [];
+  const ci = [];
+  for (let gy = 0; gy < maze.n; gy++) {
+    let run = null;
+    for (let gx = 0; gx <= maze.n; gx++) {
+      const closed = gx < maze.n && maze.grid[gy][gx] !== OPEN;
+      if (closed && run === null) run = gx;
+      if (!closed && run !== null) {
+        const base = cp.length / 3;
+        cp.push(u(run), H, u(gy), u(gx), H, u(gy), u(gx), H, u(gy + 1), u(run), H, u(gy + 1));
+        for (let i = 0; i < 4; i++) cn.push(0, 1, 0);
+        ci.push(base, base + 2, base + 1, base, base + 3, base + 2);
+        run = null;
+      }
+    }
+  }
+  const capGeo = new THREE.BufferGeometry();
+  capGeo.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3));
+  capGeo.setAttribute('normal', new THREE.Float32BufferAttribute(cn, 3));
+  capGeo.setIndex(ci);
+  world.wallCaps = new THREE.Mesh(capGeo, world.wallMat);
+  world.wallCaps.visible = false;
+  world.wallGroup.add(world.wallCaps);
+
   // Zellgrenzen-Pfosten AUF den Wandflaechen (dezent, ohne HDR -- wie das
   // Boden-Raster): das 2026-Pendant zu den 1980-Pfosten an jeder Zellgrenze.
   // Ohne sie ist eine nahe Blockwand eine strukturlose Flaeche, die den
