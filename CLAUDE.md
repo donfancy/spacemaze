@@ -590,7 +590,10 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   **Stufenplan: PLAN2026.md** (dort auch die Testrezepte: CDP-Headless-Chrome,
   Server auf 3999, NIE 3001). Prototyp + gelernte GPU-Fallen:
   public/proto2026/ (README). Three.js r185 vendored, kein Build-Tool.
-- Nächste mögliche Themen: echter "Trench Run", Politur; Score/HUD.
+- Nächste mögliche Themen: **TOUCH-BEDIENUNG (Backlog-Pflicht, Boris
+  31.8.2026 — seit dem Live-Gang auf mazestorm.io testet er andere
+  Plattformen, mobil ist das Spiel ohne Tasten unspielbar)**; echter
+  "Trench Run", Politur; Score/HUD.
   Aufgeschobene (Performance-)Ideen mit Messwerten: siehe IDEAS.md.
 - Performance-Basics sind drin: kollineare Wandzüge werden zusammengefasst
   (`mergeCollinear` — Unter-/Oberkanten lang, Pfosten bleiben an jeder
