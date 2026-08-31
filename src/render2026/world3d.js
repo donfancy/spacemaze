@@ -417,13 +417,6 @@ function buildPlate(world, maze, dockFace) {
     world.plateLightIntensity.push(intensity * kLocal * kLocal);
   }
 
-  // Glanzlicht (Boris' Wunsch): ein weisses Punktlicht, das beim Ankommen
-  // in der Draufsicht einmal diagonal ueber die Platte wischt (und beim
-  // Karten-Exit zurueck) -- der wandernde Glanz macht aus dem Szenenwechsel
-  // eine Bewegung. Intensitaet 0 = aus; backend.js faehrt es (sweepSheen).
-  world.sheenLight = new THREE.PointLight(0xffffff, 0, 0, 2);
-  scene.add(world.sheenLight);
-  world.sheenIntensity = 1.2 * total * total;
 }
 
 // Sternenhimmel: drei Punktwolken mit Phasenversatz -> unabhaengiges Funkeln

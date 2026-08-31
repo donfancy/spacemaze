@@ -30,21 +30,36 @@ export function buildStartscreenScene(renderer) {
   }
 
   // Wuerfel: dunkle Flaechen (wie die Labyrinth-Waende) + HDR-Leuchtkanten.
+  // polygonOffset 2/2 wie die Platine (world3d.buildPlate): die Flaechen
+  // weichen im TIEFENpuffer zurueck, die Kanten liegen GEOMETRISCH exakt
+  // auf der Flaeche -- frueher waren sie stattdessen 1% groesser skaliert,
+  // was am Andock-Ende einen sichtbaren SPALT zwischen Randlinie und
+  // Flaeche liess (die Platten-Kontur der Karte liegt praezise an; Boris'
+  // Befund). Gegen das Kanten-"Perlen" (Z-Fighting, Sichtpruefungs-Befund
+  // der 1.01-Loesung) hilft der Offset genauso -- die Karte beweist es:
+  // ihre Konturlinien liegen perl-frei auf der Platte mit demselben Rezept.
   const faceMat = new THREE.MeshStandardMaterial({
     color: 0x4a5a78, roughness: 0.55, metalness: 0.15,
     emissive: 0x0a0e1a, emissiveIntensity: 1,
-    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+    polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2,
   });
   const box = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
   scene.add(new THREE.Mesh(box, faceMat));
 
   const edgeMat = new THREE.LineBasicMaterial({ color: hdr(PHOSPHOR_GREEN) });
   const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box), edgeMat);
-  // Minimal groesser als der Wuerfel: die Kanten liegen sonst exakt IN den
-  // Flaechen und "perlen" durch Z-Fighting (Sichtpruefungs-Befund; 1.004
-  // reichte an den Ecken noch nicht).
-  edges.scale.setScalar(1.01);
   scene.add(edges);
+
+  // Glanzlicht fuer die Flug-Phasen: das weisse Punktlicht, das frueher
+  // erst NACH dem Szenenschnitt ueber die stehende Platte wischte, laeuft
+  // jetzt waehrend der AUSLAUFENDEN Andock-Bewegung (bzw. der anlaufenden
+  // Abdock-Bewegung) ueber die Wuerfelflaeche -- Bewegung traegt den Glanz
+  // (Boris: "im Stillstand unlogisch"). Intensitaet faehrt backend.js
+  // (sweepDockSheen); 1.2 x CUBE_SIZE^2 entspricht exakt der Platten-
+  // Formel 1.2 x total^2 unter der kLocal^2-Skalierung der Platten-Lichter.
+  const sheenLight = new THREE.PointLight(0xffffff, 0, 0, 2);
+  scene.add(sheenLight);
+  const sheenIntensity = 1.2 * CUBE_SIZE * CUBE_SIZE;
 
   // Licht: Grundschimmer + zwei farbige Lichter schraeg gegenueber -- die
   // Flaechen bekommen einen psychedelischen Verlauf, wie die Flutlichter im
@@ -59,5 +74,5 @@ export function buildStartscreenScene(renderer) {
     scene.add(light);
   }
 
-  return { scene, edgeMat, faceMat, starMats, skyRT };
+  return { scene, edgeMat, faceMat, starMats, skyRT, sheenLight, sheenIntensity };
 }

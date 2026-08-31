@@ -52,6 +52,31 @@ test('Andocken: S friert die Orbit-Bewegung nicht ein (C1 am Flug-Start)', () =>
     `Tempo-Sprung klein: v ${vBefore.toFixed(3)} -> ${vAfter.toFixed(3)}`);
 });
 
+test('Andocken: die Ankunft rollt aus (Quintic: Bremsung klingt gegen 0 ab)', () => {
+  const scene = createStartscreen(fakeGame());
+  scene.enter();
+  for (let i = 0; i < 300; i++) scene.update(DT);
+  scene.onKey('S');
+  let prev = scene.viewState().pose;
+  const speeds = [];
+  for (let i = 0; i < 120; i++) {
+    const pose = step(scene);
+    speeds.push(dist(pose.position, prev.position) / DT);
+    prev = pose;
+  }
+  // Tempo im letzten bewegten Frame: der fruehere Cosinus-Ease bremste bis
+  // zum Schluss maximal und kam mit ~0.1-0.2 Einheiten/s "hart" an; der
+  // Quintic-Ease rollt aus (zweite Ableitung 0 am Ziel) und liegt ~10x tiefer.
+  const moving = speeds.filter((v) => v > 1e-9);
+  const vLast = moving[moving.length - 1];
+  assert.ok(vLast < 0.05, `Ankunft ausgerollt: letztes Tempo ${vLast.toFixed(4)}`);
+  // ... und das Tempo faellt zum Ende hin MONOTON (kein Ruck im Auslauf).
+  const tail = moving.slice(-10);
+  for (let i = 1; i < tail.length; i++) {
+    assert.ok(tail[i] <= tail[i - 1] + 1e-9, 'Auslauf monoton fallend');
+  }
+});
+
 test('Andocken: der Flug endet trotz bewegtem Start exakt auf der Dock-Pose', () => {
   const game = fakeGame();
   const scene = createStartscreen(game);

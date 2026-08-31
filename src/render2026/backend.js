@@ -43,6 +43,7 @@ import {
   PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA, diagramBoost, linearLuminance,
 } from '../render/colors.js';
 import { EYE_RATIO, cellSize, CUBE_SIZE } from '../scenes/mazeView.js';
+import { faceLocalToWorld, SIDE_FACES } from '../world/cubeFaces.js';
 import { burstSegments, burstShards, burstGlow } from '../world/burst.js';
 import { ENEMY } from '../world/enemies.js';
 import { SHOTS, aimYaw, shotSegments } from '../world/shots.js';
@@ -512,7 +513,6 @@ export function createBackend2026(container = document.body) {
     world.plate.visible = false;
     world.mill.visible = false;
     for (const light of world.plateLights) light.intensity = 0;
-    world.sheenLight.intensity = 0;
     world.growth?.buf?.hide();
     // Kampf-Objekte (Stufe 4): nur die Ego-Ansicht schaltet sie sichtbar --
     // in den Draufsichten stehen stattdessen die Feind-Kreuze.
@@ -624,19 +624,47 @@ export function createBackend2026(container = document.body) {
     });
   }
 
-  // Glanzlicht (Boris' Wunsch "smooth ankommen"): ein weisses Punktlicht
-  // wischt einmal diagonal ueber die Platte -- beim Ankommen in der
-  // Draufsicht von Nordwest nach Suedost (dir 1), beim Karten-Exit
-  // zurueck (dir -1). Sinus-Huellkurve: bei p 0 und 1 ist es aus, der
-  // Szenenschnitt selbst traegt also NIE Glanz -- die Bewegung direkt
-  // danach/davor kaschiert ihn.
-  function sweepSheen(p, dir = 1) {
-    if (p <= 0.001 || p >= 0.999) return; // resetWorldFrame hat es schon aus
-    const T = world.total;
-    const q = dir > 0 ? p : 1 - p;
-    const s = (-0.2 + 1.4 * q) * T; // von knapp ausserhalb bis knapp drueber
-    world.sheenLight.position.set(s, 0.35 * T, s);
-    world.sheenLight.intensity = world.sheenIntensity * Math.sin(Math.PI * p);
+  // Glanzlicht (Boris' Wunsch "smooth ankommen", verlegt 31.8.2026): das
+  // weisse Punktlicht wischt nicht mehr NACH dem Szenenschnitt ueber die
+  // stehende Platte, sondern waehrend der AUSLAUFENDEN Andock-Bewegung
+  // diagonal ueber die Wuerfelflaeche (NW -> SO wie frueher) und beim
+  // Abdocken in der ANLAUFENDEN Bewegung zurueck -- der Glanz gehoert zur
+  // Bewegung, nicht zum Stillstand. Sinus-Huellkurve: an den Schnitten
+  // (Andock-Ende p=1, Abdock-Start p=0) ist er exakt aus. Geometrie =
+  // die alte Platten-Diagonale (s, 0.35T, s), per faceLocalToWorld auf
+  // die Andock-Flaeche projiziert (dieselbe Abbildung, unter der die
+  // Platten-Lichter die Startscreen-Akzente spiegeln -- nur rueckwaerts).
+  const DOCK_SHEEN_SPAN = 0.45; // Flug-Anteil, den der Wisch belegt
+  const DOCK_SHEEN_DIM = 0.6;   // gegen den Bloom-Blowout der HDR-Kanten
+  function sweepDockSheen(game, view) {
+    let q = -1; // Wisch-Fortschritt 0..1 (ausserhalb: aus)
+    if (view.phase === 'docking' || view.phase === 'docked') {
+      q = (view.p - (1 - DOCK_SHEEN_SPAN)) / DOCK_SHEEN_SPAN;
+    } else if (view.phase === 'undocking') {
+      q = view.p / DOCK_SHEEN_SPAN;
+    }
+    if (q <= 0.001 || q >= 0.999) {
+      start.sheenLight.intensity = 0;
+      return;
+    }
+    const run = view.phase === 'undocking' ? 1 - q : q; // Abdocken: rueckwaerts
+    // Anders als die alte Platten-Diagonale (-0.2..1.2) bleibt der Pfad IM
+    // Fussabdruck der Flaeche geklemmt: schwebt das Licht daneben, steht es
+    // VOR der Ebene der fast kantengleichen NACHBARflaeche -- deren duenner
+    // beleuchteter Streifen bloomt sonst zu gruenen "Perlenketten" entlang
+    // der Kanten (Sichtpruefungs-Befund). Im Fussabdruck liegt das Licht
+    // hinter jeder Nachbar-Ebene, sie bleiben schwarz; das Ein-/Ausgleiten
+    // uebernimmt die Sinus-Huellkurve.
+    const c = Math.min(0.96, Math.max(0.04, -0.2 + 1.4 * run));
+    const s = c * CUBE_SIZE;
+    const face = game.dockFace ?? SIDE_FACES[0];
+    const pos = faceLocalToWorld(s, 0.35 * CUBE_SIZE, s, face, CUBE_SIZE);
+    start.sheenLight.position.set(pos[0], pos[1], pos[2]);
+    // Doppelte Huellkurve: sin(pi q) ueber die ZEIT und sin(pi c) ueber den
+    // ORT -- nahe der Ecke gedimmt, sonst bloomt die dortige HDR-Kante
+    // ueber der hell angestrahlten Flaeche zum gruenen Balken.
+    start.sheenLight.intensity = start.sheenIntensity * DOCK_SHEEN_DIM
+      * Math.sin(Math.PI * q) * Math.sin(Math.PI * c);
   }
 
   // Voll deckend OPAK zeichnen (Tiefentest sortiert Marker/Weg/Kreuze dann
@@ -1602,6 +1630,15 @@ export function createBackend2026(container = document.body) {
       .multiplyScalar(EGO_BOOST * cubeDim);
     twinkleMats(start.starMats, game.time);
     start.scene.backgroundRotation.y = game.time * SKY_DRIFT;
+    // Nebel-Himmel blendet in den Fluegen aus/ein: rund um die Draufsicht
+    // steht nach dem Schnitt ohnehin nur Schwarz + Sterne (horizonFade der
+    // Welt-Skybox) -- statt des harten Wechsels "Nebulae -> nur Sterne"
+    // dunkelt der Nebel waehrend des Andockens ab und kommt beim Abdocken
+    // in der Bewegung wieder (quadratisch: nahe am Orbit voll, am Schnitt 0).
+    const skyA = view.phase === 'orbiting' ? 1
+      : view.phase === 'undocking' ? view.p : 1 - view.p;
+    start.scene.backgroundIntensity = skyA * skyA;
+    sweepDockSheen(game, view); // Glanzlicht wischt in der Flug-Bewegung
     updateTitle(view); // Titel-Display (Boot + Attract) -- versteckt sich selbst
   }
 
@@ -1619,7 +1656,8 @@ export function createBackend2026(container = document.body) {
     setWallHeight(world, 0);
     world.gridMat.opacity = 0; // kein Raster: die Platte ist die Wuerfelflaeche
     setPlate(1, 1, view.growCount); // die Fraese frisst die Kanaele in Grab-Reihenfolge
-    sweepSheen(view.markerFade); // Glanzlicht wischt beim Ankommen ueber die Platte
+    // (Das Ankunfts-Glanzlicht wischt schon waehrend des Andock-Flugs --
+    // sweepDockSheen -- hier steht die Kamera bereits.)
     world.outlineLines.visible = false; // stattdessen die Teil-Kontur
     updateGrowth(view.maze, view.growCount);
     setMarkerFade(world, view.markerFade);
@@ -1696,7 +1734,7 @@ export function createBackend2026(container = document.body) {
     // Beim Verlassen "heilt" die Flaeche: die schwarzen Kanaele blenden mit f
     // aus, die Platte bleibt voll -- sie wird zur Wuerfelflaeche des Abdock-Flugs.
     setPlate(1, f);
-    sweepSheen(1 - f, -1); // Glanzlicht wischt beim Abschied zurueck
+    // (Das Abschieds-Glanzlicht wischt erst im Abdock-Flug -- sweepDockSheen.)
     setMarkerFade(world, f);
     updateFoeMarkers(game, f);
     updateTrail(game.trail, f);

@@ -53,9 +53,13 @@ function clamp01(x) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
-// Sanfte, harmonische Ein-/Ausblendkurve (Cosinus): 0 -> 0, 1 -> 1, flach an den Enden.
+// Sanfte Ein-/Ausblendkurve (Quintic-Smootherstep): 0 -> 0, 1 -> 1, an den
+// Enden sind ERSTE UND ZWEITE Ableitung 0. Der fruehere Cosinus war nur C1:
+// seine Bremsung war am Ziel MAXIMAL und brach dort schlagartig ab -- das
+// Andocken kam "hart" zum Stehen (Boris' Befund). Quintic rollt aus: die
+// Verzoegerung klingt gegen 0 ab, bevor die Kamera steht.
 function easeInOut(t) {
-  return 0.5 - 0.5 * Math.cos(Math.PI * t);
+  return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
 // Kuerzester Winkelweg from->to, normalisiert auf (-pi, pi].

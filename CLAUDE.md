@@ -13,6 +13,29 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Inkrementell: einfach anfangen, dann komplexere Levels, durch Tests abgesichert.
 
 ## Konventionen
+- SMOOTH-PASS An-/Abdocken (31.8.2026, Boris' "unstetig in der 1.
+  Ableitung"-Jagd): (1) BEIDE Startscreen-Fluege sind C1 -- die Orbit-Uhr
+  t laeuft im Flug WEITER und dockPose blendet gegen die BEWEGTE
+  Orbit-Pose (Andocken: bewegter Start, Abdocken: bewegtes Ziel; die
+  Abdock-Uhr startet UNDOCK_DURATION vor dem zugewandten Bahnpunkt).
+  (2) dockPose-Ease = QUINTIC-Smootherstep (C2): der alte Cosinus
+  bremste bis zum letzten Frame maximal und kam "hart" an. Beides
+  getestet per Finite-Differenzen (test/dockFlight.test.js). (3) 2026:
+  Nebel-Himmel blendet im Flug aus/ein (start.scene.backgroundIntensity
+  = (1-p)^2 bzw. p^2 -- am Schnitt zur Draufsicht steht ringsum eh nur
+  Schwarz+Sterne, horizonFade), Glanzlicht wischt in der AUSLAUFENDEN
+  Andock-/anlaufenden Abdock-Bewegung ueber die WUERFELflaeche
+  (sweepDockSheen in backend.js, faceLocalToWorld-Projektion der alten
+  Platten-Diagonale; das Welt-sheenLight ist entfernt). PERLEN-FALLE
+  dabei: der Licht-Pfad MUSS im Flaechen-Fussabdruck geklemmt bleiben
+  (schwebt das Punktlicht daneben, beleuchtet es die fast kantengleiche
+  NACHBARflaeche -- ihr duenner heller Streifen bloomt zu gruenen
+  Perlenketten), plus Orts-Huellkurve sin(pi c) gegen den Kanten-Balken
+  nahe der Ecke (HDR-Kante ueber hell angestrahlter Flaeche). Und die
+  Wuerfel-Kanten liegen GEOMETRISCH auf den Flaechen (polygonOffset 2/2
+  wie die Platine statt edges.scale 1.01 -- der 1%-Spalt zwischen
+  Randlinie und Flaeche am Andock-Ende ist weg, die Platten-Kontur
+  liegt praezise an).
 - TASTEN-STRINGENZ (30.8.2026, Boris): S = IMMER Starten/Weiterspielen
   (Startscreen, Demo, Karte: Resume/Retry), X = IMMER Exit/eine Ebene raus
   (Begehung → Karte, Karte → Orbit, Replay → Karte), R = Replay (nur Karte),
