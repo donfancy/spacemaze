@@ -202,7 +202,24 @@ per Quaternion-Slerp); nur wo nötig wird über Schwarz geblendet. Die gesamte
 Begehung spielt AUF der gewählten Würfelseite — Schlüssel dafür sind die freie
 Kamera-Oben-Richtung (`camera.basis`), `faceLocalToWorld` und `scenes/mazeView.js`.
 
-## Deployment (später)
+## Deployment (mazestorm.io / mazestorm.de)
 
-Für den Cloud-Server bündeln wir alle Module + HTML zu einer einzigen
-`.html`-Datei. Bis dahin entwickeln wir modular über den Dev-Server.
+```
+npm run build        # erzeugt dist/
+```
+
+Den **Inhalt von `dist/`** komplett in den Webroot laden — fertig, das Spiel
+ist rein statisch (keine Server-Logik, kein Nachladen außer den eigenen
+Modulen). `dist/` spiegelt die Dev-Struktur (`index.html` an der Wurzel +
+`public/` + `src/`), weil `index.html` mit absoluten Pfaden auf
+`/public/...` und `/src/...` verweist; beim Dev-Server übernimmt diese
+Abbildung `server.js`.
+
+Wichtig:
+- `dist/` muss in die **Domain-Wurzel** (wegen der absoluten Pfade) — ein
+  Unterverzeichnis wie `mazestorm.de/spiel/` funktioniert nicht.
+- Nur `public/` hochzuladen reicht NICHT: der Spielcode liegt in `src/`.
+- `public/proto2026/` (Werkstatt-Prototyp) bleibt absichtlich draußen.
+
+Ein Bündeln zu einer einzigen `.html`-Datei ist damit unnötig geworden;
+ES-Module laufen auf dem Webspace direkt.
