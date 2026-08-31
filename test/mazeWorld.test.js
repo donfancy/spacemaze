@@ -2,7 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateMaze, OPEN, WALL } from '../src/world/maze.js';
 import { corridorOutline, mergeCollinear } from '../src/world/mazeGeometry.js';
-import { mazeWalls, wallFootprints, cellAt, cellCenter, isWalkable, tryMove, startFacingYaw } from '../src/world/mazeWorld.js';
+import {
+  mazeWalls, wallFootprints, cellAt, cellCenter, isWalkable, tryMove,
+  startFacingYaw, hasLineOfSight,
+} from '../src/world/mazeWorld.js';
+import { createMetric } from '../src/world/metric.js';
 
 // Mini-Labyrinth fuer praezise Kollisionstests: nur Mitte (1,1) offen.
 function tiny() {
@@ -147,4 +151,59 @@ test('startFacingYaw blickt in den offenen Startgang', () => {
     const ny = sy + Math.round(fz);
     assert.equal(m.grid[ny][nx], OPEN, `seed ${seed}: Blick nicht in den Gang`);
   }
+});
+
+// --- hasLineOfSight: exakter Sichtlinien-DDA (Feuer-Disziplin der Demo) ---
+
+// 5x5-Kreuzung: Mittelzeile und Mittelspalte offen, Rest Wand.
+function cross5() {
+  const W = WALL, O = OPEN;
+  return {
+    n: 5,
+    grid: [
+      [W, W, O, W, W],
+      [W, W, O, W, W],
+      [O, O, O, O, O],
+      [W, W, O, W, W],
+      [W, W, O, W, W],
+    ],
+  };
+}
+
+test('hasLineOfSight: im geraden Gang frei, durch die Wand blockiert', () => {
+  const m = cross5();
+  assert.equal(hasLineOfSight(m, 0.5, 2.5, 4.5, 2.5), true, 'laengs des Gangs');
+  assert.equal(hasLineOfSight(m, 2.5, 0.5, 2.5, 4.5), true, 'laengs des Quergangs');
+  assert.equal(hasLineOfSight(m, 0.5, 2.5, 0.5, 0.5), false, 'quer durch die Wand');
+  assert.equal(hasLineOfSight(m, 0.5, 2.5, 4.5, 0.5), false, 'diagonal um die Ecke');
+  assert.equal(hasLineOfSight(m, 2.5, 2.5, 2.5, 2.5), true, 'Punkt auf sich selbst');
+  // Diagonal durch die offene Kreuzungszelle: von kurz vor der Kreuzung im
+  // einen Gang zu kurz nach der Kreuzung im anderen -- frei.
+  assert.equal(hasLineOfSight(m, 1.6, 2.5, 2.5, 3.4), true, 'diagonal durch die Kreuzung');
+});
+
+test('hasLineOfSight: schmale Metrik -- die schraege 1-Einheit-Wand blockiert exakt', () => {
+  // Zwei parallele Gaenge (5 Einheiten) mit 1-Einheit-Trennwand (Sternen-
+  // FALLE: ein abtastender Raycast uebersprang genau solche Waende schraeg).
+  const W = WALL, O = OPEN;
+  const m = {
+    n: 5,
+    grid: [
+      [W, W, W, W, W],
+      [W, O, O, O, W],
+      [W, W, W, W, W], // 1-Einheit-Trennwand (Zeile mit gerader Nummer)
+      [W, O, O, O, W],
+      [W, W, W, W, W],
+    ],
+    metric: createMetric({ wall: 1, corridor: 5 }),
+  };
+  const { toUnits } = m.metric;
+  const midRow = (gy) => toUnits(gy + 0.5); // Gangmitte einer offenen Zeile
+  // Sehr flacher Schuss vom einen Gang in den anderen: die duenne Wand
+  // dazwischen muss ihn schlucken, egal wie schraeg.
+  assert.equal(hasLineOfSight(m, toUnits(1.1), midRow(1), toUnits(3.9), midRow(3)),
+    false, 'schraeg durch die duenne Trennwand');
+  // Im selben schmalen Gang bleibt die Sicht frei (auch leicht schraeg).
+  assert.equal(hasLineOfSight(m, toUnits(1.1), midRow(1) - 1.5, toUnits(3.9), midRow(1) + 1.5),
+    true, 'schraeg im eigenen Gang');
 });

@@ -199,11 +199,48 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   sonst hält der Ausricht-Assistent (logisch ↓) die Spur — kein
   Schlingerkurs; gefeuert wird NUR bei Feind in Sicht (`foeInSight`:
   fireDist 7 Gangbreiten + Blickkegel 0.5 rad; playing.js reicht Tanker,
-  Spinner-SPITZEN, Flipper + sirrende Schüsse als `mode.foes` — Pulsare
-  NICHT: unzerstörbar, ihre Rotation ist Teil der Show); auf freier
+  Spinner-SPITZEN + sirrende Schüsse als `mode.foes` — Pulsare
+  NICHT: unzerstörbar, ihre Rotation ist Teil der Show; SICHTLINIE
+  Pflicht, 31.8.2026 — Boris' Befund „schießt auf Feinde hinter der
+  Wand", das waren ~49 % aller Feuer-Frames: playing filtert foes UND
+  flippers per `hasLineOfSight` (mazeWorld.js, exakter Grid-DDA über
+  die Metrik wie skylineElevation — die Sternen-FALLE gilt: ein
+  abtastender Raycast überspränge schräge 1-Einheit-Wände; der
+  Autopilot selbst kennt kein Maze, die Naht liefert nur Sichtbares);
+  auf freier
   Geraden ≥ boostRun 3 Gangbreiten ohne Feind BOOSTET er (logisch ↑,
   Brems-Rampe schafft den Abbau vor Kurve/Duell); Demo-Tod ist
-  arcade-ok; Durchkommens-Tests Tank + Fahrt). Rotation 3/7/12/17/22/27, immer OHNE
+  arcade-ok; Durchkommens-Tests Tank + Fahrt.
+  TANK-KURVENGEFÜHL (31.8.2026, Boris sah Bump an JEDER Ecke): der
+  Vorausblick zog schon ~0.9 Gangbreiten vor der Kurvenkammer diagonal
+  auf den Quergang-Punkt — die Diagonale läuft praktisch exakt über die
+  Innenecke. Fix in autopilot.js: Vorausblick klemmt im Tank-Modus an
+  KNICK-Wegpunkten (isTurnPoint), aufgerückt wird dort erst dicht an der
+  Kammermitte (turnAdvance 0.25 statt advance 0.55), losgefahren erst
+  fast ausgerichtet (walkAlign 0.6→0.35) — reinfahren, auf der Stelle
+  drehen, sauber raus; Test verlangt NULL Bumps (90 Seeds geprüft).
+  FLIPPER-DUELL (31.8.2026, Boris: „scheitert an jedem Flipper"): der
+  Gangmitte-Geradeaus-Schuss verfehlt den Seiten-Trefferpunkt
+  (0.5−lift = 0.34 > shotRadius 0.3) IMMER — der Autopilot zielt jetzt
+  wie ein Mensch mit dem Fadenkreuz-Lenkausschlag (`flipperDuel`:
+  playing reicht `mode.flippers` als Objekte — nicht mehr in foes — und
+  `mode.steer`, die Ziel-Regelung pulst den gerampten steer per
+  Bang-Bang auf aim/deflect). Duell-Erkennung: Quer-Fenster duelWindow
+  1.0 Gangbreiten (unter dem parallelen Nachbargang 1.2 — Wand schützt
+  dort) + Blick-HALBEBENE statt Kegel (ein Kegel bricht nah und beim
+  Einbiegen genau dann ab, wenn es zählt); ANGESTEUERT wird nur bis
+  kurz hinter den nächsten Weg-Knick (nextTurnDist als Luftlinie —
+  NICHT straightRunAhead: dessen approach-Zweig kollabiert beim
+  seitlichen Ziel-Versatz und würgte das Duell selbst ab), echte
+  Kurven gewinnen gegen das Zielen. DRIVE-BY-Feuer in jeder Fahrlage:
+  sobald das Fadenkreuz einen treffbaren Punkt in duelFire 0.28
+  Gangbreiten Quer-Toleranz hat (auch mitten im Einlenken — das Kreuz
+  streicht beim Einbiegen zwangsläufig über den Punkt, das rettet
+  Begegnungen direkt hinter der Kurve); untreffbar geklappt (side 0)
+  = weiterfahren ohne Boost und ohne sinnloses Feuer. Messlauf 16
+  Level-Läufe: 13 komplett durch (~90 % der Duelle gewonnen, Rest
+  Pech-Timing = arcade-ok); Durchkommens-Test mit echten Flippern.
+  Rotation 3/7/12/17/22/27, immer OHNE
   Ton (`audio.setSuppressed`, unabhängig von M) und ohne Controls: ←/→
   ändern nur die AUSWAHL (`displayLevel` in hud.js), ↑/↓ Engine live, Rest
   geschluckt (game.demoKey; main.js hält User-Tasten aus game.keys).

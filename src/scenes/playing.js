@@ -35,7 +35,7 @@ import { createRecording, recordFrame, recordEvent } from '../core/recorder.js';
 import { createCamera } from '../math/camera.js';
 import { createOscillator } from '../math/oscillator.js';
 import { generateMaze } from '../world/maze.js';
-import { cellCenter, startFacingYaw } from '../world/mazeWorld.js';
+import { cellCenter, startFacingYaw, hasLineOfSight } from '../world/mazeWorld.js';
 import { DRIVE, createDriveState, driveStep } from '../world/drive.js';
 import { WALK, createWalkState, walkStep } from '../world/walk.js';
 import { ENEMY, enemiesStep, enemyHit } from '../world/enemies.js';
@@ -445,20 +445,28 @@ export function createPlaying(game) {
       }
 
       // Attract-Mode: die Tasten kommen vom Autopiloten, nicht vom Spieler.
-      // Er bekommt die sichtbaren Ziele mit (Tanker, Spinner-SPITZEN --
-      // die Spitze ist das Gefaehrliche und Beschossene --, Flipper,
-      // sirrende Spinner-Schuesse) und feuert nur bei Feind in Sicht.
-      // Pulsare sind KEIN Ziel: unzerstoerbar, und ihre Blick-Rotation
-      // ist Teil der Demo-Show.
+      // Er bekommt die SICHTBAREN Ziele mit (Tanker, Spinner-SPITZEN --
+      // die Spitze ist das Gefaehrliche und Beschossene --, sirrende
+      // Spinner-Schuesse): wer keine Sichtlinie hat (hasLineOfSight,
+      // Grid-DDA), fliegt raus -- sonst feuert die Demo sichtbar sinnlos
+      // auf Feinde HINTER Waenden im Blickkegel (Boris' Befund 31.8.2026).
+      // FLIPPER laufen nicht ueber foes, sondern als Objekte ins DUELL
+      // (flipperDuel): ihr Trefferpunkt liegt seitlich der Gangmitte, der
+      // Autopilot zielt mit dem Fadenkreuz-Lenkausschlag darauf -- dafuer
+      // liest er den gerampten Lenk-Zustand mit (steer, dieselbe Groesse
+      // wie fireShot); auch sie nur mit Sichtlinie. Pulsare sind KEIN
+      // Ziel: unzerstoerbar, und ihre Blick-Rotation ist Teil der Show.
+      const seen = ([x, z]) => hasLineOfSight(maze, px, pz, x, z, unit);
       const keys = game.demo && ap
         ? autopilotStep(ap, { px, pz, yaw }, {
           drive, shoot, orient: gyro.orient,
+          steer: drive ? driveState.steer : walkState.steer,
+          flippers: flippers.filter((f) => seen(flipperPos(f))),
           foes: shoot ? [
             ...enemies.filter((e) => e.alive).map((e) => [e.x, e.z]),
             ...spinners.filter((s) => s.alive).map(spinnerTip),
-            ...flippers.filter((f) => f.alive).map(flipperPos),
             ...foeShots.map(spinnerShotPos),
-          ] : null,
+          ].filter(seen) : null,
         }).keys
         : game.keys;
       const dirs = {

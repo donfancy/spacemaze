@@ -110,6 +110,40 @@ export function rectWalkable(maze, x0, x1, z0, z1, unit = 1) {
   return true;
 }
 
+// Freie SICHTLINIE zwischen zwei Welt-Punkten (keine Wandzelle dazwischen)?
+// Exakter Grid-DDA von Zellkante zu Zellkante ueber die Metrik, gleiche
+// Mechanik wie skylineElevation (stars.js) -- die Sternen-FALLE gilt auch
+// hier: ein abtastender Raycast ueberspringt schraeg gestreifte
+// 1-Einheit-Waende. Ein exakt durch eine Zell-ECKE laufender Strahl wird
+// konservativ behandelt (beide Nachbarzellen nacheinander geprueft).
+// Nutzer: die Feuer-Disziplin des Autopiloten -- auf ein Ziel ohne
+// Sichtlinie schiesst kein Profi, der Schuss verpufft nur an der Wand.
+export function hasLineOfSight(maze, x0, z0, x1, z1, unit = 1) {
+  const { toGrid, toUnits } = mazeMetric(maze);
+  const dist = Math.hypot(x1 - x0, z1 - z0);
+  if (dist < 1e-12) return true;
+  const dx = (x1 - x0) / dist;
+  const dz = (z1 - z0) / dist;
+  let gx = Math.floor(toGrid(x0 / unit));
+  let gz = Math.floor(toGrid(z0 / unit));
+  const tgx = Math.floor(toGrid(x1 / unit));
+  const tgz = Math.floor(toGrid(z1 / unit));
+  const edge = (g, dir) => (dir > 0 ? g + 1 : g);
+  for (let guard = 0; guard < 4 * maze.n; guard++) {
+    if (gx === tgx && gz === tgz) return true;
+    const tx = Math.abs(dx) > 1e-12
+      ? (toUnits(edge(gx, dx)) * unit - x0) / dx : Infinity;
+    const tz = Math.abs(dz) > 1e-12
+      ? (toUnits(edge(gz, dz)) * unit - z0) / dz : Infinity;
+    if (Math.min(tx, tz) >= dist) return true; // Ziel liegt vor der naechsten Kante
+    if (tx <= tz) gx += dx > 0 ? 1 : -1;
+    else gz += dz > 0 ? 1 : -1;
+    if (gx < 0 || gx >= maze.n || gz < 0 || gz >= maze.n) return false;
+    if (maze.grid[gz][gx] !== OPEN) return false;
+  }
+  return true;
+}
+
 // yaw, sodass die Kamera am Start in den (einzigen) offenen Nachbargang blickt.
 // forward(yaw, pitch=0) = (-sin yaw, 0, -cos yaw).
 export function startFacingYaw(maze) {
