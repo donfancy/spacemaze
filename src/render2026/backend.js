@@ -683,10 +683,15 @@ export function createBackend2026(container = document.body) {
     mat.needsUpdate = true;
   }
 
-  // Sternen-Funkeln (eine Formel fuer Welt und Startscreen).
-  function twinkleMats(mats, time) {
+  // Sternen-Funkeln (eine Formel fuer Welt und Startscreen). `dim` blendet
+  // das ganze Sternfeld: die Sternfelder von Startscreen (Seed 1980, volle
+  // Kugel im Wuerfel-System) und Welt (maze.seed, Halbkugel im Maze-System)
+  // sind NIE deckungsgleich -- am Szenenschnitt der Draufsichten muessen
+  // beide auf 0 stehen, sonst springen die Sterne (Boris' "hard cut";
+  // die Blende laeuft in den Flug-/Schwenk-Bewegungen).
+  function twinkleMats(mats, time, dim = 1) {
     mats.forEach((mat, i) => {
-      mat.opacity = 0.75 + 0.25 * Math.sin(time * (1.3 + i * 0.7) + i * 2.1);
+      mat.opacity = (0.75 + 0.25 * Math.sin(time * (1.3 + i * 0.7) + i * 2.1)) * dim;
     });
   }
 
@@ -712,12 +717,19 @@ export function createBackend2026(container = document.body) {
   // Ziel strahlt es weiss auf und erlischt (wie die 1980-Strahlen). `view`
   // kommt aus playing.viewState() (null in der Draufsicht: dort entscheidet
   // game.reachedGoal, ob das Leuchtfeuer noch brennt). `dim` blendet das
-  // Leuchtfeuer mit (Maze-Wachstum, Karten-Exit).
-  function animateWorld(game, view, dim = 1) {
-    twinkleMats(world.starGroups, game.time);
+  // Leuchtfeuer mit (Maze-Wachstum, Karten-Exit). `starDim` blendet die
+  // Sterne: Draufsichten sind STERNENLOS (Boris' Entscheid gegen den
+  // Sternen-Cut am Szenenschnitt), die Schwenks blenden mit der Ego-Naehe.
+  function animateWorld(game, view, dim = 1, starDim = 1) {
+    twinkleMats(world.starGroups, game.time, starDim);
     // Kaum merkliche Drift der Nebel-Skybox (backgroundRotation kostet pro
     // Frame nichts -- nur eine Matrix-Uniform; die Punkt-Sterne bleiben fest).
     world.scene.backgroundRotation.y = game.time * SKY_DRIFT;
+    // Auch der GEBACKENE Himmel (Nebel + Staub der Cubemap) und die
+    // SPIEGEL-Sterne folgen starDim -- die Spiegel-Sterne haengen unter der
+    // Welt und waren von oben der eigentliche Sternen-Teppich um die Platte.
+    world.scene.backgroundIntensity = starDim;
+    for (const m of world.mirrorStarMats) m.opacity = world.mirrorStarOpacity * starDim;
 
     const done = view ? view.reached : game.reachedGoal;
     const flashAge = view?.reached ? view.sceneT - view.reachedAt : Infinity;
@@ -1628,16 +1640,17 @@ export function createBackend2026(container = document.body) {
     const cubeDim = view.titleT != null ? 0.3 : 1;
     start.edgeMat.color.set(view.color ?? PHOSPHOR_GREEN)
       .multiplyScalar(EGO_BOOST * cubeDim);
-    twinkleMats(start.starMats, game.time);
     start.scene.backgroundRotation.y = game.time * SKY_DRIFT;
-    // Nebel-Himmel blendet in den Fluegen aus/ein: rund um die Draufsicht
-    // steht nach dem Schnitt ohnehin nur Schwarz + Sterne (horizonFade der
-    // Welt-Skybox) -- statt des harten Wechsels "Nebulae -> nur Sterne"
-    // dunkelt der Nebel waehrend des Andockens ab und kommt beim Abdocken
-    // in der Bewegung wieder (quadratisch: nahe am Orbit voll, am Schnitt 0).
+    // Himmel blendet in den Fluegen aus/ein: die Draufsicht ist STERNENLOS
+    // (Boris' Entscheid -- die Sternfelder beider Szenen sind nie
+    // deckungsgleich, am Schnitt spraengen die Sterne), also gehen hier
+    // Nebel UND Sterne im Andock-Flug auf Schwarz und kommen beim Abdocken
+    // in der Bewegung wieder. Nebel quadratisch (verschwindet zuerst),
+    // Sterne linear (halten etwas laenger) -- am Schnitt beide 0.
     const skyA = view.phase === 'orbiting' ? 1
       : view.phase === 'undocking' ? view.p : 1 - view.p;
     start.scene.backgroundIntensity = skyA * skyA;
+    twinkleMats(start.starMats, game.time, skyA);
     sweepDockSheen(game, view); // Glanzlicht wischt in der Flug-Bewegung
     updateTitle(view); // Titel-Display (Boot + Attract) -- versteckt sich selbst
   }
@@ -1663,7 +1676,7 @@ export function createBackend2026(container = document.body) {
     setMarkerFade(world, view.markerFade);
     updateFoeMarkers(game, view.foeFade);
     updateTrail(null, 0);
-    animateWorld(game, null, DIAGRAM_BEACON * view.markerFade); // blendet mit G ein
+    animateWorld(game, null, DIAGRAM_BEACON * view.markerFade, 0); // blendet mit G ein; sternenlos
     world.beaconCone.visible = false;
   }
 
@@ -1689,7 +1702,8 @@ export function createBackend2026(container = document.body) {
     world.headlight.position.set(camera.position.x, camera.position.y + 2, camera.position.z);
     // Leuchtfeuer: von der blassen Karten-Saeule zur vollen Ego-Helligkeit;
     // der Kegel kommt erst mit der Ego-Naehe dazu (end-on = Blowout).
-    animateWorld(game, null, DIAGRAM_BEACON + (1 - DIAGRAM_BEACON) * e);
+    // Sterne kommen mit der Ego-Naehe (Draufsicht sternenlos).
+    animateWorld(game, null, DIAGRAM_BEACON + (1 - DIAGRAM_BEACON) * e, e);
     world.beaconCone.material.opacity *= e;
   }
 
@@ -1711,7 +1725,7 @@ export function createBackend2026(container = document.body) {
     updateTrail(game.trail, view.e);
     swoopCamera(view.origin, a, (game.viewRoll ?? 0) * a);
     world.headlight.position.set(camera.position.x, camera.position.y + 2, camera.position.z);
-    animateWorld(game, null, DIAGRAM_BEACON + (1 - DIAGRAM_BEACON) * a); // hin zur blassen Karten-Saeule
+    animateWorld(game, null, DIAGRAM_BEACON + (1 - DIAGRAM_BEACON) * a, a); // hin zur blassen, sternenlosen Karte
     world.beaconCone.material.opacity *= a;
   }
 
@@ -1738,7 +1752,7 @@ export function createBackend2026(container = document.body) {
     setMarkerFade(world, f);
     updateFoeMarkers(game, f);
     updateTrail(game.trail, f);
-    animateWorld(game, null, DIAGRAM_BEACON * f); // blasse Saeule, blendet mit aus
+    animateWorld(game, null, DIAGRAM_BEACON * f, 0); // blasse Saeule, blendet mit aus; sternenlos
     world.beaconCone.visible = false;
   }
 
@@ -2035,7 +2049,8 @@ export function createBackend2026(container = document.body) {
     // Kamera angekommen ist -- waehrend der Schwenks stehen wie bei
     // Falling/Rising die Feind-Kreuze (gleiche Bildsprache).
     if (e < 1) {
-      animateWorld(gameLike, view, DIAGRAM_BEACON + (1 - DIAGRAM_BEACON) * e);
+      // Sterne blenden wie bei Falling/Rising mit der Karten-Naehe.
+      animateWorld(gameLike, view, DIAGRAM_BEACON + (1 - DIAGRAM_BEACON) * e, e);
       world.beaconCone.material.opacity *= e;
       return;
     }

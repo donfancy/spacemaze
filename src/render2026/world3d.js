@@ -555,12 +555,21 @@ function buildMirror(world) {
   });
   g.add(new THREE.LineSegments(world.beaconLines.geometry, world.beaconMirrorMat));
 
+  // Spiegel-Sterne mit EIGENEN Materialien (matt, ohne Funkeln). Sie haengen
+  // bei y = -600*sin(el) UNTER der Welt -- die Draufsicht schaut direkt auf
+  // sie (rings um die Platte, wo kein Boden deckt): backend.js blendet sie
+  // deshalb ueber mirrorStarMats mit dem starDim der Szene (Draufsichten
+  // sternenlos, Boris' Entscheid gegen den Sternen-Cut am Szenenschnitt).
+  world.mirrorStarMats = [];
+  world.mirrorStarOpacity = 0.3;
   for (const geo of world.starGeos) {
-    g.add(new THREE.Points(geo, new THREE.PointsMaterial({
+    const mat = new THREE.PointsMaterial({
       size: 2.5, sizeAttenuation: false, vertexColors: true,
-      transparent: true, opacity: 0.3, depthWrite: false,
+      transparent: true, opacity: world.mirrorStarOpacity, depthWrite: false,
       blending: THREE.AdditiveBlending, fog: false,
-    })));
+    });
+    world.mirrorStarMats.push(mat);
+    g.add(new THREE.Points(geo, mat));
   }
 
   world.mirror = g;

@@ -31,7 +31,20 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   (schwebt das Punktlicht daneben, beleuchtet es die fast kantengleiche
   NACHBARflaeche -- ihr duenner heller Streifen bloomt zu gruenen
   Perlenketten), plus Orts-Huellkurve sin(pi c) gegen den Kanten-Balken
-  nahe der Ecke (HDR-Kante ueber hell angestrahlter Flaeche). Und die
+  nahe der Ecke (HDR-Kante ueber hell angestrahlter Flaeche). STERNE:
+  die 2026-Draufsichten sind STERNENLOS (Boris' Entscheid) -- die
+  Sternfelder von Startscreen (Seed 1980, volle Kugel, Wuerfel-System)
+  und Welt (maze.seed, Halbkugel, Maze-System) sind nie deckungsgleich,
+  am Szenenschnitt spraengen die Sterne als Hard-Cut; stattdessen
+  blenden sie NUR in den Bewegungen (Startscreen-Fluege: skyA linear,
+  Nebel skyA^2; Schwenks/Replay-Blenden: mit der Ego-Naehe e --
+  twinkleMats/animateWorld tragen dafuer einen starDim). DREI Quellen
+  muessen dem starDim folgen, sonst bleibt ein Rest-Teppich:
+  world.starGroups, scene.backgroundIntensity (gebackener Skybox-Staub)
+  UND world.mirrorStarMats -- die SPIEGEL-Sterne haengen bei
+  y=-600*sin(el) UNTER der Welt, die Draufsicht schaut rings um die
+  Platte direkt auf sie (das war der hartnaeckige "Sternen-Cut",
+  Sichtpruefungs-Befund). Und die
   Wuerfel-Kanten liegen GEOMETRISCH auf den Flaechen (polygonOffset 2/2
   wie die Platine statt edges.scale 1.01 -- der 1%-Spalt zwischen
   Randlinie und Flaeche am Andock-Ende ist weg, die Platten-Kontur
