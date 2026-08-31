@@ -10,6 +10,15 @@
 //                 von 0% auf 30% ein, und der Flug endet an der Stelle der
 //                 Orbit-Bahn, die dieser Flaeche zugewandt ist -- dort laeuft
 //                 das Umtanzen nahtlos weiter.
+// C1-STETIGKEIT beider Fluege (31.8.2026): die Orbit-Uhr t laeuft waehrend
+// der Fluege WEITER, und dockPose blendet gegen die BEWEGTE Orbit-Pose
+// (Andocken: bewegter Start, Abdocken: bewegtes Ziel). Weil easeInOut an
+// beiden Enden Steigung 0 hat, uebernimmt der Flug am Orbit-Ende exakt die
+// Bahngeschwindigkeit und kommt an der Flaeche mit Tempo 0 an -- kein
+// hartes Stehenbleiben des Himmels beim S-Druck, kein harter Ruck, wenn
+// nach dem Abdocken das Umtanzen wieder einsetzt. Der Abdock-Flug startet
+// die Uhr um UNDOCK_DURATION VOR dem zugewandten Bahnpunkt, damit die
+// Landung trotz laufender Uhr dort ankommt.
 // Nach Abschluss des Andockens uebernimmt MazeGen nahtlos dieselbe Flaeche.
 //
 // Tasten (Stufe 3): links/rechts = Level, hoch/runter = Engine-Schalter
@@ -61,11 +70,9 @@ export function createStartscreen(game) {
   let t = 0;
   let phase = 'orbiting';
   let dockT = 0;
-  let dockStart = null;
   let dockTarget = null;
   let undockT = 0;
   let undockStart = null;
-  let undockTarget = null;
   let idle = 0; // Sekunden ohne Tastendruck im Orbit (Attract-Mode-Uhr)
   // Info-Seite "HOW TO PLAY" (core/hud.js): I blendet sie im Orbit ueber
   // den (gedimmten) Wuerfel, I/X schliessen. Der Attract-Mode zeigt sie
@@ -90,7 +97,6 @@ export function createStartscreen(game) {
     const face = pickDockFace(viewDir);
     game.dockFace = face;
     dockTarget = faceDockPose(face, CUBE_SIZE, camera.fov, 0.85);
-    dockStart = { position: o.position, yaw: o.yaw, pitch: o.pitch };
     phase = 'docking';
     dockT = 0;
     info = false;
@@ -109,9 +115,11 @@ export function createStartscreen(game) {
   // (null = Renderer-Grundfarbe gruen). p ist der Flug-Fortschritt (0..1).
   function look() {
     if (phase === 'undocking') {
+      // Bewegtes ZIEL: die Orbit-Uhr laeuft, der Flug landet mit der
+      // Bahngeschwindigkeit des Orbits (C1 -- kein Ruck beim Uebergang).
       const p = Math.min(undockT / UNDOCK_DURATION, 1);
       return {
-        phase, p, pose: dockPose(p, undockStart, undockTarget),
+        phase, p, pose: dockPose(p, undockStart, orbitCamera(t, ORBIT_OPTS)),
         hiddenDim: HIDDEN_DIM * p,
         color: mixColors(levelColor(game.level), PHOSPHOR_GREEN, p),
       };
@@ -120,9 +128,11 @@ export function createStartscreen(game) {
       return { phase, p: 0, pose: orbitCamera(t, ORBIT_OPTS), hiddenDim: HIDDEN_DIM, color: null };
     }
     // 'docking' (und der Moment 'docked'): Blende Richtung Level-Farbe.
+    // Bewegter START: der Orbit tanzt unter dem anwachsenden Ease weiter,
+    // der S-Druck friert nichts ein (C1 -- der Himmel bleibt in Fahrt).
     const p = Math.min(dockT / DOCK_DURATION, 1);
     return {
-      phase, p, pose: dockPose(p, dockStart, dockTarget),
+      phase, p, pose: dockPose(p, orbitCamera(t, ORBIT_OPTS), dockTarget),
       hiddenDim: HIDDEN_DIM * (1 - p),
       color: mixColors(PHOSPHOR_GREEN, levelColor(game.level), p),
     };
@@ -208,11 +218,9 @@ export function createStartscreen(game) {
       t = 0;
       phase = 'orbiting';
       dockT = 0;
-      dockStart = null;
       dockTarget = null;
       undockT = 0;
       undockStart = null;
-      undockTarget = null;
       idle = 0;
       info = false;
       title = false;
@@ -227,14 +235,16 @@ export function createStartscreen(game) {
       }
 
       if (game.undock) {
-        // Rueckweg von der Karte: Abdock-Flug von der Andock-Pose zu der Stelle
-        // der Orbit-Bahn, die dieser Flaeche zugewandt ist. t startet dort,
-        // damit das Umtanzen nach dem Flug nahtlos weiterlaeuft.
+        // Rueckweg von der Karte: Abdock-Flug von der Andock-Pose auf die
+        // LAUFENDE Orbit-Bahn. Die Uhr startet UNDOCK_DURATION vor dem
+        // Bahnpunkt, der dieser Flaeche zugewandt ist -- so landet der Flug
+        // trotz mitlaufender Uhr genau dort, und das Umtanzen laeuft mit
+        // uebernommener Bahngeschwindigkeit nahtlos weiter (C1).
         game.undock = false;
         const face = game.dockFace ?? SIDE_FACES[0];
-        t = orbitTimeFacing(face.normal, ORBIT_OPTS);
+        t = orbitTimeFacing(face.normal, ORBIT_OPTS) - UNDOCK_DURATION;
+        if (t < 0) t += 2 * Math.PI / ORBIT_OPTS.azimuthSpeed; // Uhr positiv halten
         undockStart = faceDockPose(face, CUBE_SIZE, camera.fov, 0.85);
-        undockTarget = orbitCamera(t, ORBIT_OPTS);
         phase = 'undocking';
         game.audio?.play(dockPatch(UNDOCK_DURATION, true)); // dezentes Weggleiten
       }
@@ -242,13 +252,14 @@ export function createStartscreen(game) {
 
     update(dt) {
       if (phase === 'undocking') {
+        t += dt; // Orbit-Uhr laeuft mit -- der Flug zielt auf die bewegte Bahn
         undockT += dt;
         if (undockT >= UNDOCK_DURATION) {
-          phase = 'orbiting'; // t steht schon richtig
+          phase = 'orbiting'; // t steht schon richtig (Start war vorverlegt)
           idle = 0;
           pauseT = 0; // Attract-Pause (Titel -> Info) beginnt von vorn
         }
-        return; // t (Orbit-Uhr) steht waehrend des Flugs
+        return;
       }
       t += dt;
       // Attract-Mode: nach IDLE Sekunden ohne Taste startet die Demo (bzw.
