@@ -1,4 +1,4 @@
-# SPACE MAZE — Projekt-Instruktionen
+# MAZESTORM — Projekt-Instruktionen
 
 3D-Vektorlabyrinth im Atari-Stil (Battlezone/Tempest/Star Wars), Browser, plain
 vanilla JS, 2D-Canvas mit selbstgerechnetem 3D — grüner Phosphor-Look, alles Linien.
@@ -61,9 +61,15 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Hinweis unten. Manuell geoeffnet haelt sie die Attract-Uhr an; der
   Attract-Mode zeigt sie automatisch in der Orbit-Pause zwischen den Demos
   (viewState().info, in der Demo geschluckte Tasten unveraendert).
-- TITEL-DISPLAY "SPACE MAZE" (30.8.2026, Tempest-Hommage): `world/title.js`
+- TITEL-DISPLAY "MAZESTORM" (30.8.2026, Tempest-Hommage): `world/title.js`
   (pur, testbar): Phasen-Uhr TITLE {assemble 3s, hold 3.4s, finale 1.6s},
-  5x7-Voxel-Schrift `titleCells` mit HALBER Wort-Luecke (Boris' Spec),
+  5x7-Voxel-Schrift `titleCells` (seit 31.8.2026 EIN Wort MAZESTORM --
+  Umbenennung wegen Namenskollision, die halbe Wort-Luecke ist Geschichte;
+  PARALLAXE-TRICK: das M ist 7 statt 5 Spalten breit mit Luft zwischen den
+  Strichen ("Durchschuss") -- die aeusseren Buchstaben stehen in der
+  kamera-verankerten 2026-Schrift-Ebene schraeg im Blick und stauchen sich,
+  das 5er-M war dort nicht mehr als M lesbar (Boris' Befund); der
+  Letter-Vorschub folgt der Glyphen-Breite),
   Farb-Zyklus ueber FIREWORK_COLORS, Finale weiss. Laeuft STUMM beim
   allerersten Laden (bootPlayed) und in jeder Attract-Pause: RUHIGE
   Nur-Wuerfel-Zeit (ORBIT_CALM 7s, nur zwischen den Demos -- die erste
@@ -114,7 +120,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   malen sonst Riesen-Strahlen (1980 clippte das weg) — Radius waechst mit
   der Kamera-Distanz auf. CDP-FALLE: unter `--headless=new` steht rAF ohne
   erzwungene Frames still — Sichtpruefungs-Skripte pumpen Frames per
-  Wegwerf-Screenshot und pollen `window.spacemaze`; ZEITRAFFER dabei
+  Wegwerf-Screenshot und pollen `window.mazestorm`; ZEITRAFFER dabei
   beachten: ~5 rAF a 0.1s pro Pump = 0.5s Spielzeit, kurze Effekte sofort
   fotografieren (Details PLAN2026.md, Stufe-3/4/5-Notizen).
 - Boris sieht aktuell die Terminal-Ausgaben evtl. NICHT (Client-Hänger) — wichtige

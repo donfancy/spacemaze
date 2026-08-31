@@ -327,7 +327,7 @@ export function createBackend2026(container = document.body) {
     if (el._t !== html) { el._t = html; el.innerHTML = html; }
   }
 
-  // --- Titel-Display "SPACE MAZE" (world/title.js): dicke Voxel-Lettern -------
+  // --- Titel-Display "MAZESTORM" (world/title.js): dicke Voxel-Lettern -------
   // Die Bloecke starten AUF der Wuerfel-Oberflaeche (voxelOrigin, jeder poppt
   // erst beim eigenen Abheben auf -- voxelSize) und fliegen gestaffelt in
   // eine kamera-verankerte Schrift-Ebene (immer lesbar, obwohl der Orbit

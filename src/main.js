@@ -19,7 +19,7 @@ const debugEnabled = new URLSearchParams(location.search).has('debug');
 // Schalter (Stufe 3) aendert game.engine LIVE: applyEngine() laedt das Backend
 // nach und blendet Canvas/Backend um; die Wahl landet in localStorage
 // (?engine= in der URL hat beim Laden Vorrang, siehe resolveEngine).
-const ENGINE_KEY = 'spacemaze.engine';
+const ENGINE_KEY = 'mazestorm.engine';
 let stored = null;
 try { stored = localStorage.getItem(ENGINE_KEY); } catch { /* privat-Modus o.ae. */ }
 const engine = resolveEngine(location.search, stored);
@@ -71,7 +71,7 @@ applyEngine(game); // initiale Wahl anwenden (laedt ggf. das 2026-Backend)
 
 // Debug-Haken fuer die CDP-Sichtpruefung (PLAN2026.md): headless laeuft die
 // Uhr gedehnt, die Test-Skripte pollen deshalb Zustand + Spielzeit.
-window.spacemaze = game;
+window.mazestorm = game;
 
 // Einzelzeichen (Buchstaben) normalisieren wir auf Grossbuchstaben.
 const normKey = (e) => (e.key.length === 1 ? e.key.toUpperCase() : e.key);

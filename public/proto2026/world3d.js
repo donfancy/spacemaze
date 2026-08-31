@@ -1,4 +1,4 @@
-// SPACE MAZE 2026 -- Prototyp: Szenen-Aufbau.
+// MAZESTORM 2026 -- Prototyp: Szenen-Aufbau.
 // Baut aus dem ECHTEN Maze-Generator (src/world/maze.js, metric.js,
 // mazeGeometry.js) und der ECHTEN Farb-Palette (src/render/colors.js) eine
 // Three.js-Szene: dunkle Flaechen mit Neon-Leuchtkanten (der Bloom-Pass in

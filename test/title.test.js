@@ -1,6 +1,6 @@
-// Titel-Display "SPACE MAZE" (world/title.js, pur) + Startscreen-Einbindung:
+// Titel-Display "MAZESTORM" (world/title.js, pur) + Startscreen-Einbindung:
 // Boot-Titel beim allerersten Laden, Attract-Auftakt, jede Taste raeumt ihn
-// weg; 5x7-Voxel-Layout mit HALBER Wort-Luecke (Boris' Spec).
+// weg; 5x7-Voxel-Layout, EIN Wort (Umbenennung 31.8.2026, Boris' Entscheid).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,8 +16,8 @@ test('Phasen-Summe stimmt mit der Gesamtdauer ueberein', () => {
   assert.ok(Math.abs(TITLE.assemble + TITLE.hold + TITLE.finale - TITLE.dur) < 1e-9);
 });
 
-test('titleCells: SPACE MAZE zentriert, mit HALBER Wort-Luecke', () => {
-  assert.equal(TITLE_WORD, 'SPACE MAZE');
+test('titleCells: MAZESTORM zentriert, EIN Wort ohne Wort-Luecke', () => {
+  assert.equal(TITLE_WORD, 'MAZESTORM');
   const cells = titleCells();
   assert.ok(cells.length > 100, `genug Voxel fuer 9 Buchstaben (${cells.length})`);
 
@@ -28,16 +28,23 @@ test('titleCells: SPACE MAZE zentriert, mit HALBER Wort-Luecke', () => {
   assert.equal(Math.min(...ys), -3);
   assert.equal(Math.max(...ys), 3, '7 Zeilen hoch');
 
-  // Belegte Spalten: Luecken ZWISCHEN Buchstaben sind 1 Spalte breit, die
-  // Wort-Luecke ist 4 Spalten (halbes Blank: 3 + Buchstaben-Luecke) --
-  // deutlich kleiner als ein volles Blank (7).
+  // Belegte Spalten: nur die 1-Spalten-Luecken ZWISCHEN den Buchstaben,
+  // keine breitere Wort-Luecke mehr (ein Wort). Breite = 7 schmale
+  // Buchstaben (5+1) + 2 BREITE M (7+1) — der Parallaxe-Trick: die
+  // aeusseren M sind 2 Spalten breiter, damit sie in der schraegen
+  // 2026-Schrift-Ebene lesbar bleiben.
   const cols = [...new Set(xs)].sort((a, b) => a - b);
-  const gaps = [];
   for (let i = 1; i < cols.length; i++) {
-    if (cols[i] - cols[i - 1] > 1) gaps.push(cols[i] - cols[i - 1] - 1);
+    assert.ok(cols[i] - cols[i - 1] <= 2, 'keine Luecke breiter als die Buchstaben-Luecke');
   }
-  assert.equal(Math.max(...gaps), 4, 'die groesste Luecke ist die halbe Wort-Luecke');
-  assert.equal(gaps.filter((g) => g === 4).length, 1, 'genau EINE Wort-Luecke');
+  assert.equal(cols[cols.length - 1] - cols[0], 7 * 6 + 2 * 8 - 2, '7 schmale + 2 breite Buchstaben');
+
+  // Beide M nutzen die 7er-Breite: in der OBERSTEN Zeile (y=3) belegt ein
+  // M nur seine beiden Rand-Spalten — links wie rechts 7 Spalten auseinander.
+  const top = cells.filter((c) => c.y === 3).map((c) => c.x).sort((a, b) => a - b);
+  assert.equal(top[1] - top[0], 6, 'linkes M: Aussenstriche 7 Spalten auseinander');
+  assert.equal(top[top.length - 1] - top[top.length - 2], 6,
+    'rechtes M: Aussenstriche 7 Spalten auseinander');
 });
 
 test('voxelProgress: alle starten am Wuerfel und kommen puenktlich an', () => {
@@ -135,13 +142,12 @@ function advance(game, renderer, seconds, dt = 1 / 60) {
   }
 }
 
-test('Boot-Titel: laeuft beim Laden einmal, 1980 zeichnet beide Woerter', () => {
+test('Boot-Titel: laeuft beim Laden einmal, 1980 zeichnet den Schriftzug', () => {
   const g = new Game();
   const r = fakeRenderer();
   assert.equal(g.current.viewState().titleT, 0, 'Titel steht sofort an');
   advance(g, r, 0.2);
-  assert.ok(r.texts.includes('SPACE') && r.texts.includes('MAZE'),
-    'beide Woerter einzeln gesetzt (halbe Luecke)');
+  assert.ok(r.texts.includes('MAZESTORM'), 'der Schriftzug ist gesetzt');
   assert.ok(!r.texts.some((s) => /^LEVEL \d+$/.test(String(s))),
     'Level-Auswahl weicht dem Titel');
   advance(g, r, TITLE.dur);

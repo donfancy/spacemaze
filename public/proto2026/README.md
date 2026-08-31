@@ -1,4 +1,4 @@
-# SPACE MAZE 2026 — Prototyp
+# MAZESTORM 2026 — Prototyp
 
 Diskussionsgrundlage fuer die "2026-Variante": dasselbe Labyrinth wie im Spiel
 (ECHTER Generator `src/world/maze.js`, echte Metrik, echte Farb-Palette, echter

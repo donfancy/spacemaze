@@ -27,8 +27,7 @@
 
 import { GameEvent } from '../core/states.js';
 import { blinkOn, displayLevel, INFO_TITLE, INFO_LINES } from '../core/hud.js';
-import { TITLE, titleZoom, titleAlpha, titleColor, titleFlash } from '../world/title.js';
-import { measureText } from '../render/vectorText.js';
+import { TITLE, TITLE_WORD, titleZoom, titleAlpha, titleColor, titleFlash } from '../world/title.js';
 import { stepLevel, levelColor, MIN_LEVEL, MAX_LEVEL } from '../core/levels.js';
 import { ENGINE_1980, ENGINE_2026 } from '../core/engine.js';
 import { PHOSPHOR_GREEN, mixColors } from '../render/colors.js';
@@ -78,7 +77,7 @@ export function createStartscreen(game) {
   // den (gedimmten) Wuerfel, I/X schliessen. Der Attract-Mode zeigt sie
   // automatisch waehrend der Orbit-Pause zwischen den Demos.
   let info = false;
-  // Titel-Display "SPACE MAZE" (world/title.js): einmal beim allerersten
+  // Titel-Display "MAZESTORM" (world/title.js): einmal beim allerersten
   // Laden (bootPlayed) und als Auftakt jeder Attract-Pause; jede Taste
   // raeumt ihn weg. attractWait = die erste Attract-Sequenz laeuft schon
   // im Orbit, bevor game.beginDemo() die Demo uebernimmt.
@@ -148,11 +147,10 @@ export function createStartscreen(game) {
     renderer.renderScene({ segments: visible, intensity: dim }, camera, opts);
   }
 
-  // Titel-Display (1980, Tempest-Stil): SPACE MAZE fliegt aus der Tiefe
+  // Titel-Display (1980, Tempest-Stil): MAZESTORM fliegt aus der Tiefe
   // heran (titleZoom skaliert die Schrift), dahinter 2 Echo-Konturen in den
   // Nachbarfarben der Palette (der "Tunnel"-Look), harte Farbwechsel
   // (titleColor), am Ende weisser Blitz (renderer.flash) + Ausblenden.
-  // Die halbe Wort-Luecke: beide Woerter einzeln vermessen und gesetzt.
   function drawTitle(renderer) {
     const alpha = titleAlpha(titleT);
     if (alpha <= 0) return;
@@ -164,19 +162,13 @@ export function createStartscreen(game) {
     const full = Math.min(w / 11, h / 4.5);
     for (let ring = 2; ring >= 0; ring--) {
       const size = full * titleZoom(titleT) * (1 + 0.24 * ring);
-      const wordS = measureText('SPACE', { size }).width;
-      const wordM = measureText('MAZE', { size }).width;
-      const gap = size * 0.5; // das halbe Blank
-      const x0 = w / 2 - (wordS + gap + wordM) / 2;
-      const opts = {
-        y: cy, size, align: 'left', baseline: 'middle',
+      renderer.drawText(TITLE_WORD, {
+        x: w / 2, y: cy, size, align: 'center', baseline: 'middle',
         color: titleColor(titleT, ring),
         intensity: alpha * (ring === 0 ? 1 : 0.4 / ring),
         lineWidth: ring === 0 ? 2.5 : 1.5,
         glow: ring === 0 ? 14 : 6,
-      };
-      renderer.drawText('SPACE', { ...opts, x: x0 });
-      renderer.drawText('MAZE', { ...opts, x: x0 + wordS + gap });
+      });
     }
     const flash = titleFlash(titleT);
     if (flash > 0) renderer.flash(flash * 0.6, '#ffffff');

@@ -1,4 +1,4 @@
-// Titel-Display "SPACE MAZE" (Boot + Attract-Zyklus) als reine Daten und
+// Titel-Display "MAZESTORM" (Boot + Attract-Zyklus) als reine Daten und
 // Funktionen fuer BEIDE Engines -- Vorbild: das Tempest-Titel-Display.
 //   1980: der Schriftzug fliegt aus der Tiefe heran (titleZoom), haelt mit
 //         harten Arcade-Farbwechseln (titleColor, Echo-Konturen in den
@@ -11,23 +11,28 @@
 
 import { FIREWORK_COLORS } from './fireworks.js';
 
-export const TITLE_WORD = 'SPACE MAZE';
+export const TITLE_WORD = 'MAZESTORM';
 
 // Phasen in Sekunden: Aufbau -> Halten (Farb-Zyklus) -> Finale (weiss).
 export const TITLE = { assemble: 3.0, hold: 3.4, finale: 1.6, dur: 8.0 };
 
 // 5x7-Blockschrift der Titel-Buchstaben ('#' = Voxel).
+// Das M ist 7 statt 5 Spalten breit (Boris' Parallaxe-Trick 31.8.2026): in
+// der kamera-verankerten 2026-Schrift-Ebene stehen die aeusseren Buchstaben
+// schraeg im Blick und stauchen sich — MAZESTORM beginnt und endet mit M,
+// die breitere Form mit Luft zwischen den Strichen ("Durchschuss") bleibt
+// auch gestaucht als M lesbar. Der Vorschub folgt der Glyphen-Breite.
 const FONT = {
   S: ['.####', '#....', '#....', '.###.', '....#', '....#', '####.'],
-  P: ['####.', '#...#', '#...#', '####.', '#....', '#....', '#....'],
   A: ['.###.', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
-  C: ['.####', '#....', '#....', '#....', '#....', '#....', '.####'],
   E: ['#####', '#....', '#....', '####.', '#....', '#....', '#####'],
-  M: ['#...#', '##.##', '#.#.#', '#.#.#', '#...#', '#...#', '#...#'],
+  M: ['#.....#', '##...##', '#.#.#.#', '#..#..#', '#.....#', '#.....#', '#.....#'],
   Z: ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####'],
+  T: ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '..#..'],
+  O: ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  R: ['####.', '#...#', '#...#', '####.', '#.#..', '#..#.', '#...#'],
 };
-const LETTER_STEP = 6;  // 5 Spalten Buchstabe + 1 Spalte Luecke
-const HALF_SPACE = 3;   // Boris: nur ein HALBES Blank zwischen den Woertern
+const LETTER_GAP = 1;   // 1 Spalte Luecke zwischen den Buchstaben
 
 // Voxel-Zellen des Schriftzugs, zentriert um (0,0): x nach rechts in
 // Spalten, y nach OBEN in Zeilen.
@@ -35,17 +40,13 @@ export function titleCells(word = TITLE_WORD) {
   const cells = [];
   let cursor = 0;
   for (const ch of word) {
-    if (ch === ' ') {
-      cursor += HALF_SPACE;
-      continue;
-    }
     const rows = FONT[ch];
     for (let r = 0; r < rows.length; r++) {
       for (let c = 0; c < rows[r].length; c++) {
         if (rows[r][c] === '#') cells.push({ x: cursor + c, y: rows.length - 1 - r });
       }
     }
-    cursor += LETTER_STEP;
+    cursor += rows[0].length + LETTER_GAP;
   }
   const width = cursor - 1; // letzte Buchstaben-Luecke zaehlt nicht
   for (const cell of cells) {

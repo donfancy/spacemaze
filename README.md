@@ -1,4 +1,4 @@
-# SPACE MAZE
+# MAZESTORM
 
 Ein 3D-Vektorlabyrinth im Browser, im Stil der frühen 80er-Atari-Arcade-Automaten
 (Battlezone, Tempest, Star Wars) — grüner Phosphor-Look, alles nur Linien.
@@ -28,7 +28,7 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
 
 ## Steuerung (aktueller Stand)
 
-- Beim Laden läuft einmal das TITEL-DISPLAY: „SPACE MAZE" im Tempest-Stil
+- Beim Laden läuft einmal das TITEL-DISPLAY: „MAZESTORM" im Tempest-Stil
   (1980: aus der Tiefe heranfliegend mit Echo-Konturen und Arcade-
   Farbwechseln; 2026: dicke Voxel-Buchstaben, die aus dem Würfel
   zusammenfliegen und im weißen Goal-Glanz zerbersten). Der Attract-Mode

@@ -1,4 +1,4 @@
-// SPACE MAZE 2026 -- Prototyp: Render-Loop, Autopilot-Flug, Effekt-Toggles, HUD.
+// MAZESTORM 2026 -- Prototyp: Render-Loop, Autopilot-Flug, Effekt-Toggles, HUD.
 // Diskussionsgrundlage fuer die "2026-Variante": gleiche Maze-Logik wie das
 // Spiel (echter Generator, echte Metrik, echter Loesungsweg), aber GPU-Rendering
 // mit Flaechen, Bloom, Nebel, Spiegelung und Sternenhimmel.
@@ -190,7 +190,7 @@ function updateHud(dt) {
   const i = renderer.info.render;
   const an = (on) => (on ? 'AN ' : 'aus');
   hud.innerHTML =
-    `<b>SPACE MAZE 2026 — PROTOTYP</b>  (Seed ${maze.seed})\n` +
+    `<b>MAZESTORM 2026 — PROTOTYP</b>  (Seed ${maze.seed})\n` +
     `${fpsEma.toFixed(0)} FPS  ${msEma.toFixed(1)} ms  |  Draws ${i.calls}  Tris ${(i.triangles / 1000).toFixed(1)}k\n` +
     `[B] Bloom ${an(state.bloom)}   [R] Spiegelung ${an(state.mirror)}   [N] Nebel ${an(state.fog)}   [F] Freiflug ${an(state.free)}\n` +
     `[1] Phosphor  [2] Tempest  [3] Arcade  [H] Farbzyklus ${an(state.hueCycle)}   Thema: ${state.hueCycle ? 'psychedelisch' : state.themeName}\n` +

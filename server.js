@@ -21,6 +21,7 @@ const MIME = {
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 const server = createServer(async (req, res) => {
@@ -62,6 +63,6 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`SPACE MAZE dev server läuft:  http://localhost:${PORT}/`);
+  console.log(`MAZESTORM dev server läuft:   http://localhost:${PORT}/`);
   console.log(`Debug-Modus:                  http://localhost:${PORT}/?debug`);
 });
