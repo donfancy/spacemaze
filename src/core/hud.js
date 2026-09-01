@@ -6,6 +6,8 @@
 
 import { steerHintKeys, assistHintKeys } from '../world/gyro.js';
 import { TANKER_RED, mixColors } from '../render/colors.js';
+import { MIN_LEVEL, MAX_LEVEL } from './levels.js';
+import { ENGINE_1980, ENGINE_2026 } from './engine.js';
 
 // Steuer-Zeile der Ego-Ansicht (unten rechts bzw. 2026 im Label).
 // Die Lenk-Tasten folgen der Blick-Verdrehung (Pulsar-Rotation, orient) --
@@ -77,6 +79,26 @@ export function blinkOn(t) {
 // die ANZEIGE (und das, was S startet) ist aber die gemerkte Auswahl.
 export function displayLevel(g) {
   return g.demo && g.demoSavedLevel != null ? g.demoSavedLevel : g.level;
+}
+
+// Pfeil-Hinweise der Startscreen-Auswahl (1.9.2026, Boris: "meine Testuser
+// waren planlos"): links/rechts neben der Level-Zeile, runter/rauf am
+// Engine-Schalter (runter = 1980, rauf = 2026 -- der Pfeil steht neben der
+// Jahreszahl, die er anwaehlt). true = hell (der Druck bewirkt etwas),
+// false = gedimmt (Rand erreicht bzw. schon gewaehlt) -- dieselbe
+// Aktiv/Inaktiv-Optik wie die Jahreszahlen selbst.
+export function selectorArrows(g) {
+  const lvl = displayLevel(g);
+  return {
+    left: lvl > MIN_LEVEL, right: lvl < MAX_LEVEL,
+    down: g.engine !== ENGINE_1980, up: g.engine !== ENGINE_2026,
+  };
+}
+
+// Arcade-Copyright unterm Titel-Display ("(C) 1980 ATARI"-Hommage):
+// die Jahreszahl folgt der gewaehlten Engine.
+export function copyrightLine(engine) {
+  return '(C) BB DESIGN ' + (engine === ENGINE_2026 ? ENGINE_2026 : ENGINE_1980);
 }
 
 // GAME-OVER-Puls: die FARBE pulsiert zwischen Feind-Rot und Weiss

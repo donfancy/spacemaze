@@ -31,16 +31,17 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { State } from '../core/states.js';
 import {
   playHint, mapHint, replayHint, replayStatus, gameOverColor, blinkOn, displayLevel,
-  INFO_TITLE, INFO_LINES,
+  selectorArrows, copyrightLine, INFO_TITLE, INFO_LINES,
 } from '../core/hud.js';
 import { hasRecording } from '../core/recorder.js';
 import {
   TITLE, titleCells, voxelOrigin, voxelProgress, voxelBurst, voxelSize,
-  titleColor, titleFlash,
+  titleColor, titleFlash, titleAlpha,
 } from '../world/title.js';
 import { levelColor, levelConfig, enemyColor, spinnerColor } from '../core/levels.js';
 import {
   PHOSPHOR_GREEN, ARCADE_YELLOW, NEON_MAGENTA, diagramBoost, linearLuminance,
+  wallColorCycle,
 } from '../render/colors.js';
 import { EYE_RATIO, cellSize, CUBE_SIZE } from '../scenes/mazeView.js';
 import { faceLocalToWorld, SIDE_FACES } from '../world/cubeFaces.js';
@@ -99,7 +100,16 @@ const SPARK_COUNT = 14;
 const SPARK_SPEED = 2.2;     // Flugtempo (Gangbreiten/s)
 const SPARK_LIFE = 0.5;      // s
 const SPARK_SIZE = 0.09;     // Splitter-Halblaenge (Gangbreiten)
-const SPARK_OFF = 0.1;       // Abstand des Ursprungs von der Wandflaeche
+// Haarfein VOR der Wandflaeche (Boris' "physischer"-Pass 1.9.2026): die
+// Funken entspringen AN der Wand, die wandwaerts fliegende Haelfte
+// verschluckt der Tiefentest -- sie spritzen sichtbar AUS der Wand statt
+// frei in der Luft zu spruehen (der alte Abstand war 0.1 Gangbreiten).
+const SPARK_OFF = 0.02;
+const SPARK_TINT = 0.45;     // Farb-Touch: Weiss Richtung Level-Farbe gemischt
+// Funken-Hoehe (Gangbreiten): auf reiner Gleiter-Flughoehe (0.26) rutschten
+// sie im Ego-Bild fast unter den Rand (Boris' Test 1.9.2026) -- etwas
+// angehoben Richtung Augenhoehe, im Replay immer noch dicht am Rumpf.
+const SPARK_HEIGHT = 0.35;
                              // (Gangbreiten) -- sonst halb IN der Wand geboren
 
 const FOE_MARK_RATIO = 0.22; // Kreuz-Halbarm der Feind-Marker (Gangbreiten)
@@ -128,6 +138,20 @@ const SHARD_GLOW = { flash: 2.0, dim: 0.25 }; // flaechige Truemmer-Platten
 // FLIRRENDE Arcade-Farben zum Weiss gemischt (harte Schaltung wie 1981).
 const SHOT_PARAMS = { size: 0.12, spin: 18 };
 const SKY_DRIFT = 0.004;        // rad/s: kaum merkliche Drehung der Nebel-Skybox
+// Startscreen-Wuerfel "aufgemotzt" (Boris 1.9.2026). Alle drei Extras sind
+// reine ORBIT-Effekte: sie blenden in den An-/Abdock-Fluegen mit skyA^2 aus,
+// am Szenenschnitt steht wieder exakt die neutrale Platte unter den
+// statischen ACCENT_LIGHTS (Smooth-Pass-Regel).
+const CUBE_FACE_LUM = linearLuminance('#4a5a78'); // Ziel-Helligkeit des Zyklus
+const CUBE_CYCLE_PERIOD = 24;   // s: ein voller Ring Gruen -> Blau -> Rot
+const CUBE_EDGE_LUM = 1.1;      // Kanten im Orbit: knapp UEBER der Bloom-
+                                // Schwelle (0.85) statt EGO_BOOST -- der Bloom
+                                // bleibt, die satte Farb-Linie verschwindet
+                                // (luminanz-normiert: Blau glueht wie Gruen)
+const CUBE_ENV_REFLECT = 0.6;   // Nebel-Cubemap als diffuse Reflexion
+const DRIFT_INTENSITY = [130, 95]; // Wander-Sonnen (gruen/gelb)
+const DRIFT_RATE = 0.14;        // rad/s: gemaechlicher Umlauf
+const scratchCol = new THREE.Color(); // Scratch fuer die Zyklus-Mischung
 const SHOT_FLICKER = 12;        // Farb-Schaltrate (Hz)
 const SHOT_WHITE_MIX = 0.55;    // Weiss-Anteil der Arcade-Farben
 const NEAR_STAR = 0.6;          // Gangbreiten: der Stern-Radius waechst erst mit
@@ -216,6 +240,10 @@ const RCAM_FOV = { ego: EGO_FOV, chase: EGO_FOV, bird: 60, total: 55, orbit: 65 
 const RCAM_GLOW = { ego: 0, chase: 0, bird: 0.6, total: 1, orbit: 0.25 };
 const GLIDER_EDGE_HDR = 2.8;   // Kanten-Glut des Gleiters (etwas ueber den Waenden)
 const GLIDER_BODY_DIM = 0.13;  // dunkler Koerper (Tanker-Prinzip)
+// Kamera-Schnitt am Ende der LIVE-Begehung (Boris 1.9.2026): Crash und Ziel
+// blenden aus der Ego- in die Verfolger-Pose (RCAM.chase) -- man sieht die
+// Explosion des eigenen Schiffs bzw. den Gleiter im Feuerwerk von aussen.
+const END_CAM_BLEND = 0.8;     // s: wie die Replay-Kamera-Blenden
 
 const MM_DIST = 1.2;        // Abstand vor der Kamera (3D-Einheiten, > near 0.1)
 const MM_SCREEN = 0.14;     // Scheiben-Radius als Anteil der BildHOEHE
@@ -299,6 +327,10 @@ export function createBackend2026(container = document.body) {
   // Dezenter Hinweis auf die Info-Seite, ganz unten (wie 1980).
   const infoHint = overlay('left:0;right:0;bottom:2.5vh;text-align:center;' +
     'font-size:min(1.8vh,14px);letter-spacing:.18em;opacity:.5;');
+  // Arcade-Copyright unterm Titel-Display (Boris 1.9.2026): klein aber
+  // sichtbar, unter der kamera-verankerten Voxel-Schrift-Ebene.
+  const copyEl = overlay('left:0;right:0;top:64vh;text-align:center;' +
+    'font-size:min(2vh,16px);letter-spacing:.22em;');
 
   // Weisser Einschlag-Blitz des Crashs (Stufe 4) -- das 2026-Pendant zu
   // renderer.flash; liegt UNTER dem Fade (der Szenen-Uebergang deckt alles).
@@ -763,23 +795,35 @@ export function createBackend2026(container = document.body) {
   // (world/burst.js ist eine reine Funktion des Alters -- kein Partikel-
   // Zustand, deterministisch wie die 1980-Splitter). Ein wiederverwendetes
   // LineSegments-Objekt pro Welt; ohne aktiven Wurf unsichtbar.
-  function updateSparks(view, b, k) {
+  function updateSparks(view, b, k, color) {
     if (!world.sparks) {
       world.sparks = makeBuffer({
         world,
-        material: new THREE.LineBasicMaterial({
-          color: hdr('#ffffff', 2.5), transparent: true, opacity: 1,
-        }),
+        material: new THREE.LineBasicMaterial({ transparent: true, opacity: 1 }),
       });
       world.sparks.ensure(SPARK_COUNT * 6);
     }
     const s = world.sparks;
-    // Nur Fahrt-Kollisionen (b.point) funken; Geh-Bumps bleiben Blitz+Impuls.
-    const spec = b && b.point ? {
+    // Funken mit Farb-Touch in der Level-Farbe (Boris: reines Weiss sah aus
+    // wie die Schuesse) -- Weiss Richtung Level-Farbe gemischt, HDR-Boost
+    // wie zuvor; gecacht wie beim Gleiter.
+    if (s.colorKey !== color) {
+      s.colorKey = color;
+      s.mesh.material.color.set('#ffffff').lerp(new THREE.Color(color), SPARK_TINT)
+        .multiplyScalar(2.5);
+    }
+    // Nur Fahrt-Kollisionen funken; Geh-Bumps bleiben Blitz+Impuls.
+    // Ursprung: der PHYSISCHE Beruehrungspunkt (b.contact, drive.js -- Lot
+    // der Spielermitte auf die Wand) auf SPARK_HEIGHT: streift der linke
+    // Fluegel, spritzen die Funken von links ins Bild statt voraus an der
+    // Sichtlinie in der Luft (Boris' Replay-Befund). b.point bleibt als
+    // Fallback fuer Aufnahmen ohne contact.
+    const at = b && (b.contact ?? b.point);
+    const spec = at ? {
       center: [
-        b.point[0] - (b.axis === 'x' ? b.side * SPARK_OFF * view.cell : 0),
-        EYE_RATIO * view.cell,
-        b.point[1] - (b.axis === 'z' ? b.side * SPARK_OFF * view.cell : 0)],
+        at[0] - (b.axis === 'x' ? b.side * SPARK_OFF * view.cell : 0),
+        SPARK_HEIGHT * view.cell,
+        at[1] - (b.axis === 'z' ? b.side * SPARK_OFF * view.cell : 0)],
       count: SPARK_COUNT, speed: SPARK_SPEED * view.cell, life: SPARK_LIFE,
       size: SPARK_SIZE * view.cell, seed: b.at,
     } : null;
@@ -1456,8 +1500,11 @@ export function createBackend2026(container = document.body) {
   function updateMinimap(game, view) {
     const mm = ensureMinimap();
     // Beim Crash verschwindet das Instrument (das Bild zerbirst) -- 1980
-    // scherbt die Rose mit, hier ist Ausblenden das Pendant.
-    if (view.crash) { mm.group.visible = false; return; }
+    // scherbt die Rose mit, hier ist Ausblenden das Pendant. Am Ziel
+    // genauso: die Kamera loest sich vom Schiff (END_CAM_BLEND), ein
+    // kamera-verankertes Instrument haette in der Aussensicht nichts
+    // mehr zu melden.
+    if (view.crash || view.reached) { mm.group.visible = false; return; }
     mm.group.visible = true;
 
     // Pro Maze einmal: Wand-Kontur + S/G-Zentren in LOKALE Einheiten bringen
@@ -1638,8 +1685,6 @@ export function createBackend2026(container = document.body) {
     // Waehrend des Titel-Displays dimmt der Wuerfel ab (wie 1980) -- die
     // Voxel-Lettern stehen sonst gegen seine hellen Leuchtkanten.
     const cubeDim = view.titleT != null ? 0.3 : 1;
-    start.edgeMat.color.set(view.color ?? PHOSPHOR_GREEN)
-      .multiplyScalar(EGO_BOOST * cubeDim);
     start.scene.backgroundRotation.y = game.time * SKY_DRIFT;
     // Himmel blendet in den Fluegen aus/ein: die Draufsicht ist STERNENLOS
     // (Boris' Entscheid -- die Sternfelder beider Szenen sind nie
@@ -1651,6 +1696,35 @@ export function createBackend2026(container = document.body) {
       : view.phase === 'undocking' ? view.p : 1 - view.p;
     start.scene.backgroundIntensity = skyA * skyA;
     twinkleMats(start.starMats, game.time, skyA);
+
+    // Orbit-Extras (Boris' "aufmotzen" 1.9.2026): Farbzyklus, Nebel-
+    // Reflexion und Wander-Sonnen leben nur im Orbit -- orbitX = skyA^2
+    // blendet sie in den Fluegen aus, am Szenenschnitt uebernimmt die
+    // neutrale Platte unter den statischen ACCENT_LIGHTS nahtlos.
+    const orbitX = skyA * skyA;
+    const cyc = wallColorCycle(game.time, CUBE_CYCLE_PERIOD);
+    // Flaechen: die Zyklusfarbe LUMINANZ-normiert auf die Platten-
+    // Helligkeit (Gruen ist linear ~8x heller als das neutrale Blaugrau --
+    // roh gemischt wuerde der Wuerfel pumpen und blitzen).
+    scratchCol.set(cyc).multiplyScalar(CUBE_FACE_LUM / Math.max(linearLuminance(cyc), 1e-6));
+    start.faceMat.color.set('#4a5a78').lerp(scratchCol, orbitX);
+    // Kanten: folgen im Orbit dem Zyklus (nicht mehr farblich abgesetzt)
+    // und gluehen luminanz-normiert knapp ueber der Bloom-Schwelle
+    // (CUBE_EDGE_LUM statt EGO_BOOST -- Bloom bleibt, die satte Linie
+    // verschwindet); in den Fluegen blendet die volle Level-Farb-Kante
+    // ein, das Andock-Ende ist unveraendert.
+    scratchCol.set(cyc).multiplyScalar(CUBE_EDGE_LUM / Math.max(linearLuminance(cyc), 1e-6));
+    start.edgeMat.color.set(view.color ?? PHOSPHOR_GREEN)
+      .multiplyScalar(EGO_BOOST).lerp(scratchCol, orbitX)
+      .multiplyScalar(cubeDim);
+    start.scene.environmentIntensity = CUBE_ENV_REFLECT * orbitX;
+    const dl = start.driftLights;
+    const a = game.time * DRIFT_RATE;
+    dl[0].position.set(Math.cos(a) * 7, 2.5 * Math.sin(a * 0.6), Math.sin(a) * 7);
+    dl[1].position.set(Math.cos(2.1 - a * 0.73) * 6.5,
+      -2 + 4 * Math.cos(a * 0.41), Math.sin(2.1 - a * 0.73) * 6.5);
+    dl[0].intensity = DRIFT_INTENSITY[0] * orbitX;
+    dl[1].intensity = DRIFT_INTENSITY[1] * orbitX;
     sweepDockSheen(game, view); // Glanzlicht wischt in der Flug-Bewegung
     updateTitle(view); // Titel-Display (Boot + Attract) -- versteckt sich selbst
   }
@@ -1723,7 +1797,22 @@ export function createBackend2026(container = document.body) {
     setMarkerFade(world, view.e);
     updateFoeMarkers(game, view.e);
     updateTrail(game.trail, view.e);
-    swoopCamera(view.origin, a, (game.viewRoll ?? 0) * a);
+    if (view.gameOver || game.reachedGoal) {
+      // Nach Crash/Ziel steht die Live-Kamera in der Verfolgerpose
+      // (Kamera-Schnitt in drawEgo): der Rueckschwenk startet dort statt
+      // in der Ego-Lage -- sonst schnitte der Uebergang hart. Eine Gyro-
+      // Restverdrehung ist durch die chase-Blende schon ausgedreht.
+      const c = world.total / 2;
+      const dist = topDownDist();
+      computeReplayCamera(view.origin, 'chase', rcPosA, rcQuatA);
+      camera.position.set(c + (rcPosA.x - c) * a,
+        dist + (rcPosA.y - dist) * a, c + (rcPosA.z - c) * a);
+      camera.quaternion.copy(topQuaternion()).slerp(rcQuatA, a);
+      setFov(TOP_FOV + (EGO_FOV - TOP_FOV) * a);
+      world.wallCaps.visible = a > 0.05; // Deckel wie im Replay-Rausschwenk
+    } else {
+      swoopCamera(view.origin, a, (game.viewRoll ?? 0) * a);
+    }
     world.headlight.position.set(camera.position.x, camera.position.y + 2, camera.position.z);
     animateWorld(game, null, DIAGRAM_BEACON + (1 - DIAGRAM_BEACON) * a, a); // hin zur blassen, sternenlosen Karte
     world.beaconCone.material.opacity *= a;
@@ -1789,10 +1878,13 @@ export function createBackend2026(container = document.body) {
       const decay = Math.exp(-age * 9);
       const d = BUMP_WALL_DIST * UNITS_PER_CELL; // Mindestabstand zur Wand (decay-2-Falle)
       if (b.point) {
-        // Blitz KURZ VOR der Wandebene, vom Auftreffpunkt in den Gang gerueckt.
+        // Blitz KURZ VOR der Wandebene, vom BERUEHRUNGSPUNKT in den Gang
+        // gerueckt (contact = Streifstelle am Schiff; das Licht kommt beim
+        // Fluegel-Streifen von der Seite statt von voraus).
+        const lp2 = b.contact ?? b.point;
         world.bumpLight.position.set(
-          b.point[0] * k - (b.axis === 'x' ? b.side * d : 0), EYE,
-          b.point[1] * k - (b.axis === 'z' ? b.side * d : 0));
+          lp2[0] * k - (b.axis === 'x' ? b.side * d : 0), EYE,
+          lp2[1] * k - (b.axis === 'z' ? b.side * d : 0));
       } else {
         const push = b.impact * BUMP_RECOIL * UNITS_PER_CELL * decay;
         if (b.axis === 'x') x -= b.side * push;
@@ -1809,7 +1901,7 @@ export function createBackend2026(container = document.body) {
     } else {
       world.bumpLight.intensity = 0;
     }
-    updateSparks(view, b, k);
+    updateSparks(view, b, k, color);
 
     // Kampf (Stufe 4): Tanker, Projektile, Fadenkreuz, Splitter-Explosionen.
     // Der Crash bringt seine Splitter + Truemmer ueber view.bursts mit, der
@@ -1844,6 +1936,37 @@ export function createBackend2026(container = document.body) {
     // 1980-Occlusion). Sway-Konvention: roll > 0 = Kamera nach rechts =
     // negative Drehung um die Three.js-Blickachse; pitch passt direkt.
     camera.rotation.set(view.pitch, view.yaw, -(view.roll + shakeRoll));
+
+    // Kamera-Schnitt am Ende (END_CAM_BLEND): Crash und Ziel loesen die
+    // Kamera vom Schiff und blenden in die Replay-Verfolgerpose -- gleiche
+    // Rezeptur wie die Kamera-Blenden der Wiedergabe (Slerp + smoothstep;
+    // eine Gyro-Restverdrehung dreht dabei mit aus, chase ist horizontal).
+    // Der Rueckschwenk zur Karte startet dann von DIESER Pose (drawRising).
+    const overT = view.crash ? view.crash.t
+      : view.reached ? view.sceneT - view.reachedAt : -1;
+    let swing = 0;
+    if (overT >= 0) {
+      const q = Math.min(1, overT / END_CAM_BLEND);
+      swing = q * q * (3 - 2 * q);
+      computeReplayCamera(view, 'chase', rcPosA, rcQuatA);
+      camera.position.lerp(rcPosA, swing);
+      camera.quaternion.slerp(rcQuatA, swing); // slerp AUF der Kamera: kein Aliasing
+      // Von aussen brauchen die Waende Deckel (Replay-Regel: hohle Kaesten);
+      // von innen sind sie unsichtbar, der Schalter darf sofort an.
+      world.wallCaps.visible = true;
+      // Der Gleiter erscheint mit dem Kamera-Abstand (Replay-Regel) -- am
+      // Ziel steht/dreht er im Feuerwerk; beim Crash bleibt er weg (er ist
+      // explodiert, sein Schiffs-Burst fliegt stattdessen -- only2026).
+      const glider = ensureGlider(color);
+      glider.group.position.set(view.px * k, GLIDER.height * UNITS_PER_CELL, view.pz * k);
+      glider.group.rotation.set(0, view.yaw, -(view.bank ?? 0) * GLIDER.bankGain);
+      glider.mirrorObj.position.copy(glider.group.position);
+      glider.mirrorObj.rotation.copy(glider.group.rotation);
+      const showGlider = !view.crash
+        && camera.position.distanceTo(glider.group.position) > GLIDER_HIDE_DIST * UNITS_PER_CELL;
+      glider.group.visible = showGlider;
+      glider.mirrorObj.visible = showGlider;
+    }
 
     // Scheinwerfer schwebt UEBER der Kamera (Mindestabstand zu den Waenden,
     // sonst Bloom-Blowout an naher Wand, siehe world3d.js).
@@ -2063,7 +2186,7 @@ export function createBackend2026(container = document.body) {
     updateFoeShots(view, k);
     updateShotLights(view, k);
     updateFireworks(view);
-    updateSparks(view, view.bump, k); // Fahrt-Aufpraelle funken wie live
+    updateSparks(view, view.bump, k, color); // Fahrt-Aufpraelle funken wie live
 
     // Crash in der Aufnahme: greller Licht-Puls am Einschlag (der weisse
     // Vollbild-Blitz kommt in render(), wie im Spiel).
@@ -2160,21 +2283,43 @@ export function createBackend2026(container = document.body) {
     // Info-Seite (I bzw. Attract-Pause): ersetzt Level-Auswahl + Schalter,
     // "PRESS S" blinkt darunter weiter (wie 1980). Waehrend des
     // Titel-Displays weichen ALLE Mitte-Texte den Voxel-Lettern.
-    const infoOn = view?.info === true;
+    // Info-Seite blendet mit infoA ein/aus (startscreen-Rampe, Boris'
+    // Feinschliff 1.9.2026 -- vorher "ausgeknipst"); waehrend der ganzen
+    // Attract-Sequenz (view.hold: Titel/Luecke/Info/Fade) bleiben die
+    // Mitte-Texte verdraengt, statt in der 1s-Luecke kurz einzublitzen.
+    const infoA = view?.infoA ?? (view?.info ? 1 : 0);
+    const infoOn = view?.info === true || infoA > 0.01;
     const titleOn = view?.titleT != null;
-    infoEl.style.display = infoOn ? '' : 'none';
-    setText(infoHint, orbiting && !infoOn && !titleOn ? 'I INFO' : '');
-    setText(title, overlayOn && !infoOn && !titleOn ? `LEVEL ${displayLevel(game)}` : '');
+    const holdOn = view?.hold === true;
+    infoEl.style.display = infoA > 0.01 ? '' : 'none';
+    infoEl.style.opacity = String(infoA);
+    setText(infoHint, orbiting && !infoOn && !titleOn && !holdOn ? 'I INFO' : '');
     setText(press, overlayOn && blink ? 'PRESS S TO START' : '');
-    if (overlayOn && !infoOn && !titleOn) {
+    if (overlayOn && !infoOn && !titleOn && !holdOn) {
+      // Pfeil-Hinweise wie 1980 (drawSelector): hell = Druck bewirkt etwas,
+      // gedimmt = Rand/schon gewaehlt (core/hud.js selectorArrows).
+      const arrows = selectorArrows(game);
+      const arr = (ch, on) => `<span style="opacity:${on ? 1 : 0.3}">${ch}</span>`;
       const dim = (eng) => (game.engine === eng ? 1 : 0.3);
+      setHtml(title,
+        arr('←', arrows.left) + `&nbsp; LEVEL ${displayLevel(game)} &nbsp;`
+        + arr('→', arrows.right));
+      // Der Pfeil steht neben der Jahreszahl, die er anwaehlt (runter =
+      // 1980, rauf = 2026).
       setHtml(switchLine,
-        `<span style="opacity:${dim('1980')}">1980</span>` +
+        arr('↓', arrows.down) + '&nbsp; '
+        + `<span style="opacity:${dim('1980')}">1980</span>` +
         '<span style="opacity:.3"> / </span>' +
-        `<span style="opacity:${dim('2026')}">2026</span>`);
+        `<span style="opacity:${dim('2026')}">2026</span>`
+        + ' &nbsp;' + arr('↑', arrows.up));
     } else {
+      setText(title, '');
       setHtml(switchLine, '');
     }
+    // Arcade-Copyright unter dem Voxel-Titelzug: blendet mit dem Titel
+    // (dieselbe titleAlpha-Huellkurve wie die 1980-Schrift).
+    setText(copyEl, titleOn ? copyrightLine(game.engine) : '');
+    if (titleOn) copyEl.style.opacity = String(0.75 * titleAlpha(view.titleT));
 
     // GAME OVER auf der Karte: Farb-Puls rot<->weiss aus core/hud.js
     // (wie 1980 -- Helligkeits-Pulsieren wirkte "durchgestrichen").

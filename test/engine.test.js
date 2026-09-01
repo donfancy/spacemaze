@@ -203,10 +203,17 @@ test('Playing (Kampf): Feindberuehrung setzt crash im viewState und Game Over', 
   assert.ok(view.crash.t >= 0, 'Crash-Alter fuer den weissen Blitz');
   assert.ok([view.crash.x, view.crash.z].every(Number.isFinite), 'Einschlagsort');
   assert.equal(g.gameOver, true);
-  assert.equal(foe.alive, false, 'die Beruehrung reisst den Tanker mit');
-  assert.ok(view.bursts.length >= 2, 'Crash-Explosion (zwei Splitter-Wuerfe)');
+  assert.equal(foe.alive, true, 'der Tanker ueberlebt -- Feinde explodieren nicht mit');
+  assert.ok(view.bursts.length >= 3, 'Crash-Explosion (Einschlag + Blitz + Schiffs-Burst)');
   assert.ok(view.bursts[0].shardCount > 0,
     'der Crash-Burst traegt die Truemmer-Spezifikation (burstShards, 2026)');
+  // Der Schiffs-Burst an der Spielerlage ist NUR fuer die 2026-Engine
+  // (only2026) -- 1980 ueberspringt ihn (die Splitter saessen im Auge).
+  const ship = view.bursts.find((b) => b.only2026);
+  assert.ok(ship, 'das Schiff zerbirst als eigener 2026-Burst');
+  assert.ok(ship.shardCount > 0, 'der Schiffs-Burst traegt Truemmer');
+  assert.deepEqual([ship.center[0], ship.center[2]], [view.px, view.pz],
+    'der Schiffs-Burst sitzt an der Spielerlage');
 
   // Der Shake erreicht die 2026-Kamera echt ueber roll/pitch (Oszillatoren).
   let maxRoll = 0;

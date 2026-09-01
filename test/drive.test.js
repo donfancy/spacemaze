@@ -191,6 +191,12 @@ test('schraeger Aufprall: Auftreffpunkt liegt auf der Sichtlinie, nicht am Lotpu
   assert.ok(Math.abs(collision.point[0] - expected) < 1e-6,
     `Punkt ${collision.point[0].toFixed(3)} != Sichtlinie ${expected.toFixed(3)}`);
   assert.ok(collision.point[0] > pose.px, 'in Blickrichtung (+x) versetzt, nicht am Lotpunkt');
+  // Der PHYSISCHE Beruehrungspunkt (`contact`, 2026-Funken) ist dagegen
+  // genau das Lot der Spielermitte auf die Wandebene: beim Streifen sitzt
+  // er seitlich am Schiff, waehrend die Sichtlinie voraus laeuft.
+  assert.deepEqual(collision.contact, [pose.px, 1], 'contact = Lot der Spielermitte auf der Wandebene');
+  assert.ok(collision.contact[0] < collision.point[0],
+    'schraeg fallen Beruehrung (am Schiff) und Sichtlinie (voraus) auseinander');
 });
 
 test('frei stehender Pfeiler, versetzt gestreift: Wandzelle ist der Pfeiler, Welle bleibt dran', () => {

@@ -65,6 +65,13 @@ export const GLYPHS = {
   '+': [[[2, 1], [2, 5]], [[0, 3], [4, 3]]],
   '=': [[[0, 2], [4, 2]], [[0, 4], [4, 4]]],
   "'": [[[2, 0], [2, 2]]],
+
+  // Pfeile (Startscreen-Auswahl-Hinweise, 1.9.2026): Schaft + offene
+  // Spitze im Vollraster -- beide Engines zeigen dieselben Zeichen.
+  '←': [[[4, 3], [0, 3]], [[2, 1], [0, 3], [2, 5]]],
+  '→': [[[0, 3], [4, 3]], [[2, 1], [4, 3], [2, 5]]],
+  '↑': [[[2, 6], [2, 0]], [[0, 2], [2, 0], [4, 2]]],
+  '↓': [[[2, 0], [2, 6]], [[0, 4], [2, 6], [4, 4]]],
 };
 
 // Liefert die Strokes einer Glyphe. Unbekannte Zeichen -> leere Liste (Luecke).

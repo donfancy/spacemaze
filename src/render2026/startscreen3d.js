@@ -7,7 +7,7 @@
 // damit die Posen der Orbit-/Dock-Bahnen unveraendert gelten.
 
 import * as THREE from 'three';
-import { PHOSPHOR_GREEN } from '../render/colors.js';
+import { PHOSPHOR_GREEN, ARCADE_YELLOW } from '../render/colors.js';
 import { hdr, buildStarField, ACCENT_LIGHTS } from './world3d.js';
 import { bakeSkybox } from './skybox.js';
 import { startscreenSkyTheme } from './skyTheme.js';
@@ -27,6 +27,13 @@ export function buildStartscreenScene(renderer) {
   if (renderer) {
     skyRT = bakeSkybox(renderer, startscreenSkyTheme());
     scene.background = skyRT.texture;
+    // Der Nebel spiegelt sich DIFFUS im Wuerfel (Boris' "aufmotzen"
+    // 1.9.2026): dieselbe gebackene Cubemap als Umgebungslicht des
+    // Standard-Materials. Intensitaet faehrt backend.js -- in den
+    // An-/Abdock-Fluegen blendet sie mit dem Himmel aus, am Szenenschnitt
+    // ist die Flaeche wieder exakt die neutral beleuchtete Platte.
+    scene.environment = skyRT.texture;
+    scene.environmentIntensity = 0;
   }
 
   // Wuerfel: dunkle Flaechen (wie die Labyrinth-Waende) + HDR-Leuchtkanten.
@@ -74,5 +81,17 @@ export function buildStartscreenScene(renderer) {
     scene.add(light);
   }
 
-  return { scene, edgeMat, faceMat, starMats, skyRT, sheenLight, sheenIntensity };
+  // Wander-Lichter (Boris 1.9.2026, "aktuell nur 1 Sonne"): zwei weitere
+  // Farb-Sonnen ziehen langsam um den Wuerfel -- Bahnen + Intensitaet
+  // animiert backend.js (Intensitaet 0 = aus, fester Licht-Bestand gegen
+  // die Shader-Rekompilierungs-Falle). In den Fluegen blenden sie aus:
+  // die Platten-Projektion (buildPlate) kennt nur die statischen
+  // ACCENT_LIGHTS, am Szenenschnitt muss deren Muster alleine stehen.
+  const driftLights = [
+    new THREE.PointLight(PHOSPHOR_GREEN, 0, 40, 2),
+    new THREE.PointLight(ARCADE_YELLOW, 0, 40, 2),
+  ];
+  for (const l of driftLights) scene.add(l);
+
+  return { scene, edgeMat, faceMat, starMats, skyRT, sheenLight, sheenIntensity, driftLights };
 }

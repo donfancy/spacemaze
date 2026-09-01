@@ -67,12 +67,13 @@ import { recordTrailPoint } from '../world/trail.js';
 import { compassLayout } from '../render/compass.js';
 import { swayTransform } from '../render/sway.js';
 import { SIDE_FACES, faceLocalToWorld } from '../world/cubeFaces.js';
-import { levelConfig, spinnerColor, enemyColor } from '../core/levels.js';
+import { levelConfig, levelColor, spinnerColor, enemyColor } from '../core/levels.js';
 import { CUBE_SIZE, EYE_RATIO, NEAR_RATIO } from './mazeView.js';
 import { buildEgoStatics, renderEgoWorld, collisionWaveSet, WAVE_FX } from './egoWorld.js';
 
 const RADIUS_RATIO = 0.25;
 const GOAL_AUTO_EXIT = 20;  // Sekunden am Ziel bis automatischer Rueckschwenk
+const GOAL_EXIT_HOLD = 0.8; // s: X am Ziel wartet die 2026-Kamera-Blende ab (END_CAM_BLEND)
 const DEMO_GOAL_EXIT = 6;   // Demo: Feuerwerk kurz zeigen, dann weiter im Zyklus
 const TRAIL_DIST_RATIO = 0.2; // Weg-Aufzeichnung: Mindestdistanz in Zellen
 
@@ -169,15 +170,15 @@ export function createPlaying(game) {
 
   // Feindberuehrung: krachende Explosion an `at` {x,z}, dann schleudert es den
   // Spieler hinaus in die Kartenansicht (update() dispatcht nach CRASH_TIME).
-  // opts: `kill` (Objekt mit alive-Flag, das in der Explosion aufgeht -- beim
-  // Aufspiessen am Spike ueberlebt der Spinner!), `color` (Splitter-Farbe,
-  // Standard Feind-Rot), `height` (Explosions-Hoehe, Standard Augenhoehe).
+  // Der FEIND explodiert NICHT mit (Boris 1.9.2026): es zerbirst das SCHIFF,
+  // der Sieger bleibt stehen (wie schon immer beim Aufspiessen am Spike).
+  // opts: `color` (Splitter-Farbe des Einschlags, Standard Feind-Rot),
+  // `height` (Explosions-Hoehe, Standard Augenhoehe).
   function startCrash(at, opts = {}) {
     crash = true;
     crashT = 0;
     crashPos = { x: at.x, z: at.z };
     game.gameOver = true; // Karte zeigt GAME OVER, S startet den Level neu
-    if (opts.kill) opts.kill.alive = false;
     game.audio?.engine(null);
     game.audio?.play(crashPatch());
     recEvent('crash', { x: at.x, z: at.z });
@@ -187,6 +188,15 @@ export function createPlaying(game) {
     // (burstShards -- 1980 zeichnet weiter nur die Linien-Splitter).
     pushBurst({ born: sceneT, center: [at.x, h, at.z], seed: 11, count: 24, speed: 3.5 * cell, life: 1.2, size: 0.16 * cell, color, shardCount: 9, shardSize: 0.38 * cell });
     pushBurst({ born: sceneT, center: [at.x, h, at.z], seed: 47, count: 16, speed: 2.5 * cell, life: 0.9, size: 0.12 * cell, color: SHOT_COLOR });
+    // Das SCHIFF zerbirst an der Spielerlage (Level-Farbe + Truemmer):
+    // sichtbar nur in der 2026-Engine (only2026) -- dort schneidet die
+    // Kamera nach aussen (drawEgo) und das Replay zeigt die Explosion des
+    // Gleiters; 1980 bleibt beim klassischen Zerbersten des Bildes (die
+    // Splitter saessen dort direkt im Auge).
+    // speed unter RCAM.chaseBack/life halten: die Truemmer erreichen die
+    // Verfolgerkamera (Kamera-Schnitt) sonst mitten in der Blende und
+    // stehen als dunkle Riesenflaechen vor der Linse (Sichtpruefung).
+    pushBurst({ born: sceneT, center: [px, EYE_RATIO * cell, pz], seed: 23, count: 22, speed: 2.2 * cell, life: 1.5, size: 0.14 * cell, color: levelColor(game.level), shardCount: 12, shardSize: 0.42 * cell, only2026: true });
     rollOsc.kick(CRASH_SHAKE_ROLL);
     pitchOsc.kick(CRASH_SHAKE_PITCH);
   }
@@ -296,11 +306,13 @@ export function createPlaying(game) {
   // + elektrisches Brutzeln (Wucht bestimmt Lautstaerke und Dauer).
   function spawnCollision(col) {
     game.audio?.play(sizzlePatch(col.impact));
-    // Flanke fuer die 2026-Engine (Stufe 2): mit exaktem Wand-Auftreffpunkt
-    // (`point`) -- daraus werden Licht-Blitz + Funken statt der 1980-Wellen.
+    // Flanke fuer die 2026-Engine (Stufe 2): `point` (Sichtlinie) fuer den
+    // Licht-Blitz-Fallback, `contact` (physischer Beruehrungspunkt, drive.js)
+    // fuer Blitz + Funken -- die spruehen an der Streifstelle seitlich am
+    // Schiff, nicht voraus in der Luft (Boris' "Echtheitsgefuehl").
     // Der Feder-Impuls selbst steckt schon in der Pose (drive.js).
     bump = { at: sceneT, axis: col.axis, side: col.side, impact: col.impact,
-      x: px, z: pz, point: col.point };
+      x: px, z: pz, point: col.point, contact: col.contact };
     // Fuers Replay reicht die komplette Kollisions-Meldung (reine Daten):
     // die Wiedergabe baut die Wellenzuege mit collisionWaveSet nach und
     // spielt das Brutzeln; die 2026-Wiedergabe macht daraus Blitz + Funken.
@@ -539,23 +551,20 @@ export function createPlaying(game) {
         enemiesStep(enemies, dt);
         const hit = enemyHit(enemies, px, pz, (RADIUS_RATIO + ENEMY.hitRadius) * cell);
         if (hit && !reached) {
-          startCrash(hit, { kill: hit });
+          startCrash(hit); // der Tanker ueberlebt den Rammstoss
           return;
         }
       }
 
       // Spinner: Spike waechst, Vorlauf/Rueckzug pendelt; Koerper-Beruehrung
-      // ODER frontales Kreuzen der Spitze = Game Over (beim Aufspiessen
-      // ueberlebt der Spinner -- nur die Koerper-Kollision reisst ihn mit).
+      // ODER frontales Kreuzen der Spitze = Game Over (der Spinner
+      // ueberlebt beides -- Feinde explodieren nicht mit).
       if (spinners.length) {
         spinnersStep(spinners, dt, cell);
         const hit = spinnerPlayerHit(spinners, px, pz, RADIUS_RATIO * cell, cell,
           { px: prevX, pz: prevZ });
         if (hit && !reached) {
-          startCrash(hit, {
-            kill: hit.impale ? null : hit.spinner,
-            color: spinnerCol, height: SPINNER.height * cell,
-          });
+          startCrash(hit, { color: spinnerCol, height: SPINNER.height * cell });
           return;
         }
         // Ab Level 21 (spinners.shoot): steht man im Gang eines Spinners
@@ -581,13 +590,13 @@ export function createPlaying(game) {
       }
 
       // Flipper: wandern und flippen; ihre Querschnitts-Ebene ist toedlich --
-      // Beruehren oder Kreuzen zerstoert den Spieler (der Flipper geht mit).
+      // Beruehren oder Kreuzen zerstoert den Spieler (nur ihn).
       if (flippers.length) {
         flippersStep(flippers, dt, cell);
         const hit = flipperPlayerHit(flippers, px, pz, RADIUS_RATIO * cell, cell,
           { px: prevX, pz: prevZ });
         if (hit && !reached) {
-          startCrash(hit, { kill: hit.flipper, color: NEON_MAGENTA });
+          startCrash(hit, { color: NEON_MAGENTA }); // der Flipper klappt weiter
           return;
         }
       }
@@ -792,10 +801,13 @@ export function createPlaying(game) {
     // fuer die Steuer-Hinweis-Zeile, `foeShots` fuer die sirrenden
     // Spinner-Schuesse. Spinner/Flipper/Pulsare liest die Engine wie die
     // Tanker von game.* (dort leben sie samt Resume/Retry-Regeln).
+    // `bank` (pure Kurvenneigung, ohne Oszillator/Gyro) fuer den Gleiter
+    // des End-Kamera-Schnitts (Crash/Ziel blenden 2026 in die
+    // Verfolgerpose, END_CAM_BLEND in backend.js).
     viewState() {
       if (!maze) return null; // vor enter() -- gleicher Vertrag wie alle Szenen
       return { maze, cell, unit, px, pz, yaw, sceneT, reached, reachedAt, bump,
-        drive, roll: bank + rollOsc.x + gyro.roll, pitch: pitchOsc.x,
+        drive, roll: bank + rollOsc.x + gyro.roll, pitch: pitchOsc.x, bank,
         orient: gyro.orient, foeShots,
         shoot, steer: drive ? driveState.steer : walkState.steer,
         shots: shotsState ? shotsState.shots : [], bursts,
@@ -804,6 +816,10 @@ export function createPlaying(game) {
 
     onKey(key) {
       if (key !== 'X' || crash) return; // waehrend der Explosion kein Abheben mehr
+      // Frisch am Ziel schwingt die 2026-Kamera in die Aussenpose
+      // (END_CAM_BLEND 0.8s) -- X darf die Blende ausklingen lassen, sonst
+      // startet der Rueckschwenk von der noch nicht erreichten Pose (Cut).
+      if (reached && sceneT - reachedAt < GOAL_EXIT_HOLD) return;
       if (drive && !reached) {
         braking = true; // Fahrt-Modus: erst abbremsen, updateDrive hebt dann ab
       } else {

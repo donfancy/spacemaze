@@ -279,7 +279,7 @@ test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry',
   victim.z = g.playerState.pz;
   advance(g, r, 0.1);
   assert.equal(g.gameOver, true, 'Crash setzt Game Over');
-  assert.equal(victim.alive, false, 'die getroffene Raute zerplatzt');
+  assert.equal(victim.alive, true, 'die getroffene Raute ueberlebt -- es zerbirst nur das Schiff');
   assert.equal(g.stateKey, State.PLAYING, 'die Explosion tobt noch');
   assert.ok((r.shatters ?? 0) > 0, 'das Bild zerbirst waehrend des Crashs');
 

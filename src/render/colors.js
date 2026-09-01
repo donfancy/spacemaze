@@ -51,6 +51,18 @@ export function diagramBoost(hex, mix, { ego, targetLum, maxBoost = ego }) {
 }
 
 // Linear zwischen zwei '#rrggbb'-Farben; t wird auf [0,1] geklemmt.
+// Wand-Farb-Ring des Startscreen-Wuerfels (1.9.2026, Boris' "aufmotzen"):
+// fliesst durch die drei Level-Wandfarben Gruen -> Blau -> Rot -> Gruen.
+// t in Sekunden, period = Dauer eines vollen Rings; auch t < 0 sicher.
+export const WALL_COLOR_RING = [PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_RED];
+export function wallColorCycle(t, period = 24) {
+  const ring = WALL_COLOR_RING;
+  const u = (((t / period) % 1) + 1) % 1;
+  const seg = u * ring.length;
+  const i = Math.floor(seg) % ring.length;
+  return mixColors(ring[i], ring[(i + 1) % ring.length], seg - i);
+}
+
 export function mixColors(a, b, t) {
   const k = Math.min(1, Math.max(0, t));
   const ca = parseHex(a);

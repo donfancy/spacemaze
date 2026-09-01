@@ -56,3 +56,21 @@ test('diagramBoost: Ego-Boost bei mix 0, luminanz-normiert bei mix 1 (Overglow-F
   // Schwarz laeuft nicht gegen unendlich (lum-Floor + Deckel).
   assert.ok(diagramBoost('#000000', 1, { ego: 2.2, targetLum: 1.0, maxBoost: 3.0 }) <= 3.0);
 });
+
+test('wallColorCycle: fliesst durch Gruen -> Blau -> Rot und schliesst den Ring', async () => {
+  const { wallColorCycle, PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_RED, mixColors } =
+    await import('../src/render/colors.js');
+  const P = 24;
+  // Segment-Anker: exakt die drei Wandfarben.
+  assert.equal(wallColorCycle(0, P), PHOSPHOR_GREEN);
+  assert.equal(wallColorCycle(P / 3, P), TEMPEST_BLUE);
+  assert.equal(wallColorCycle((2 * P) / 3, P), ARCADE_RED);
+  // Mitten im Segment: die halbe Mischung (kanalweise, +-1 gegen die
+  // Binaer-Rundung von 1/6 * 3).
+  const mid = parseHex(wallColorCycle(P / 6, P));
+  const want = parseHex(mixColors(PHOSPHOR_GREEN, TEMPEST_BLUE, 0.5));
+  for (let c = 0; c < 3; c++) assert.ok(Math.abs(mid[c] - want[c]) <= 1, `Kanal ${c}`);
+  // Ring schliesst: eine volle Periode spaeter dieselbe Farbe, auch t < 0.
+  assert.equal(wallColorCycle(P + 5, P), wallColorCycle(5, P));
+  assert.equal(wallColorCycle(-P / 3, P), ARCADE_RED);
+});

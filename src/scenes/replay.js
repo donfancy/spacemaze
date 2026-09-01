@@ -140,7 +140,7 @@ export function createReplay(game) {
     if (colEv && (!bumpEv || colEv.t > bumpEv.t)) {
       bump = pick(colEv, {
         axis: colEv.col.axis, side: colEv.col.side, impact: colEv.col.impact,
-        x: cur.px, z: cur.pz, point: colEv.col.point,
+        x: cur.px, z: cur.pz, point: colEv.col.point, contact: colEv.col.contact,
       });
     } else if (bumpEv) {
       bump = pick(bumpEv, {

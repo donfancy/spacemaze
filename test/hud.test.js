@@ -78,3 +78,26 @@ test('gameOverColor pulsiert zwischen Feind-Rot und Weiss (1.2 Hz)', () => {
     assert.match(gameOverColor(t), /^#ff[0-9a-f]{4}$/);
   }
 });
+
+test('selectorArrows: hell nur, wenn der Tastendruck etwas bewirkt', async () => {
+  const { selectorArrows } = await import('../src/core/hud.js');
+  const { MIN_LEVEL, MAX_LEVEL } = await import('../src/core/levels.js');
+  // Mittendrin: beide Level-Pfeile hell; 1980 gewaehlt -> nur rauf hell.
+  assert.deepEqual(selectorArrows({ level: 5, engine: '1980' }),
+    { left: true, right: true, down: false, up: true });
+  // Raender: am unteren Level kein links, am oberen kein rechts.
+  assert.equal(selectorArrows({ level: MIN_LEVEL, engine: '1980' }).left, false);
+  assert.equal(selectorArrows({ level: MAX_LEVEL, engine: '1980' }).right, false);
+  // 2026 gewaehlt: rauf gedimmt, runter hell.
+  assert.deepEqual(selectorArrows({ level: 5, engine: '2026' }),
+    { left: true, right: true, down: true, up: false });
+  // Demo: die Pfeile folgen der gemerkten AUSWAHL, nicht dem Demo-Level.
+  assert.equal(selectorArrows({ level: 12, demo: true, demoSavedLevel: MIN_LEVEL, engine: '1980' }).left,
+    false);
+});
+
+test('copyrightLine: Jahreszahl folgt der gewaehlten Engine', async () => {
+  const { copyrightLine } = await import('../src/core/hud.js');
+  assert.equal(copyrightLine('1980'), '(C) BB DESIGN 1980');
+  assert.equal(copyrightLine('2026'), '(C) BB DESIGN 2026');
+});

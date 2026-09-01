@@ -97,15 +97,30 @@ test('Attract-Pause im Orbit: Ruhe, dann Titel, dann Info-Seite, dann Demo', () 
   let v = g.current.viewState();
   assert.equal(v.titleT, null, 'erst die RUHIGE Nur-Wuerfel-Zeit (kein Titel)');
   assert.equal(v.info, false, '... und keine Info');
-  advance(g, r, 7.2); // ORBIT_CALM (7 s) -> der Titel uebernimmt
+  advance(g, r, 19); // mitten in der Ruhe (ORBIT_CALM 20 s): immer noch still
+  v = g.current.viewState();
+  assert.equal(v.titleT, null, 'die Ruhe traegt (Boris: 20 s Nur-Wuerfel-Zeit)');
+  advance(g, r, 1.2); // ORBIT_CALM voll -> der Titel uebernimmt
   v = g.current.viewState();
   assert.ok(v.titleT != null, 'nach der Ruhe kommt der Titel');
   assert.equal(v.info, false, 'Info kommt erst nach dem Titel');
   advance(g, r, TITLE.dur); // Titel durchlaufen lassen
   v = g.current.viewState();
   assert.equal(v.titleT, null, 'Titel vorbei');
+  // 1s Luecke vor der Info (Boris: "kommt hart"): noch keine Karte, aber
+  // die Mitte bleibt verdraengt (hold) -- kein Text blitzt ein.
+  assert.equal(v.info, false, 'erst eine Sekunde Luft');
+  assert.equal(v.hold, true, 'die Attract-Sequenz haelt die Mitte frei');
+  advance(g, r, 1.1); // INFO_GAP (1 s) vorbei
+  v = g.current.viewState();
   assert.equal(v.info, true, 'jetzt steht die Info-Karte');
-  advance(g, r, 6.2); // ATTRACT_INFO (6 s) -> die naechste Demo dockt an
-  assert.equal(g.current.viewState().info, false, 'beim Andocken wieder weg');
+  advance(g, r, 0.6); // die 2026-Blende laeuft hoch (INFO_FADE 0.5 s)
+  assert.ok(g.current.viewState().infoA > 0.95, 'Info voll eingeblendet (infoA)');
+  advance(g, r, 5.1); // ATTRACT_INFO (6 s) laeuft ab -> Ausblende beginnt
+  v = g.current.viewState();
+  assert.equal(v.info, false, 'Info-Zeit vorbei');
+  assert.equal(v.phase, 'orbiting', 'das Andocken wartet die Ausblende ab');
+  advance(g, r, 0.6); // INFO_FADE (0.5 s) -> jetzt dockt die naechste Demo an
   assert.equal(g.current.viewState().phase, 'docking');
+  assert.ok(g.current.viewState().infoA < 0.2, 'die Info ist ausgeblendet, nicht ausgeknipst');
 });

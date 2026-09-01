@@ -171,15 +171,29 @@ function buildWallsAndLines(world, maze) {
 
   // Flaechen: pro Kontur-Segment ein senkrechtes Quad (Boden bis Wandkrone).
   const pos = [], norm = [], idx = [];
-  for (const [[x1, y1], [x2, y2]] of segs) {
-    const ax = u(x1), az = u(y1), bx = u(x2), bz = u(y2);
-    const len = Math.hypot(bx - ax, bz - az);
-    const nx = -(bz - az) / len, nz = (bx - ax) / len; // senkrecht zum Segment
+  const quad = (ax, az, bx, bz, nx, nz) => {
     const base = pos.length / 3;
     pos.push(ax, 0, az, bx, 0, bz, bx, H, bz, ax, H, az);
     for (let i = 0; i < 4; i++) norm.push(nx, 0, nz);
     idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  for (const [[x1, y1], [x2, y2]] of segs) {
+    const ax = u(x1), az = u(y1), bx = u(x2), bz = u(y2);
+    const len = Math.hypot(bx - ax, bz - az);
+    quad(ax, az, bx, bz, -(bz - az) / len, (bx - ax) / len); // Normale senkrecht zum Segment
   }
+  // AUSSENWAENDE: corridorOutline kennt nur die GANG-Konturen -- der aeussere
+  // Umfang des Labyrinths blieb offen, die Aussenkameras (Replay + der
+  // End-Kamera-Schnitt) blickten in die hohlen Randbloecke (Boris' Befund
+  // 1.9.2026). Vier Quads um den Umfang, im selben wallGeo: Material,
+  // Spiegelbild und das Hoehen-Wachstum der Schwenks kommen gratis; auf der
+  // Karte (Hoehe 0) sind sie degeneriert, von innen liegen sie komplett
+  // hinter den gleich hohen Randwaenden.
+  const T = world.total;
+  quad(0, 0, T, 0, 0, -1); // Sued
+  quad(T, T, 0, T, 0, 1);  // Nord
+  quad(0, T, 0, 0, -1, 0); // West
+  quad(T, 0, T, T, 1, 0);  // Ost
   const wallGeo = new THREE.BufferGeometry();
   wallGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   wallGeo.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3));
@@ -212,6 +226,11 @@ function buildWallsAndLines(world, maze) {
     corners.set(x2 + ',' + y2, [bx, bz]);
   }
   for (const [, [cx, cz]] of corners) lp.push(cx, 0, cz, cx, H, cz);
+  // Aussenwand-Kronen + Eck-Pfosten (Glut-Kanten wie alle Flaechen; auf der
+  // Karte fallen die Kronen deckungsgleich auf den borderLines-Rahmen).
+  lp.push(0, H, 0, T, H, 0, T, H, 0, T, H, T,
+    T, H, T, 0, H, T, 0, H, T, 0, H, 0);
+  for (const [cx, cz] of [[0, 0], [T, 0], [T, T], [0, T]]) lp.push(cx, 0, cz, cx, H, cz);
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
   world.wallGroup.add(new THREE.LineSegments(lineGeo, world.lineMat));
@@ -228,7 +247,6 @@ function buildWallsAndLines(world, maze) {
 
   // Grid-Rahmen (die "Wuerfelflaeche"): steht auf der Karte und waehrend des
   // Maze-Wachstums immer -- deckungsgleich mit dem Andock-Quadrat.
-  const T = world.total;
   const bp = [0, 0.1, 0, T, 0.1, 0, T, 0.1, 0, T, 0.1, T,
     T, 0.1, T, 0, 0.1, T, 0, 0.1, T, 0, 0.1, 0];
   const borderGeo = new THREE.BufferGeometry();
@@ -240,9 +258,11 @@ function buildWallsAndLines(world, maze) {
   // geschlossenen Grid-Zellen (zeilenweise zu Laeufen zusammengefasst).
   // Von OBEN gesehen (Replay-Aussenkameras: Vogel/Totale/Orbit/Verfolger)
   // waeren die Waende sonst hohl -- man blickte in die leeren Kaesten
-  // (Boris' Befund). Standard UNSICHTBAR: die Draufsichten zeigen die
-  // Platte, die Schwenks den Crossfade -- nur die Wiedergabe schaltet die
-  // Deckel an (backend.drawReplay). In der wallGroup wachsen sie mit der
+  // (Boris' Befund). Standard UNSICHTBAR (resetWorldFrame): die
+  // Draufsichten zeigen die Platte, die Schwenks den Crossfade -- an
+  // schalten sie die Wiedergabe (drawReplay), der End-Kamera-Schnitt
+  // (drawEgo, Crash/Ziel) und dessen Rausschwenk (drawRising).
+  // In der wallGroup wachsen sie mit der
   // Wandhoehe mit; das geteilte wallMat (polygonOffset) laesst die auf den
   // Deckel-Kanten liegenden Wandkronen-Linien sauber gewinnen.
   const cp = [];

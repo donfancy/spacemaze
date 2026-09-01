@@ -26,12 +26,14 @@
 // localStorage und laedt/zeigt das 2026-Backend live).
 
 import { GameEvent } from '../core/states.js';
-import { blinkOn, displayLevel, INFO_TITLE, INFO_LINES } from '../core/hud.js';
+import { blinkOn, copyrightLine, INFO_TITLE, INFO_LINES } from '../core/hud.js';
+import { drawSelector } from './demoOverlay.js';
 import { TITLE, TITLE_WORD, titleZoom, titleAlpha, titleColor, titleFlash } from '../world/title.js';
 import { stepLevel, levelColor, MIN_LEVEL, MAX_LEVEL } from '../core/levels.js';
 import { ENGINE_1980, ENGINE_2026 } from '../core/engine.js';
 import { PHOSPHOR_GREEN, mixColors } from '../render/colors.js';
 import { tickPatch, dockPatch } from '../sound/patches.js';
+import { rampToward } from '../world/drive.js';
 import { createCamera } from '../math/camera.js';
 import { normalize } from '../math/vec3.js';
 import { cubeMesh } from '../world/shapes.js';
@@ -52,8 +54,14 @@ const DEMO_IDLE = 30;
 // (ORBIT_CALM), dann TITEL (TITLE.dur) -> HOW TO PLAY (ATTRACT_INFO) ->
 // naechste Demo dockt an. Die allererste Sequenz (nach DEMO_IDLE) beginnt
 // direkt mit dem Titel -- die Ruhe davor war die Idle-Zeit selbst.
-const ORBIT_CALM = 7;
+const ORBIT_CALM = 20; // Boris 1.9.2026: 7s wirkten wie ~4s reine Wuerfel-Zeit
 const ATTRACT_INFO = 6;
+// Feinschliff der Attract-Sequenz (Boris 1.9.2026, "How to play kommt
+// hart"): 1s Luft zwischen Titel-Ende und Info, und die Info blendet in
+// 2026 ein/aus (infoA-Rampe; 1980 schaltet hart -- Arcade-authentisch).
+// Das Andocken wartet das Ausblenden ab.
+const INFO_GAP = 1;
+const INFO_FADE = 0.5;
 const UNDOCK_DURATION = DOCK_DURATION; // Rueckflug symmetrisch gleich lang
 // Hoehe leicht begrenzt (max ~31 Grad), damit immer eine SEITENflaeche zugewandt
 // ist -- dort dockt die Kamera ohne Gimbal-Rollen an.
@@ -77,6 +85,9 @@ export function createStartscreen(game) {
   // den (gedimmten) Wuerfel, I/X schliessen. Der Attract-Mode zeigt sie
   // automatisch waehrend der Orbit-Pause zwischen den Demos.
   let info = false;
+  let infoA = 0;          // Info-Blende 0..1 (2026 zeichnet damit; Rampe s.u.)
+  let attractHold = false; // Attract-Sequenz laeuft (Titel/Luecke/Info/Fade):
+                           // die Mitte-Texte bleiben durchgehend verdraengt
   // Titel-Display "MAZESTORM" (world/title.js): einmal beim allerersten
   // Laden (bootPlayed) und als Auftakt jeder Attract-Pause; jede Taste
   // raeumt ihn weg. attractWait = die erste Attract-Sequenz laeuft schon
@@ -172,6 +183,13 @@ export function createStartscreen(game) {
     }
     const flash = titleFlash(titleT);
     if (flash > 0) renderer.flash(flash * 0.6, '#ffffff');
+    // Arcade-Copyright unterm Titelzug (Boris 1.9.2026, "(C) 1980 ATARI"-
+    // Hommage): steht fest, waehrend der Titel heranzoomt; die Jahreszahl
+    // folgt der gewaehlten Engine (core/hud.js).
+    renderer.drawText(copyrightLine(game.engine), {
+      x: w / 2, y: cy + full * 1.05, size: full * 0.22,
+      align: 'center', baseline: 'middle', intensity: alpha * 0.7,
+    });
   }
 
   // Info-Seite (1980): Titel + zweispaltige Tasten-Tabelle, mittig ueber
@@ -215,6 +233,8 @@ export function createStartscreen(game) {
       undockStart = null;
       idle = 0;
       info = false;
+      infoA = 0;
+      attractHold = false;
       title = false;
       attractWait = false;
       pauseT = 0;
@@ -243,6 +263,9 @@ export function createStartscreen(game) {
     },
 
     update(dt) {
+      // Info-Blende (2026): infoA folgt info als lineare Rampe -- laeuft in
+      // JEDER Phase (S bei offener Info blendet sie im Abflug aus).
+      infoA = rampToward(infoA, info && phase === 'orbiting' ? 1 : 0, 1 / INFO_FADE, dt);
       if (phase === 'undocking') {
         t += dt; // Orbit-Uhr laeuft mit -- der Flug zielt auf die bewegte Bahn
         undockT += dt;
@@ -266,13 +289,18 @@ export function createStartscreen(game) {
           const seq = pauseT - (attractWait ? 0 : ORBIT_CALM);
           title = seq >= 0 && seq < TITLE.dur;
           titleT = Math.max(seq, 0);
-          info = seq >= TITLE.dur;
-          if (seq >= TITLE.dur + ATTRACT_INFO) {
+          // 1s Luft nach dem Titel, dann die Info; nach ihr wartet das
+          // Andocken die Ausblende ab (INFO_FADE) -- kein "Ausknipsen".
+          info = seq >= TITLE.dur + INFO_GAP
+            && seq < TITLE.dur + INFO_GAP + ATTRACT_INFO;
+          attractHold = seq >= 0; // Titel/Luecke/Info/Fade: Mitte bleibt frei
+          if (seq >= TITLE.dur + INFO_GAP + ATTRACT_INFO + INFO_FADE) {
             attractWait = false;
             game.beginDemo();
             startDock();
           }
         } else {
+          attractHold = false;
           // Boot-Titel laeuft einmal durch; danach normale Idle-Uhr.
           if (title) {
             titleT += dt;
@@ -302,7 +330,7 @@ export function createStartscreen(game) {
     render(renderer) {
       const { phase: ph, pose, hiddenDim, color } = look();
       applyPose(pose);
-      const overlaid = ph === 'orbiting' && (info || title);
+      const overlaid = ph === 'orbiting' && (info || title || attractHold);
       drawCube(renderer, hiddenDim, color, overlaid ? (title ? 0.15 : 0.25) : 1);
       if (ph !== 'orbiting') return; // waehrend der Fluege keine Texte
 
@@ -335,33 +363,22 @@ export function createStartscreen(game) {
         return;
       }
 
-      // Level-Auswahl oberhalb des Wuerfels (links/rechts aendert sie) --
-      // waehrend der Demo die gemerkte AUSWAHL, nicht das Demo-Level.
-      renderer.drawText(`LEVEL ${displayLevel(game)}`, {
-        x: w / 2,
-        y: Math.max(48, h * 0.14),
-        size,
-        align: 'center',
-        baseline: 'middle',
-      });
+      // Luecke/Fade der Attract-Sequenz (zwischen Titel und Info bzw. vor
+      // dem Andocken): ruhiger Wuerfel + blinkendes PRESS S -- die
+      // Mitte-Texte blitzen NICHT fuer eine Sekunde ein.
+      if (attractHold) {
+        if (blinkOn(t)) {
+          renderer.drawText('PRESS S TO START', {
+            x: w / 2, y: h - Math.max(48, h * 0.14), size,
+            align: 'center', baseline: 'middle',
+          });
+        }
+        return;
+      }
 
-      // Engine-Schalter "1980 / 2026" darunter (hoch/runter schaltet ihn):
-      // die aktive Stellung leuchtet voll, die andere ist gedimmt.
-      const swSize = size * 0.55;
-      const swY = Math.max(48, h * 0.14) + size * 1.1;
-      const active = (eng) => (game.engine === eng ? 1.0 : 0.3);
-      renderer.drawText('1980', {
-        x: w / 2 - swSize * 2.2, y: swY, size: swSize,
-        align: 'center', baseline: 'middle', intensity: active(ENGINE_1980),
-      });
-      renderer.drawText('/', {
-        x: w / 2, y: swY, size: swSize,
-        align: 'center', baseline: 'middle', intensity: 0.3,
-      });
-      renderer.drawText('2026', {
-        x: w / 2 + swSize * 2.2, y: swY, size: swSize,
-        align: 'center', baseline: 'middle', intensity: active(ENGINE_2026),
-      });
+      // Level-Auswahl + Engine-Schalter samt Pfeil-Hinweisen: EIN Layout
+      // mit dem Demo-Overlay (drawSelector in demoOverlay.js).
+      drawSelector(renderer, game);
 
       if (blinkOn(t)) {
         renderer.drawText('PRESS S TO START', {
@@ -421,11 +438,15 @@ export function createStartscreen(game) {
     // Phase, Flug-Fortschritt, Kanten-Dimmung und Blend-Farbe -- dieselbe
     // Quelle wie die 1980-Zeichnung (look()). blink steuert "PRESS S",
     // info die "HOW TO PLAY"-Seite, titleT (null = aus) das Titel-Display.
+    // infoA = Blende der Info-Seite (2026 zeichnet Opacity damit, 1980
+    // schaltet weiter hart auf `info`); hold = Attract-Sequenz laeuft
+    // (Titel/Luecke/Info/Fade) -- die Mitte-Texte bleiben verdraengt.
     viewState() {
       const orbiting = phase === 'orbiting';
       return {
         ...look(), t, blink: blinkOn(t),
-        info: info && orbiting,
+        info: info && orbiting, infoA,
+        hold: attractHold && orbiting,
         titleT: title && orbiting ? titleT : null,
       };
     },

@@ -273,8 +273,12 @@ export function renderEgoWorld(renderer, camera, ctx) {
       { near, color: SHOT_COLOR, glow: 10 });
   }
 
-  // Splitter-Explosionen (Verpuffen, Feind-Abschuss, Crash).
+  // Splitter-Explosionen (Verpuffen, Feind-Abschuss, Crash). Der Schiffs-
+  // Burst des Spieler-Crashs ist NUR fuer die 2026-Engine (only2026, dort
+  // schneidet die Kamera nach aussen) -- 1980 sitzt die Kamera IM Schiff,
+  // sein Crash bleibt das klassische Zerbersten des Bildes.
   for (const b of ctx.bursts ?? []) {
+    if (b.only2026) continue;
     const geo = burstSegments(t - b.born, b);
     if (!geo) continue;
     renderer.renderScene({ segments: faceSegments(geo.segments, face), intensity: geo.fade },

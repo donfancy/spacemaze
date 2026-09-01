@@ -72,9 +72,13 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   Letter-Vorschub folgt der Glyphen-Breite),
   Farb-Zyklus ueber FIREWORK_COLORS, Finale weiss. Laeuft STUMM beim
   allerersten Laden (bootPlayed) und in jeder Attract-Pause: RUHIGE
-  Nur-Wuerfel-Zeit (ORBIT_CALM 7s, nur zwischen den Demos -- die erste
+  Nur-Wuerfel-Zeit (ORBIT_CALM 20s -- Boris hob sie 1.9.2026 von 7s an, "7 wirkten wie 4" --, nur zwischen den Demos -- die erste
   Sequenz nach DEMO_IDLE beginnt direkt mit dem Titel, die Ruhe war die
-  Idle-Zeit) -> TITEL (8s) -> HOW TO PLAY (ATTRACT_INFO 6s) -> Demo
+  Idle-Zeit) -> TITEL (8s) -> 1s LUFT -> HOW TO PLAY (ATTRACT_INFO 6s, 2026
+  blendet per infoA-Rampe INFO_FADE 0.5s ein/aus, 1980 schaltet hart;
+  das Andocken wartet die Ausblende ab -- Boris 1.9.2026 "kommt
+  hart"/"ausgeknipst"; view.hold verdraengt die Mitte-Texte ueber die
+  GANZE Sequenz, sonst blitzten sie in der Luecke ein) -> Demo
   (attractWait ueberbrueckt die erste Runde vor game.beginDemo; jede
   Taste raeumt Titel + Wartesequenz weg). 1980: Zoom aus der Tiefe (titleZoom) +
   2 Echo-Konturen in Nachbarfarben (titleColor(t, ring)), Wuerfel dimmt
@@ -149,6 +153,82 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   (gemeinsamer Flächen-Renderer)
 
 ## Stand & wichtige technische Punkte
+- **END-KAMERA-SCHNITT + Feind ueberlebt (1.9.2026, Boris' Politur-Paket):**
+  (1) Beim Spieler-Crash explodiert der FEIND nicht mehr mit (startCrash
+  ohne `kill` -- der Sieger bleibt stehen, wie schon immer beim
+  Aufspiessen am Spike; game.test/engine.test angepasst). (2) Es zerbirst
+  stattdessen das SCHIFF: startCrash spawnt einen Extra-Burst an der
+  SPIELERlage (Level-Farbe, Truemmer, burstGlow-Blitzverlauf) mit Flag
+  `only2026` -- egoWorld.js (1980 + 1980-Replay) ueberspringt ihn, der
+  1980-Crash bleibt pixelgenau das Zerbersten des Bildes
+  (test/egoWorld.test.js); speed 2.2*cell BEWUSST unter chaseBack/life,
+  sonst stehen die Truemmer als dunkle Riesenflaechen vor der
+  Verfolgerkamera. (3) 2026 LIVE-Kamera-Schnitt: Crash UND Ziel blenden
+  in drawEgo aus der Ego- in die Replay-Verfolgerpose (computeReplayCamera
+  'chase', Slerp + smoothstep, END_CAM_BLEND 0.8s) -- man sieht die
+  Schiffs-Explosion bzw. den Gleiter im Feuerwerk von aussen (Gleiter
+  erscheint per Kamera-Abstands-Regel, beim Crash bleibt er weg; Minimap
+  blendet bei reached wie beim Crash aus; viewState traegt dafuer `bank`).
+  (4) NAHTLOS raus: drawRising startet nach Crash/Ziel von der CHASE-Pose
+  statt der Ego-Lage (Gyro-Rest ist durch die Blende schon ausgedreht),
+  und X am Ziel wartet GOAL_EXIT_HOLD 0.8s (sonst Cut auf die
+  unfertige Blende). (5) Wand-DECKEL (wallCaps) schalten jetzt auch der
+  End-Kamera-Schnitt und sein Rausschwenk an (vorher nur drawReplay,
+  Boris' Befund "hohle Waende"); zentral aus in resetWorldFrame.
+  (6) AUSSENWAENDE: corridorOutline kennt nur Gang-Konturen, der aeussere
+  Umfang war offen (Replay-Fahrten blickten in die hohlen Randbloecke)
+  -- vier Umfangs-Quads + Kronen/Eck-Pfosten DIREKT in wallGeo/lineGeo
+  (buildWallsAndLines): Material, Spiegelbild und Schwenk-Wachstum
+  gratis; Karte (Hoehe 0) degeneriert, von innen komplett hinter den
+  gleich hohen Randwaenden. (7) PHYSISCHE Wand-Funken (Boris'
+  "Echtheitsgefuehl"): collisionInfo (drive.js) liefert neben dem
+  SICHTLINIEN-`point` (bleibt fuer die 1980-Wellen: "da, wo man
+  hinschaut") jetzt `contact` = Lot der Spielermitte auf die Wandebene
+  -- die 2026-Funken + der Bump-Licht-Blitz sitzen an der STREIFSTELLE
+  (linker Fluegel -> Funken von links), auf SPARK_HEIGHT 0.35 (Boris hob sie
+  von der Gleiter-Flughoehe 0.26 an -- im Ego rutschten sie fast unter
+  den Bildrand), SPARK_OFF 0.1 -> 0.02 (Funken entspringen AN der Wand,
+  die wandwaerts fliegende Haelfte schluckt der Tiefentest =
+  "spritzen aus der Wand"), Farb-Touch SPARK_TINT 0.45 Richtung
+  Level-Farbe (Boris: reines Weiss sah aus wie die Schuesse).
+  `contact` reist im collision-Event automatisch ins Replay
+  (replay.js reicht es in den bump). Sichtpruefungs-Rezept: REPLAY +
+  Space-PAUSE friert die Funken ein (live verglueht SPARK_LIFE 0.5s
+  schneller als der CDP-Zeitraffer fotografiert). (8) STARTSCREEN-
+  Beschilderung (Boris: "meine Testuser waren planlos"): Pfeil-Hinweise
+  an Level-Zeile (links/rechts) und Engine-Schalter (runter=1980 links,
+  rauf=2026 rechts -- der Pfeil steht neben der Jahreszahl, die er
+  anwaehlt), hell = Druck bewirkt etwas, 0.3 = Rand/schon gewaehlt
+  (selectorArrows pur in hud.js, getestet); Pfeil-GLYPHEN in glyphs.js
+  ergaenzt (Unicode-Keys, beide Engines dieselben Zeichen); das doppelte
+  Auswahl-Layout von startscreen.render + Demo-Overlay ist zu EINEM
+  drawSelector (demoOverlay.js) konsolidiert, 2026 = Spans im
+  title/switchLine-DOM. (9) Arcade-COPYRIGHT unterm Titel-Display:
+  "(C) BB DESIGN 1980/2026" (copyrightLine in hud.js, Jahr = gewaehlte
+  Engine); 1980 unterm Zoom-Titel (drawTitle), 2026 als copyEl-DOM
+  unter der Voxel-Ebene, blendet mit titleAlpha. (10) 2026-WUERFEL
+  "aufgemotzt": (a) Flaechen fliessen durch die Level-Wandfarben
+  (wallColorCycle pur in colors.js: Gruen->Blau->Rot-Ring, 24s,
+  getestet) -- LUMINANZ-normiert auf die Platten-Helligkeit
+  (CUBE_FACE_LUM; Gruen ist linear ~8x heller als das Neutralgrau,
+  roh gemischt pumpte der Wuerfel); (b) Kanten DEZENT: im Orbit in der
+  Zyklusfarbe, luminanz-normiert knapp UEBER die Bloom-Schwelle
+  (CUBE_EDGE_LUM 1.1 statt EGO_BOOST 2.2 -- Bloom bleibt, die satte
+  Linie ist weg); (c) Nebel-Cubemap als scene.environment (diffuse
+  Reflexion, CUBE_ENV_REFLECT) + zwei WANDER-Sonnen (gruen/gelb,
+  driftLights, langsame Umlaeufe; fester Licht-Bestand, intensity 0 =
+  aus -- Shader-Rekompilierungs-Falle). NAHT-REGEL: alle drei Extras
+  sind reine Orbit-Effekte und blenden mit orbitX = skyA^2 in den
+  Fluegen aus -- am Szenenschnitt steht exakt die neutrale Platte
+  unter den statischen ACCENT_LIGHTS (die Platten-Projektion kennt nur
+  diese); die Kanten blenden dabei zur vollen Level-Farb-Kante
+  (view.color x EGO_BOOST, Andock-Ende unveraendert). Sichtpruefung
+  cdp-cube.mjs (Zyklus-Phasen + Andock-Naht) bestanden.
+  Stetigkeit per CDP gemessen: Frame-Delta am
+  PLAYING->RISING-Schnitt exakt 0, danach weich ansteigend
+  (Scratchpad-Skripte cdp-endcam.mjs/cdp-campath.mjs, Muster: eigener
+  Static-Server 3999 mit public/index.html-Mapping, debugCamera-Sampler
+  pro rAF; Pump-Rate real ~0.15s Spielzeit/Screenshot messen!).
 - **Gesamt-Review 28.8.2026 (REVIEW.md) umgesetzt:** Flipper-Wand-Bug +
   Paar-Spawn gefixt, world/foePlacement.js + core/hud.js + makeBuffer
   (backend.js) gegen Dreifach-/Achtfach-Duplikate, toter Fade-Pfad raus,
@@ -292,7 +372,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   geschluckt (game.demoKey; main.js hält User-Tasten aus game.keys).
   Overlay (LEVEL/Schalter/PRESS S, `blinkOn` aus hud.js) bleibt die ganze
   Demo: 1980 `scenes/demoOverlay.js`, 2026 DOM. Zyklus: Ziel (6 s
-  Feuerwerk)/Game Over → Karte (5 s) → Abdocken → Orbit (7 s) → nächste
+  Feuerwerk)/Game Over → Karte (5 s) → Abdocken → Orbit (20 s Ruhe) → nächste
   Demo. S in der Demo = Boris' Übergang: hinauf zur Karte, Fläche HEILT
   zu (2026: Kanäle → Platte), dann normales Fräsen des GEWÄHLTEN Levels
   (neue Übergänge MAP/MAZE_GEN --START--> MAZE_GEN).

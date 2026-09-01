@@ -124,9 +124,9 @@ test('der Demo-Zyklus laeuft weiter: Karte -> Orbit -> naechste Demo', () => {
   assert.equal(g.stateKey, State.STARTSCREEN);
   assert.equal(g.demo, true, 'der Zyklus haelt die Demo am Leben');
 
-  // Abdock-Flug (~1.6s) + Attract-Pause (Ruhe 7s + Titel 8s + Info 6s)
+  // Abdock-Flug (~1.6s) + Attract-Pause (Ruhe 20s + Titel 8s + 1s Luft + Info 6s + Fade)
   // -> naechste Demo.
-  for (let t = 0; t < 28 && g.stateKey !== State.MAZE_GEN; t += 0.5) advance(g, r, 0.5);
+  for (let t = 0; t < 43 && g.stateKey !== State.MAZE_GEN; t += 0.5) advance(g, r, 0.5);
   assert.equal(g.stateKey, State.MAZE_GEN, 'die naechste Demo beginnt von selbst');
   assert.notEqual(g.level, firstDemoLevel, 'die Rotation nimmt das naechste Demo-Level');
 });

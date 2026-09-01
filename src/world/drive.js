@@ -49,9 +49,14 @@ export function rampToward(value, target, rate, dt) {
 // targetSpeed? } -- targetSpeed (Gangbreiten/s, Standard cruise) erlaubt das
 // Abbremsen vor dem Abheben (X): 0 uebergeben, bis vel 0 erreicht.
 // Liefert { px, pz, yaw, collision }; collision ist null oder
-// { axis:'x'|'z', side:+1|-1, plane, wallCell:[gx,gy], point:[lx,lz], impact }
+// { axis:'x'|'z', side:+1|-1, plane, wallCell:[gx,gy], point:[lx,lz],
+//   contact:[lx,lz], impact }
 // mit plane = Welt-Koordinate der getroffenen Wandebene und impact in 0..1
-// (Anteil der Reisegeschwindigkeit senkrecht in die Wand).
+// (Anteil der Reisegeschwindigkeit senkrecht in die Wand). `point` ist der
+// SICHTLINIEN-Auftreffpunkt (fuer die 1980-Wellen: da, wo man hinschaut),
+// `contact` der PHYSISCHE Beruehrungspunkt (Lot der Spielermitte auf die
+// Wandebene -- streift der linke Fluegel, sitzt er links neben dem Schiff;
+// die 2026-Funken spruehen dort, Boris' "Echtheitsgefuehl" 1.9.2026).
 export function driveStep(maze, state, pose, turn, dt, opts) {
   const { unit, cell, radius } = opts;
   // Nur bei Override mergen -- laeuft 60x/s im Sim-Schritt.
@@ -145,7 +150,7 @@ function collisionInfo(maze, axis, dx, dz, px, pz, impact, unit, radius) {
     // Welche Zeile blockiert? Sichtpunkt zuerst, dann Mitte und die Ecken.
     const rows = [hit, pz, pz - radius, pz + radius].map(cellOf);
     const wallY = rows.find((r) => !isOpenCell(maze, wallX, r)) ?? pgy;
-    return { axis, side, plane, wallCell: [wallX, wallY], point: [plane, hit], impact };
+    return { axis, side, plane, wallCell: [wallX, wallY], point: [plane, hit], contact: [plane, pz], impact };
   }
   const side = Math.sign(dz);
   const wallY = pgy + side;
@@ -153,5 +158,5 @@ function collisionInfo(maze, axis, dx, dz, px, pz, impact, unit, radius) {
   const hit = clampSpan(px + (dx / dz) * (plane - pz), px); // Sichtlinie, geklemmt
   const cols = [hit, px, px - radius, px + radius].map(cellOf);
   const wallX = cols.find((c) => !isOpenCell(maze, c, wallY)) ?? pgx;
-  return { axis, side, plane, wallCell: [wallX, wallY], point: [hit, plane], impact };
+  return { axis, side, plane, wallCell: [wallX, wallY], point: [hit, plane], contact: [px, plane], impact };
 }
