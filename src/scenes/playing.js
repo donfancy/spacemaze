@@ -7,19 +7,21 @@
 // Zeichnet den abgelaufenen Weg auf (game.trail) und merkt die Spielerlage
 // (game.playerState) fuer den Rueckschwenk. X -> zurueck zur Karte; am Ziel
 // loest der Rueckschwenk nach 20 s automatisch aus.
-// Ab Level 11 (Level-Eigenschaften `enemies`/`shoot`): rote Rauten-Feinde
-// (world/enemies.js), Schiessen mit Space (world/shots.js, Tempest-Regel,
-// Fadenkreuz mit Lenk-Ausschlag); Feindberuehrung = krachende Explosion und
-// Game Over -> Karte (S dort: Level-Neustart).
+// Ab Level 11 (Level-Eigenschaften `enemies`/`shoot`): Tanker-ALLEYS
+// (world/enemies.js, Sturm-Mechanik): Rauten lauern verkleinert auf den
+// Wandkronen langer Gaenge, purzeln bei Sichtkontakt herunter, jagen
+// gangbunden und feuern sirrende Schuesse; jeder Abschuss hinterlaesst ein
+// magenta Flipper-PAAR (world/flippers.js -- toedliche Querschnitts-Ebene,
+// abschiessbar seitlich eingerastet). Schiessen mit Space (world/shots.js,
+// Tempest-Regel, Fadenkreuz mit Lenk-Ausschlag); Feindberuehrung = krachende
+// Explosion und Game Over -> Karte (S dort: Level-Neustart).
 // Ab Level 16 (`spinners`): gruene Spiral-Spinner an den End-Waenden langer
 // Gaenge (world/spinners.js) -- ihr Spike ist eine Einbahn-Sperre: frontal
 // sperrt die Spitze den Gang und will per Dauerfeuer gekuerzt werden
 // (Kreuzen von vorn oder Koerper-Beruehrung = Crash), von hinten harmlos.
 // Ab Level 21: Spinner GELB (auf gruenen Waenden) und feuernd
 // (`spinners.shoot` -- sirrende Schuesse in flirrenden Farben, abfangbar per
-// Dauerfeuer), dazu magenta X-FLIPPER (`flippers`, world/flippers.js): ihre
-// Querschnitts-Ebene toetet, abschiessbar nur in Links-/Rechts-Stellung;
-// ein Tanker-Abschuss aus >= 3 Feldern spawnt ein Flipper-Paar.
+// Dauerfeuer).
 // Ab Level 26 (`pulsars`, rote Waende, bunte Sterne, Tanker blau): gelbe
 // PULSARE (world/pulsars.js) -- unzerstoerbare Zackenlinien im Querschnitt,
 // die Schuessen nach oben/unten ausweichen. Beruehrung toetet NICHT: die
@@ -39,15 +41,14 @@ import { generateMaze } from '../world/maze.js';
 import { cellCenter, startFacingYaw, hasLineOfSight } from '../world/mazeWorld.js';
 import { DRIVE, createDriveState, driveStep } from '../world/drive.js';
 import { WALK, createWalkState, walkStep } from '../world/walk.js';
-import { ENEMY, enemiesStep, enemyHit } from '../world/enemies.js';
+import { ENEMY, enemiesStep, enemyHit, enemyFire } from '../world/enemies.js';
 import {
   SPINNER, spinnersStep, spinnerShotHit, spinnerPlayerHit, spinnerTip,
   spinnerFire, spinnerShotsStep, spinnerShotPlayerHit, spinnerShotIntercept,
   spinnerShotPos,
 } from '../world/spinners.js';
 import {
-  FLIPPER, flippersStep, flipperPlayerHit, flipperShotHit, spawnFlipperPair,
-  flipperPos,
+  flippersStep, flipperPlayerHit, flipperShotHit, spawnFlipperPair, flipperPos,
 } from '../world/flippers.js';
 import { pulsarsStep, pulsarPlayerTouch } from '../world/pulsars.js';
 import { createGyro, startSpin, gyroStep, gyroDirs, shortestRoll } from '../world/gyro.js';
@@ -56,11 +57,11 @@ import { createAutopilot, autopilotStep } from '../world/autopilot.js';
 import { createShotsState, aimYaw, fireShot, shotsStep } from '../world/shots.js';
 import { PHOSPHOR_GREEN, NEON_MAGENTA, TANKER_RED } from '../render/colors.js';
 import { SHATTER } from '../render/shatter.js';
-import { mazeMetric } from '../world/metric.js';
 import { createRng } from '../util/rng.js';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams,
   shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch, whirrPatch, gyroPatch,
+  tumblePatch,
 } from '../sound/patches.js';
 import { inGoalZone } from '../world/goal.js';
 import { STARS, createStars } from '../world/stars.js';
@@ -145,8 +146,7 @@ export function createPlaying(game) {
   // gerendert (Hidden-Lines-Falle 4: NIE in die Kamerabasis). Reset bei
   // enter(): nach Karte/Resume startet man wieder aufrecht.
   let gyro = createGyro();
-  let pairSource = false; // Level hat Flipper: Tanker-Fernabschuss spawnt ein Paar
-  let fieldPitch = 0;     // Feld-Abstand (Kammer + Wand, Welt) fuer die Paar-Distanz
+  let pairSource = false; // Level hat Tanker: JEDER Abschuss spawnt ein Flipper-Paar
   let shotsState = null;  // Tempest-Schuesse (world/shots.js)
   let bursts = [];        // aktive Splitter-Explosionen (Verpuffen/Abschuss/Crash)
   let burstSeq = 0;       // laufender Splitter-Seed (unabhaengig von gerade lebenden Bursts)
@@ -359,7 +359,7 @@ export function createPlaying(game) {
       }
       if (!cfg?.enemies) game.enemies = null;
       if (!cfg?.spinners) game.spinners = null;
-      if (!cfg?.flippers) game.flippers = null;
+      if (!cfg?.enemies) game.flippers = null;
       else if (!game.flippers) game.flippers = []; // Paar-Spawns landen auf game.flippers
       if (!cfg?.pulsars) game.pulsars = null;
       enemies = game.enemies ?? [];
@@ -372,9 +372,7 @@ export function createPlaying(game) {
       enemyCol = enemyColor(game.level);
       rainbow = !!cfg?.rainbowStars;
       gyro = createGyro(); // aufrecht starten (auch nach Karte/Resume)
-      pairSource = !!cfg?.flippers;
-      const metric = mazeMetric(maze);
-      fieldPitch = (metric.wall + metric.corridor) * unit; // 1 Feld = Kammer + Wand
+      pairSource = !!cfg?.enemies;
       // Sternenhimmel ab Level 4 (1-3 "legacy 1974"), deterministisch aus
       // dem Maze-Seed -- gleiche Karte, gleicher Himmel.
       stars = game.level >= STARS.minLevel ? createStars(maze.seed) : null;
@@ -476,7 +474,7 @@ export function createPlaying(game) {
           steer: drive ? driveState.steer : walkState.steer,
           flippers: flippers.filter((f) => seen(flipperPos(f))),
           foes: shoot ? [
-            ...enemies.filter((e) => e.alive).map((e) => [e.x, e.z]),
+            ...enemies.filter((e) => e.alive && e.mode === 'hunt').map((e) => [e.x, e.z]),
             ...spinners.filter((s) => s.alive).map(spinnerTip),
             ...foeShots.map(spinnerShotPos),
           ].filter(seen) : null,
@@ -547,13 +545,24 @@ export function createPlaying(game) {
       recordTrailPoint(game.trail, px, pz, { minDist: TRAIL_DIST_RATIO * cell });
       recordState();
 
-      // Feinde: pulsieren/patrouillieren; Beruehrung einer Raute = Game Over.
+      // Tanker: lauern auf den Kronen, purzeln bei Sichtkontakt in den Gang,
+      // jagen gangbunden und feuern (Spinner-Schuss-Form -> foeShots);
+      // Beruehrung eines Jaegers = Game Over.
       if (enemies.length) {
-        enemiesStep(enemies, dt);
+        for (const ev of enemiesStep(enemies, dt, { cell, player: { px, pz, yaw } })) {
+          if (ev.type === 'drop') {
+            game.audio?.play(tumblePatch());
+            recEvent('sound', { name: 'tumble' });
+          }
+        }
         const hit = enemyHit(enemies, px, pz, (RADIUS_RATIO + ENEMY.hitRadius) * cell);
         if (hit && !reached) {
           startCrash(hit); // der Tanker ueberlebt den Rammstoss
           return;
+        }
+        if (enemyFire(enemies, foeShots, dt, foeRng, { px, pz }, cell).length) {
+          game.audio?.play(whirrPatch());
+          recEvent('sound', { name: 'whirr' });
         }
       }
 
@@ -639,11 +648,10 @@ export function createPlaying(game) {
         });
         for (const ev of events) {
           spawnShotEvent(ev);
-          // Tanker aus >= 3 Feldern Entfernung abgeschossen (Level mit
-          // Flippern): an seiner Stelle entsteht ein Flipper-PAAR (links +
-          // rechts), das den Gang entlang auf den Spieler zurueckt.
-          if (ev.type === 'enemy' && pairSource
-            && Math.hypot(ev.x - px, ev.z - pz) >= FLIPPER.pairFields * fieldPitch) {
+          // JEDER Tanker-Abschuss hinterlaesst ein Flipper-PAAR (links +
+          // rechts), das den Gang entlang auf den Spieler zurueckt (Sturm-
+          // Regel: Flipper entstehen nie anders).
+          if (ev.type === 'enemy' && pairSource) {
             flippers.push(...spawnFlipperPair(maze, ev.enemy, { px, pz }, { unit, cell }));
           }
         }

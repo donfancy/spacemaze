@@ -9,7 +9,6 @@ import assert from 'node:assert/strict';
 import { WALL, OPEN } from '../src/world/maze.js';
 import { createMetric } from '../src/world/metric.js';
 import { createRng } from '../src/util/rng.js';
-import { ENEMY } from '../src/world/enemies.js';
 import { DRIVE } from '../src/world/drive.js';
 import {
   FLIPPER, createFlippers, flippersStep, flipperSide, flipperPos,
@@ -76,7 +75,6 @@ test('createFlippers meidet Spinner-Gaenge (avoid)', () => {
 });
 
 test('Tempo: schneller als die Tanker, aber fliehbar; an den Gang-Enden wird gewendet', () => {
-  assert.ok(FLIPPER.speed > ENEMY.patrolSpeed, 'schneller als die Tanker-Patrouille');
   assert.ok(FLIPPER.speed < DRIVE.cruise, 'die Reisegeschwindigkeit entkommt ihm');
 
   const { flippers } = makeFlipper();

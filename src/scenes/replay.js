@@ -28,6 +28,7 @@ import { NEON_MAGENTA, ARCADE_YELLOW } from '../render/colors.js';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams, fallPatch, risePatch,
   shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch, whirrPatch, gyroPatch,
+  tumblePatch,
 } from '../sound/patches.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, faceWalls,
@@ -64,7 +65,7 @@ export const REPLAY_CAMS = ['ego', 'chase', 'bird', 'total', 'orbit'];
 // Sound eines aufgezeichneten Events (nur bei 1x vorwaerts gespielt).
 const SOUND_PATCHES = {
   shot: shotPatch, poof: poofPatch, clink: clinkPatch,
-  boom: boomPatch, whirr: whirrPatch,
+  boom: boomPatch, whirr: whirrPatch, tumble: tumblePatch,
 };
 function eventPatch(e) {
   switch (e.type) {
@@ -125,6 +126,8 @@ export function createReplay(game) {
       puppets[i].x = src[i].x;
       puppets[i].z = src[i].z;
       puppets[i].alive = src[i].alive;
+      puppets[i].mode = src[i].mode;   // Lauern/Purzeln/Jagen (Groesse + Hoehe)
+      puppets[i].dropT = src[i].dropT;
     }
   }
 

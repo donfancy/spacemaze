@@ -114,7 +114,7 @@ test('Level 16: Spinner entstehen beim Spielstart und werden gerendert', () => {
   assert.ok(r.calls > before, 'Spielablauf zeichnet weiter');
 });
 
-test('Level 22: gruenes Thema, Flipper + feuernde gelbe Spinner + Tanker entstehen', () => {
+test('Level 22: gruenes Thema, lauernde Tanker + feuernde gelbe Spinner, Flipper nur als Paare', () => {
   const g = new Game();
   const r = fakeRenderer();
   g.level = 22;
@@ -122,15 +122,16 @@ test('Level 22: gruenes Thema, Flipper + feuernde gelbe Spinner + Tanker entsteh
   g.handleKey('S');
   advance(g, r, 1.8);  // Andocken -> MazeGen
   assert.equal(g.stateKey, State.MAZE_GEN);
-  assert.ok(Array.isArray(g.flippers) && g.flippers.length > 0,
-    'Flipper existieren schon auf der Start-Karte');
+  assert.ok(Array.isArray(g.flippers) && g.flippers.length === 0,
+    'Flipper werden nicht platziert -- die Paar-Liste steht leer bereit');
   // Wachstum (n=43) + Reinfallen abwarten -- grosszuegig vorspulen.
   for (let t = 0; t < 30 && g.stateKey !== State.PLAYING; t += 0.5) advance(g, r, 0.5);
   assert.equal(g.stateKey, State.PLAYING);
   assert.equal(r.color, PHOSPHOR_GREEN, 'Level 22 ist wieder gruen');
-  assert.ok(g.flippers.length > 0 && g.flippers.every((f) => f.alive), 'Flipper leben');
+  assert.ok(Array.isArray(g.flippers), 'Paar-Liste bleibt im Spiel');
   assert.ok(g.spinners.length > 0 && g.spinners.every((s) => s.shoot), 'Spinner mit shoot-Flag');
-  assert.ok(g.enemies.length > 0, 'Tanker als Paar-Quelle dabei');
+  assert.ok(g.enemies.length > 0 && g.enemies.every((e) => e.mode === 'lurk'),
+    'Tanker lauern zu Beginn auf den Kronen');
 
   // Ein paar Sekunden Spiel mit Dauerfeuer: nichts wirft, es wird gezeichnet.
   g.keys.add(' ');
@@ -154,8 +155,8 @@ test('Level 26: rotes Thema, alle vier Feindarten entstehen, Pulsare bleiben', (
   for (let t = 0; t < 40 && g.stateKey !== State.PLAYING; t += 0.5) advance(g, r, 0.5);
   assert.equal(g.stateKey, State.PLAYING);
   assert.equal(r.color, ARCADE_RED, 'Level 26 ist Arcade-rot');
-  assert.ok(g.enemies.length > 0 && g.spinners.length > 0 && g.flippers.length > 0,
-    'Tanker, Spinner und Flipper treten weiter an');
+  assert.ok(g.enemies.length > 0 && g.spinners.length > 0 && Array.isArray(g.flippers),
+    'Tanker und Spinner treten weiter an, die Flipper-Paar-Liste steht bereit');
   assert.ok(g.pulsars.length > 0 && g.pulsars.every((p) => p.alive && p.armed),
     'Pulsare stehen scharf im Gang');
 
@@ -273,8 +274,10 @@ test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry',
   advance(g, r, 0.3);
   g.keys.delete(' ');
 
-  // Feindberuehrung erzwingen: eine Raute auf die Spielerposition setzen.
+  // Feindberuehrung erzwingen: einen JAEGER auf die Spielerposition setzen
+  // (Lauerer und Purzler sind harmlos).
   const victim = g.enemies[1];
+  victim.mode = 'hunt';
   victim.x = g.playerState.px;
   victim.z = g.playerState.pz;
   advance(g, r, 0.1);

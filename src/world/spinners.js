@@ -29,8 +29,7 @@
 // toedlich ueber die ganze Gangbreite. Die Durchkommens-Garantie gilt
 // weiter: der Test simuliert das Duell MIT feuerndem Spinner.
 
-import { randInt } from '../util/rng.js';
-import { corridorCandidates, foeMarkers } from './foePlacement.js';
+import { corridorCandidates, foeMarkers, aheadEnd } from './foePlacement.js';
 
 export const SPINNER = {
   minChambers: 3,   // so viele Kammern muss ein gerades Gangstueck mindestens haben
@@ -94,19 +93,9 @@ export function createSpinners(maze, config, opts) {
     const lowWall = run.min - 0.5 * cell;
     const highWall = run.max + 0.5 * cell;
     const runLen = highWall - lowWall;
-    // Wand-Ende: Laufrichtung des Wegs ueber den Gang bestimmt das Ende
-    // VORAUS; einzelne Querung -> fern der Kreuzung; abseits -> rng.
-    let highEnd;
-    if (run.visits.length >= 2) {
-      const byIdx = [...run.visits].sort((u, v) => u.idx - v.idx);
-      highEnd = byIdx[byIdx.length - 1].i > byIdx[0].i; // Weg laeuft aufwaerts -> Spinner am hohen Ende
-    } else if (run.visits.length === 1) {
-      const c = run.visits[0].i;
-      highEnd = c - run.lo < run.hi - c ? true
-        : c - run.lo > run.hi - c ? false : randInt(rng, 2) === 1;
-    } else {
-      highEnd = randInt(rng, 2) === 1;
-    }
+    // Wand-Ende: das Ende VORAUS (foePlacement.aheadEnd -- Laufrichtung des
+    // Wegs, bei Querung fern der Kreuzung, abseits per rng).
+    const highEnd = aheadEnd(run, rng);
     return {
       axis: run.axis,
       dir: highEnd ? -1 : 1,             // Blickrichtung Wand -> Gang

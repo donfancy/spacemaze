@@ -13,6 +13,7 @@
 
 import { isChamber, isOpenCell, findPath } from './maze.js';
 import { cellCenter } from './mazeWorld.js';
+import { randInt } from '../util/rng.js';
 
 // --- Platzierung ------------------------------------------------------------
 
@@ -107,6 +108,24 @@ export function corridorCandidates(maze, opts) {
   candidates.sort((a, b) => (b.onPath - a.onPath)
     || (b.chambers - a.chambers) || (a.fix - b.fix) || (a.lo - b.lo) || (a.axis < b.axis ? -1 : 1));
   return candidates;
+}
+
+// Welches Gang-Ende liegt VORAUS? Auf Loesungsweg-Gaengen das Ende in
+// Laufrichtung des Wegs (die Begegnung ist frontal), bei blosser Querung
+// das fernere Ende (mehr Zeit zum Reagieren), abseits des Wegs wuerfelt
+// der rng. Liefert true fuer das hohe Ende (run.hi). Geteilt von Spinnern
+// (End-Wand) und Tanker-Alleys (Lauer-Krone).
+export function aheadEnd(run, rng) {
+  if (run.visits.length >= 2) {
+    const byIdx = [...run.visits].sort((u, v) => u.idx - v.idx);
+    return byIdx[byIdx.length - 1].i > byIdx[0].i; // Weg laeuft aufwaerts -> hohes Ende
+  }
+  if (run.visits.length === 1) {
+    const c = run.visits[0].i;
+    return c - run.lo < run.hi - c ? true
+      : c - run.lo > run.hi - c ? false : randInt(rng, 2) === 1;
+  }
+  return randInt(rng, 2) === 1;
 }
 
 // Marker-Positionen fuer die Kartensicht: lebende Feinde, Position via

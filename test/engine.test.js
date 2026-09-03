@@ -193,7 +193,7 @@ test('Playing (Kampf): Feindberuehrung setzt crash im viewState und Game Over', 
   // Einen Tanker direkt auf die Spielerlage setzen: der naechste Schritt
   // ist die Beruehrung -- deterministisch, ohne dorthin steuern zu muessen.
   const foe = g.enemies[0];
-  foe.patrol = null;
+  foe.mode = 'hunt'; // Lauerer/Purzler sind harmlos -- nur ein Jaeger rammt
   foe.x = g.playerState.px;
   foe.z = g.playerState.pz;
   g.update(1 / 60);

@@ -36,18 +36,19 @@ test('Kampf-Levels ab 11: Geraden-Bias, Schiessen, wachsende Feind-Staffelung', 
     assert.equal(levelConfig(level).shoot, undefined, `Level ${level} ohne Schiessen`);
   }
   let prevCount = 0;
-  let prevPatrol = 0;
+  let prevGroup = 0;
   for (let level = 11; level <= 15; level++) {
     const cfg = levelConfig(level);
     assert.ok(cfg.straight > 0 && cfg.straight < 1, `Level ${level}: Geraden-Bias gesetzt`);
     assert.equal(cfg.shoot, true, `Level ${level}: Schiessen aktiv`);
     assert.ok(cfg.enemies.count > prevCount, `Level ${level}: mehr Feinde als davor`);
-    assert.ok(cfg.enemies.patrol >= prevPatrol, `Level ${level}: Patrouillen-Anteil sinkt nie`);
-    assert.ok(cfg.enemies.patrol >= 0 && cfg.enemies.patrol <= 1);
+    // Sturm-Mechanik: die Alley-Gruppen wachsen mit dem Level (2 -> 6).
+    assert.ok(cfg.enemies.group > prevGroup, `Level ${level}: groessere Gruppen als davor`);
+    assert.ok(cfg.enemies.group <= 6, `Level ${level}: hoechstens sechs pro Gang`);
     prevCount = cfg.enemies.count;
-    prevPatrol = cfg.enemies.patrol;
+    prevGroup = cfg.enemies.group;
   }
-  assert.equal(levelConfig(15).enemies.patrol, 1, 'Level 15: alle Rauten patrouillieren');
+  assert.equal(levelConfig(15).enemies.group, 6, 'Level 15: volle Sechser-Gruppen');
 });
 
 test('Spinner-Levels 16-20: 16 fuehrt solo ein, ab 17 Mix; Geraden-Bias steigt', () => {
@@ -72,26 +73,26 @@ test('Spinner-Levels 16-20: 16 fuehrt solo ein, ab 17 Mix; Geraden-Bias steigt',
   }
 });
 
-test('Flipper-Levels 21-25: wieder gruen, Flipper ueberall, Spinner ab 22 gelb und feuernd', () => {
+test('Levels 21-25: wieder gruen, KEINE platzierten Flipper (nur Paare), Spinner ab 22 gelb und feuernd', () => {
+  for (let level = 1; level <= 30; level++) {
+    assert.equal(levelConfig(level).flippers, undefined,
+      `Level ${level}: Flipper werden nie platziert (Sturm-Regel: nur Paare aus Tankern)`);
+  }
   for (let level = 1; level <= 20; level++) {
-    assert.equal(levelConfig(level).flippers, undefined, `Level ${level} ohne Flipper`);
     assert.equal(levelConfig(level).spinners?.shoot, undefined, `Level ${level}: Spinner feuern nicht`);
   }
-  assert.equal(levelConfig(21).spinners, undefined, 'Level 21: Flipper solo einfuehren');
-  let prevFlippers = 0;
+  assert.equal(levelConfig(21).spinners, undefined, 'Level 21: nur Tanker-Alleys (volle Gruppen)');
   let prevSpinners = 0;
   let prevEnemies = 0;
   for (let level = 21; level <= 25; level++) {
     const cfg = levelConfig(level);
     assert.equal(cfg.shoot, true, `Level ${level}: Schiessen aktiv`);
-    assert.ok(cfg.flippers.count >= prevFlippers, `Level ${level}: Flipper-Anzahl sinkt nie`);
     assert.ok(cfg.enemies.count >= prevEnemies, `Level ${level}: Tanker als Paar-Quelle dabei`);
     if (level >= 22) {
       assert.ok(cfg.spinners.count >= prevSpinners, `Level ${level}: Spinner-Anzahl sinkt nie`);
       assert.equal(cfg.spinners.shoot, true, `Level ${level}: Spinner feuern`);
       prevSpinners = cfg.spinners.count;
     }
-    prevFlippers = cfg.flippers.count;
     prevEnemies = cfg.enemies.count;
   }
 });
@@ -132,7 +133,7 @@ test('Pulsar-Levels 26-30: volles Feind-Quartett, Tanker blau, bunte Sterne', ()
     const cfg = levelConfig(level);
     assert.equal(cfg.shoot, true, `Level ${level}: Schiessen aktiv`);
     assert.ok(cfg.pulsars.count >= prevPulsars, `Level ${level}: Pulsar-Anzahl sinkt nie`);
-    assert.ok(cfg.enemies.count > 0 && cfg.spinners.count > 0 && cfg.flippers.count > 0,
+    assert.ok(cfg.enemies.count > 0 && cfg.spinners.count > 0,
       `Level ${level}: alle bisherigen Feinde treten an`);
     assert.equal(cfg.spinners.shoot, true, `Level ${level}: Spinner feuern weiter`);
     assert.equal(enemyColor(level), TEMPEST_BLUE, `Level ${level}: Tanker blau (Rot = Wandfarbe)`);

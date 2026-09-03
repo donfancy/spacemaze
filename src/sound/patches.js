@@ -268,6 +268,24 @@ export function whirrPatch() {
 // zur halben Dauer, dann wieder runter -- dazu ein wirbelndes Rauschband;
 // am Ende ein kurzer Einrast-Tick. `duration` = Rotations-Dauer (world/
 // gyro.js liefert sie), der Klang endet also genau mit dem Einrasten.
+// Purzeln eines Tankers von der Wandkrone (Sturm-Mechanik): ein kurzer,
+// absackender Wobbel -- wie etwas Schweres, das kippt und im Gang aufsetzt.
+export function tumblePatch() {
+  const dur = 0.55;
+  return {
+    duration: dur,
+    voices: [
+      { type: 'osc', shape: 'triangle',
+        freq: [[0, 420], [0.12, 360], [0.2, 400], [0.32, 260], [0.4, 280], [dur, 140]],
+        filter: { type: 'lowpass', freq: [[0, 1800], [dur, 500]] },
+        gain: [[0, 0], [0.02, 0.14], [0.45, 0.1], [dur, 0]] },
+      { type: 'noise',
+        filter: { type: 'lowpass', freq: [[0, 900], [0.2, 300]] },
+        gain: [[0.42, 0], [0.45, 0.1], [dur, 0]] },
+    ],
+  };
+}
+
 export function gyroPatch(duration = 1.25) {
   const d = Math.max(0.4, duration);
   return {

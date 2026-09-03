@@ -47,7 +47,7 @@ import {
 import { EYE_RATIO, cellSize, CUBE_SIZE } from '../scenes/mazeView.js';
 import { faceLocalToWorld, SIDE_FACES } from '../world/cubeFaces.js';
 import { burstSegments, burstShards, burstGlow } from '../world/burst.js';
-import { ENEMY } from '../world/enemies.js';
+import { ENEMY, enemyLift } from '../world/enemies.js';
 import { SHOTS, aimYaw, shotSegments } from '../world/shots.js';
 import { FIREWORK, FIREWORK_COLORS, fireworkBeams } from '../world/fireworks.js';
 import { growthOutline } from '../world/mazeGeometry.js';
@@ -936,11 +936,18 @@ export function createBackend2026(container = document.body) {
       if (!foe.alive) continue;
       const pulse = 1 + ENEMY.pulseAmp
         * Math.sin(2 * Math.PI * ENEMY.pulseFreq * view.sceneT + foe.phase);
-      obj.scale.set(TANKER_WIDTH * s * pulse, s * pulse, TANKER_WIDTH * s * pulse);
-      obj.position.set(foe.x * k,
-        EYE + TANKER_HOVER * Math.sin(game.time * TANKER_HOVER_FREQ + foe.phase),
-        foe.z * k);
-      obj.rotation.y = game.time * TANKER_SPIN + foe.phase;
+      // Sturm-Mechanik: Lauerer sitzen VERKLEINERT auf der Wandkrone,
+      // Purzler fallen mit Ueberschlag in den Gang (reine Funktion der
+      // Feind-Daten -- enemyLift, auch im Replay).
+      const lift = enemyLift(foe, { hover: EYE, crown: world.H, size: s });
+      const sc = s * pulse * lift.scale;
+      obj.scale.set(TANKER_WIDTH * sc, sc, TANKER_WIDTH * sc);
+      const bob = foe.mode === 'hunt'
+        ? TANKER_HOVER * Math.sin(game.time * TANKER_HOVER_FREQ + foe.phase) : 0;
+      obj.position.set(foe.x * k, lift.y + bob, foe.z * k);
+      obj.rotation.set(foe.axis === 'z' ? lift.tumble : 0,
+        game.time * TANKER_SPIN + foe.phase,
+        foe.axis === 'x' ? lift.tumble : 0);
       mirrorObj.position.copy(obj.position);
       mirrorObj.scale.copy(obj.scale);
       mirrorObj.rotation.copy(obj.rotation);

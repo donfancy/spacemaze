@@ -97,7 +97,8 @@ test('Feind-Treffer: Raute stirbt, Ereignis gemeldet, Projektil weg', () => {
   const yaw = startFacingYaw(maze);
   fireShot(state, { px, pz, yaw }, 0);
   // ... mit einem Fake-Feind direkt in der Flugbahn (1 Gangbreite voraus).
-  const enemy = { x: px - Math.sin(yaw) * CELL, z: pz - Math.cos(yaw) * CELL, alive: true };
+  // (mode 'hunt': Lauerer/Purzler auf der Krone sind unverwundbar)
+  const enemy = { x: px - Math.sin(yaw) * CELL, z: pz - Math.cos(yaw) * CELL, alive: true, mode: 'hunt' };
   const events = [];
   for (let i = 0; i < 50 && state.shots.length > 0; i++) {
     events.push(...shotsStep(maze, state, 0.016, {

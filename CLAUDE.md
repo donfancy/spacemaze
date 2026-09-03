@@ -157,6 +157,30 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   (gemeinsamer Flächen-Renderer)
 
 ## Stand & wichtige technische Punkte
+- **STURM-BRANCH `sturm-feinde` (3.9.2026, Boris' Tempest-Feind-Mechanik,
+  Plan + Entscheidungen in PLAN-STURM.md; ob es nach main geht, wird
+  spaeter entschieden; getestet wird in 2026, 1980 darf nur nicht
+  abstuerzen):** Stufe 0+1 umgesetzt -- Level-Tabelle ohne platzierte
+  Flipper (`flippers`-Feld weg, Paare entstehen bei JEDEM Tanker-Abschuss
+  ab 11, `game.flippers` = leere Paar-Liste bei Tanker-Levels), `enemies:
+  {count, group}` statt patrol, straight 0.75 in 11-17; Pulsare ohne
+  Gang-Sperre (alle Feinde teilen sich lange Gaenge). TANKER-ALLEYS
+  (world/enemies.js neu): Gruppen bis `group` (max 6, nie mehr als
+  Kammern) lauern VERKLEINERT (30 %) auf den Wandkronen langer Gaenge
+  (bis 3 auf der End-Krone, weitere auf den Zwischenwand-Kronen NEBEN den
+  Kammern, nur ueber Wandzellen), schieben sich hin und her (`t`-Uhr,
+  x/z kanonisch), werden ausgeloest, wenn der Spieler IM Gang steht und
+  die Lauer-Wand VOR sich hat (Halbebene), purzeln gestaffelt (dropGap)
+  in 0.6 s auf Schwebehoehe (`enemyLift` = Groesse/Hoehe/Taumel fuer
+  BEIDE Zeichner, auch im Replay -- die Puppen kopieren mode/dropT),
+  jagen gangbunden (huntSpeed 1.0, bleiben an der letzten bekannten
+  Spieler-Laengslage) und feuern Spinner-Schuss-Objekte in `foeShots`
+  (Blickrichtung egal). `enemyHit` trifft NUR Jaeger (Lauerer/Purzler
+  unverwundbar + harmlos -- Test-Fixtures brauchen `mode: 'hunt'`).
+  `aheadEnd` (foePlacement) ist die geteilte "Ende voraus"-Logik von
+  Spinnern und Alleys. Sound `tumblePatch`. Sichtpruefungs-Skript
+  cdp-alley.mjs (Scratchpad, Demo-Autopilot per `g.demo = true` +
+  `current.onKey('S')` ohne die 30 s Idle; --use-angle=swiftshader).
 - **TOUCH + MOBILE (1.9.2026, Boris' Entscheid "Mini-Automat" + Floating
   D-Pad):** Beruehrungen erzeugen EXAKT die Tastatur-Tasten -- die Spiel-
   logik (Rampen, Gyro-Mapping, Autopilot, Recorder/Replay) kennt keinen

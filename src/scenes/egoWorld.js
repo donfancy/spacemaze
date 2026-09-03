@@ -229,7 +229,9 @@ export function renderEgoWorld(renderer, camera, ctx) {
   if (aliveEnemies.length) {
     const segs = [];
     for (const e of aliveEnemies) {
-      segs.push(...enemySegments(e, t, { cell, px, pz, height: EYE_RATIO * cell }));
+      segs.push(...enemySegments(e, t, {
+        cell, px, pz, height: EYE_RATIO * cell, crown: WALL_RATIO * cell,
+      }));
     }
     foeOverlay(segs, ctx.enemyCol);
   }

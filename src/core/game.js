@@ -13,7 +13,6 @@ import { PHOSPHOR_GREEN } from '../render/colors.js';
 import { drawDemoOverlay } from '../scenes/demoOverlay.js';
 import { createEnemies } from '../world/enemies.js';
 import { createSpinners } from '../world/spinners.js';
-import { createFlippers } from '../world/flippers.js';
 import { createPulsars } from '../world/pulsars.js';
 import { createRng } from '../util/rng.js';
 import { unitSize, cellSize } from '../scenes/mazeView.js';
@@ -50,7 +49,7 @@ export class Game {
     this.reachedGoal = false; // Ziel erreicht? (steuert S/X-Angebot auf der Karte)
     this.enemies = null;      // Tanker (rote Rauten, ab 11), von Playing verwaltet -- bleiben ueber Karte/Resume erhalten
     this.spinners = null;     // Spiral-Spinner (ab 16), gleiche Lebensdauer-Regeln wie enemies
-    this.flippers = null;     // X-Flipper (ab 21), gleiche Lebensdauer-Regeln wie enemies
+    this.flippers = null;     // X-Flipper (Paare aus Tanker-Abschuessen), gleiche Lebensdauer-Regeln
     this.pulsars = null;      // Pulsare (ab 26), gleiche Lebensdauer-Regeln (sterben aber nie)
     this.gameOver = false;    // Feindberuehrung: Karte zeigt GAME OVER, S startet den Level neu
     this.viewRoll = 0;        // Rest-Verdrehung der Blickachse beim Abheben (Pulsar-
@@ -178,15 +177,13 @@ export class Game {
     this.spinners = cfg?.spinners ? createSpinners(maze, cfg.spinners, {
       unit, cell, rng: createRng((maze.seed ^ 0x9e3779b9) >>> 0),
     }) : null;
-    // Flipper NACH den Spinnern: deren Gangstuecke bleiben flipperfrei.
-    this.flippers = cfg?.flippers ? createFlippers(maze, cfg.flippers, {
-      unit, cell, rng: createRng((maze.seed ^ 0x85ebca6b) >>> 0),
-      avoid: this.spinners ?? [],
-    }) : null;
-    // Pulsare zuletzt: Spinner- UND Flipper-Gangstuecke bleiben pulsarfrei.
+    // Flipper werden NICHT platziert: sie entstehen nur paarweise aus
+    // Tanker-Abschuessen (Sturm-Branch) -- die Liste steht bereit.
+    this.flippers = cfg?.enemies ? [] : null;
+    // Pulsare OHNE Gang-Sperre: in langen Gaengen tauchen alle Feinde auf
+    // (Boris' "shooting alley", 3.9.2026).
     this.pulsars = cfg?.pulsars ? createPulsars(maze, cfg.pulsars, {
       unit, cell, rng: createRng((maze.seed ^ 0xc2b2ae35) >>> 0),
-      avoid: [...(this.spinners ?? []), ...(this.flippers ?? [])],
     }) : null;
   }
 
