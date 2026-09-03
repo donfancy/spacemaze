@@ -325,6 +325,17 @@ verwundbar nur beim Vorlauf, an der Wand geschützt. Neu:
   (enemies.group), Tanker-Jagdtempo/Feuerrate, holdSide der Flipper
   (Zeitfenster seitlich), Diagonal-Fenster. Das Zapper-Design fängt genau
   diesen Moment ab (einmal pro Leben).
+- **TEMPEST-SALVE (Boris, 3.9.2026, nach dem ersten Spielen: „Boah, ist das
+  SCHWER"):** SHOTS.rate 5 → **12**/s — bei gehaltenem Knopf geht die
+  8er-Salve in 0.67 s raus, danach drosselt die 8er-Grenze (jeder weitere
+  Schuss erst, wenn einer ankommt/trifft; vorher griff die Grenze nie).
+  SPINNER.shorten 0.45 → **0.2** (Kürz-Rate 2.4 > cruise). Rettungsschuss:
+  Dauerfeuer trifft die Diagonale jetzt ~100 % — gewollt, der Preis ist die
+  Munition („die Salve nicht zu früh raushauen", Test mit vorgeladener
+  8er-Liste). Messlauf danach (8 Läufe je Level): **11: 6/8, 13: 6/8,
+  15: 4/8, 20: 7/8, 25: 5/8, 30: 7/8 GOAL** — vorher 0/8 ab 15. Reste:
+  Tanker-Rammstoß (Nahkampf in der Alley), einzelne Flipper, ein
+  Aufspießen.
 
 ## Fallen und Notizen
 
