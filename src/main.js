@@ -221,6 +221,7 @@ function touchUi() {
     reached: game.reachedGoal,
     gameOver: game.gameOver,
     hasReplay: hasRecording(game.recording),
+    zapper: cfg?.shoot ? !!game.zapper : undefined, // ZAP-Chip nur in Schiess-Levels
     cams: game.engine === ENGINE_2026,
     engine: game.engine,
     arrows: selectorArrows(game),

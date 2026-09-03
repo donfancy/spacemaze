@@ -12,12 +12,13 @@ import { ENGINE_1980, ENGINE_2026 } from './engine.js';
 // Steuer-Zeile der Ego-Ansicht (unten rechts bzw. 2026 im Label).
 // Die Lenk-Tasten folgen der Blick-Verdrehung (Pulsar-Rotation, orient) --
 // auch Boost/Ausrichten (Fahrt-Modus) rotieren mit dem Tastenkreuz.
-export function playHint({ drive, shoot, orient } = {}) {
+// `zapper` (Sturm-Branch): der Superzapper ist noch verfuegbar -> 'Z ZAP'.
+export function playHint({ drive, shoot, orient, zapper } = {}) {
   if (!drive && !shoot) return 'ARROWS MOVE - X MAP';
   const { boost, align } = assistHintKeys(orient);
   const assist = boost + ' BOOST - ' + align + ' ALIGN - ';
   return steerHintKeys(orient) + ' STEER - ' + assist
-    + (shoot ? 'SPACE FIRE - ' : '') + 'X MAP';
+    + (shoot ? 'SPACE FIRE - ' + (zapper ? 'Z ZAP - ' : '') : '') + 'X MAP';
 }
 
 // Hinweis-Zeile der Karte: S nur solange das Ziel offen ist; nach Game
@@ -61,6 +62,7 @@ export const INFO_LINES = [
   ['ARROWS', 'MOVE + STEER'],
   ['', 'LEVEL 6+: UP BOOST, DOWN ALIGN'],
   ['SPACE', 'FIRE (LEVEL 11+)'],
+  ['Z / Y', 'SUPERZAPPER, ONCE PER LIFE'],
   ['S', 'START + RESUME + RETRY'],
   ['X', 'EXIT'],
   ['R', 'REPLAY (ON MAP)'],

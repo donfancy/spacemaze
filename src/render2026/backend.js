@@ -58,9 +58,10 @@ import {
 import { flipperMarkers, flipperSegments, flipperTriangles } from '../world/flippers.js';
 import { pulsarMarkers, pulsarSegments } from '../world/pulsars.js';
 import { GLIDER } from '../world/glider.js';
+import { ZAPPER } from '../world/zapper.js';
 import {
   buildWorld, applyTheme, disposeWorld, hdr, setWallHeight, setMarkerFade,
-  UNITS_PER_CELL, FOG_DENSITY, HEADLIGHT_INTENSITY, EGO_BOOST, MIRROR_LINE_DIM,,
+  UNITS_PER_CELL, FOG_DENSITY, HEADLIGHT_INTENSITY, EGO_BOOST, MIRROR_LINE_DIM,
   MAX_HOLES,
 } from './world3d.js';
 import { buildStartscreenScene } from './startscreen3d.js';
@@ -2409,9 +2410,10 @@ export function createBackend2026(container = document.body) {
       // zerberstenden Voxel-Lettern.
       const tFlash = game.stateKey === State.STARTSCREEN && view?.titleT != null
         ? 0.8 * titleFlash(view.titleT) : 0;
+      const zapFlash = pv?.zap ? 0.8 * (1 - pv.zap.t / ZAPPER.flash) ** 2 : 0; // Superzapper
       flashEl.style.opacity = pv?.crash && pv.crash.t < CRASH_FLASH
         ? String(0.95 * (1 - pv.crash.t / CRASH_FLASH) ** 2)
-        : String(tFlash);
+        : String(Math.max(tFlash, zapFlash));
     },
 
     // Live-Engine-Schalter (Stufe 3): main.js blendet die ganze 2026-Ausgabe

@@ -33,6 +33,9 @@ test('playHint: Steuer-Zeile je Modus, Wortlaut der 1980-Version', () => {
     'LEFT/RIGHT STEER - UP BOOST - DOWN ALIGN - SPACE FIRE - X MAP');
   assert.equal(playHint({ drive: true, shoot: true, orient: 1 }),
     'DOWN/UP STEER - LEFT BOOST - RIGHT ALIGN - SPACE FIRE - X MAP');
+  assert.equal(playHint({ drive: true, shoot: true, zapper: true }),
+    'LEFT/RIGHT STEER - UP BOOST - DOWN ALIGN - SPACE FIRE - Z ZAP - X MAP',
+    'Superzapper verfuegbar: Z ZAP in der Zeile');
 });
 
 test('assistHintKeys ist die Inverse von gyroDirs (alle vier Stellungen)', () => {

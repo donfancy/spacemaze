@@ -24,11 +24,12 @@ import { levelConfig, spinnerColor, enemyColor } from '../core/levels.js';
 import { spinnerMarkers } from '../world/spinners.js';
 import { flipperMarkers } from '../world/flippers.js';
 import { pulsarMarkers, pulsarOpenings } from '../world/pulsars.js';
+import { ZAPPER } from '../world/zapper.js';
 import { NEON_MAGENTA, ARCADE_YELLOW } from '../render/colors.js';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams, fallPatch, risePatch,
   shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch, whirrPatch, gyroPatch,
-  tumblePatch,
+  tumblePatch, zapPatch,
 } from '../sound/patches.js';
 import {
   WALL_RATIO, FAR_RATIO, NEAR_RATIO, faceWalls,
@@ -65,7 +66,7 @@ export const REPLAY_CAMS = ['ego', 'chase', 'bird', 'total', 'orbit'];
 // Sound eines aufgezeichneten Events (nur bei 1x vorwaerts gespielt).
 const SOUND_PATCHES = {
   shot: shotPatch, poof: poofPatch, clink: clinkPatch,
-  boom: boomPatch, whirr: whirrPatch, tumble: tumblePatch,
+  boom: boomPatch, whirr: whirrPatch, tumble: tumblePatch, zap: zapPatch,
 };
 function eventPatch(e) {
   switch (e.type) {
@@ -135,6 +136,7 @@ export function createReplay(game) {
   function derived() {
     const reachedEv = lastEventBefore(rec, tau, 'reached');
     const crashEv = lastEventBefore(rec, tau, 'crash');
+    const zapEv = lastEventBefore(rec, tau, 'zap');
     const bumpEv = lastEventBefore(rec, tau, 'bump');
     const colEv = lastEventBefore(rec, tau, 'collision');
     // Juengere der beiden Flanken als Bump (2026: Blitz/Funken/Impuls).
@@ -158,6 +160,7 @@ export function createReplay(game) {
       reached: !!reachedEv,
       reachedAt: reachedEv ? reachedEv.t : 0,
       crash: crashEv ? { t: tau - crashEv.t, x: crashEv.x, z: crashEv.z } : null,
+      zap: zapEv && tau - zapEv.t < ZAPPER.flash ? { t: tau - zapEv.t } : null,
       bump, bursts,
     };
   }
@@ -331,7 +334,9 @@ export function createReplay(game) {
         renderer.drawPolylines([[[24, y], [24 + (w - 48) * p, y]]], { intensity: 0.8, lineWidth: 2.5 });
       }
 
-      // Crash-Moment: der weisse Einschlag-Blitz auch in der Wiedergabe.
+      // Crash-Moment: der weisse Einschlag-Blitz auch in der Wiedergabe;
+      // ebenso der Superzapper-Blitz.
+      if (d.zap && !paused) renderer.flash(0.7 * (1 - d.zap.t / ZAPPER.flash) ** 2);
       if (d.crash && d.crash.t < CRASH_FLASH && !paused) {
         renderer.flash(0.9 * (1 - d.crash.t / CRASH_FLASH));
       }
@@ -349,7 +354,7 @@ export function createReplay(game) {
         roll: cur.roll, pitch: cur.pitch, bank: cur.bank,
         sceneT: tau, drive, shoot, steer: cur.steer,
         reached: d.reached, reachedAt: d.reachedAt,
-        bump: d.bump, bursts: d.bursts, crash: d.crash,
+        bump: d.bump, bursts: d.bursts, crash: d.crash, zap: d.zap,
         shots: cur.shots ?? [], foeShots: cur.foeShots ?? [],
         // Wandphantome: reine Funktion der aufgezeichneten Pulsare + Zeit.
         openings: cur.pulsars ? pulsarOpenings(cur.pulsars, maze, tau) : [],

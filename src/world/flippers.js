@@ -226,7 +226,7 @@ export function flippersStep(flippers, dt, cell, player = null) {
 // (0.5-lift Gangbreiten vor der Wand) sonst naeher als shotRadius.
 export function flipperShotHit(flippers, x, z, cell, prev = null) {
   for (const f of flippers) {
-    if (!f.alive) continue;
+    if (!f.alive || f.zapAt != null) continue; // gezappt (Superzapper): wartet nur noch auf die Explosion
     const crossS = f.axis === 'x' ? z : x;
     if (Math.abs(crossS - f.cross) >= 0.5 * cell) continue;
     if (flipperDiagonal(f)) {
@@ -263,7 +263,7 @@ export function flipperPlayerHit(flippers, px, pz, radius, cell, prev) {
   const ppx = prev?.px ?? px;
   const ppz = prev?.pz ?? pz;
   for (const f of flippers) {
-    if (!f.alive) continue;
+    if (!f.alive || f.zapAt != null) continue; // gezappt: entschaerft
     const along = f.axis === 'x' ? px : pz;
     const crossP = f.axis === 'x' ? pz : px;
     if (Math.abs(crossP - f.cross) >= 0.5 * cell) continue;

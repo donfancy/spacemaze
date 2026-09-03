@@ -63,6 +63,7 @@ export const AUTOPILOT = {
                     // die Kurve diagonal anschneiden -> Bump an der Innenecke)
   driveSteer: 0.35, // rad: ab hier lenkt der Autopilot im Fahrt-Modus selbst
                     // (Kurven) -- darunter uebernimmt der Ausricht-Assistent
+  zapCount: 3,      // ab so vielen Feinden im Sichtfeld zuendet die Demo den Superzapper
   fireDist: 7,      // Gangbreiten: nur so nahe Feinde gelten als "in Sicht"
   fireCone: 0.5,    // rad: halber Oeffnungswinkel des Sicht-Kegels um die
                     // Blickrichtung (deckt den eigenen Gang ab)
@@ -327,6 +328,10 @@ export function autopilotStep(ap, pose, mode = {}) {
     }
   }
   if (foe) keys.add(' '); // gezieltes Feuer statt Dauerfeuer
+  // SUPERZAPPER wie ein Profi: wenn es eng wird (mode.zapWorth = genug
+  // Feinde im Sichtfeld, vom Aufrufer per zapTargets bestimmt) und er noch
+  // geladen ist (mode.zap) -- die Demo zeigt die Mechanik her.
+  if (!done && mode.zap && mode.zapWorth) keys.add('Z');
 
   return { keys, done };
 }

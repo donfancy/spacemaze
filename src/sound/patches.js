@@ -286,6 +286,27 @@ export function tumblePatch() {
   };
 }
 
+// SUPERZAPPER (Sturm-Branch): eine elektrische Entladung -- knisternder
+// Hochpass-Rauschriss, ein fallender Rechteck-Sweep und ein Bass-Wumms.
+export function zapPatch() {
+  const dur = 0.7;
+  return {
+    duration: dur,
+    voices: [
+      { type: 'noise',
+        filter: { type: 'highpass', freq: [[0, 400], [dur, 2600]] },
+        gain: [[0, 0], [0.01, 0.6], [0.25, 0.3], [dur, 0]] },
+      { type: 'osc', shape: 'square',
+        freq: [[0, 2400], [0.15, 900], [0.5, 120], [dur, 40]],
+        gain: [[0, 0], [0.01, 0.35], [0.4, 0.2], [dur, 0]] },
+      { type: 'osc', shape: 'sawtooth',
+        freq: [[0, 60], [0.3, 90], [dur, 30]],
+        filter: { type: 'lowpass', freq: [[0, 400]] },
+        gain: [[0, 0], [0.02, 0.4], [dur, 0]] },
+    ],
+  };
+}
+
 export function gyroPatch(duration = 1.25) {
   const d = Math.max(0.4, duration);
   return {

@@ -259,7 +259,7 @@ export function spinnerShotHit(spinners, x, z, cell, foeShots = null) {
     if (!spinnerShown(s)) continue;
     const [t, q] = runCoords(s, x, z);
     if (t < 0) continue; // hinter der Spinner-Wand: die Wand schuetzt
-    if (s.alive && spinnerExposed(s)) {
+    if (s.alive && s.zapAt == null && spinnerExposed(s)) { // (gezappt: unverwundbar bis zur Explosion)
       const [bx, bz] = spinnerPos(s);
       if (Math.hypot(x - bx, z - bz) < SPINNER.shotRadius * cell) {
         s.alive = false;
@@ -309,7 +309,7 @@ export function spinnerPlayerHit(spinners, px, pz, radius, cell, prev) {
     // diese Schranke toetet er den Spieler im Gang DAHINTER durch die Wand.
     // Im eigenen Gang haelt der Kollisionsradius den Spieler stets bei t > 0.
     if (t < 0) continue;
-    if (s.alive) {
+    if (s.alive && s.zapAt == null) { // (gezappt: der Koerper ist entschaerft, der Spike nicht)
       const [bx, bz] = spinnerPos(s);
       if (Math.hypot(px - bx, pz - bz) < radius + SPINNER.hitRadius * cell) {
         return { x: bx, z: bz, spinner: s, impale: false };
@@ -357,7 +357,7 @@ export function spinnerFire(spinners, shots, dt, rng, player, cell) {
   const fx = -Math.sin(player.yaw); // Blickrichtung (Konvention wie forward)
   const fz = -Math.cos(player.yaw);
   for (const s of spinners) {
-    if (!s.alive) continue;
+    if (!s.alive || s.zapAt != null) continue; // (gezappt: kein Feuer mehr)
     // Spieler im Gang des Spinners? (quer in der Gangbreite, laengs in der
     // Spanne; t < 0 waere der Nachbargang hinter der End-Wand)
     const [tp, qp] = runCoords(s, player.px, player.pz);

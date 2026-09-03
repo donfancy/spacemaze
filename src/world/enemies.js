@@ -240,7 +240,7 @@ export function enemyLift(e, opts) {
 export function enemyFire(enemies, shots, dt, rng, player, cell) {
   const fired = [];
   for (const e of enemies) {
-    if (!e.alive || e.mode !== 'hunt') continue;
+    if (!e.alive || e.mode !== 'hunt' || e.zapAt != null) continue; // gezappt: entschaerft
     if (!playerInAlley(e, player.px, player.pz, cell)) continue;
     const along = e.axis === 'x' ? e.x : e.z;
     const pAlong = e.axis === 'x' ? player.px : player.pz;
@@ -259,11 +259,12 @@ export function enemyFire(enemies, shots, dt, rng, player, cell) {
 }
 
 // Liefert den ersten lebenden JAEGER im Umkreis `radius` (Welt-Einheiten)
-// um (x,z) -- oder null. Lauerer und Purzler sind unverwundbar und harmlos.
+// um (x,z) -- oder null. Lauerer und Purzler sind unverwundbar und harmlos,
+// gezappte Jaeger (Superzapper, zapAt) ebenso -- bis sie explodieren.
 // Der Aufrufer waehlt den Radius (Spieler vs. Projektil).
 export function enemyHit(enemies, x, z, radius) {
   for (const e of enemies) {
-    if (!e.alive || e.mode !== 'hunt') continue;
+    if (!e.alive || e.mode !== 'hunt' || e.zapAt != null) continue;
     if (Math.hypot(e.x - x, e.z - z) < radius) return e;
   }
   return null;

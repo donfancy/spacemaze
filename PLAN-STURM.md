@@ -224,6 +224,17 @@ verwundbar nur beim Vorlauf, an der Wand geschützt. Neu:
   Steuer-Zeile solange verfügbar (`playHint`).
 - Autopilot/Demo: darf zappen, wenn es eng wird (z.B. ≥ 3 Feinde im
   Sichtfeld) — zeigt die Mechanik im Attract-Mode her.
+- **UMGESETZT (Stufe 5, 3.9.2026):** `world/zapper.js` (zapTargets: Kegel
+  ±37.5° + hasLineOfSight, nah→fern; startZap setzt `zapAt` = sofort
+  entschärft + unverwundbar, zapStep tötet fällige; die Feind-Module prüfen
+  `zapAt` in Hit/Fire). playing: `zap()` idempotent (Z/Y gehalten via
+  game.keys, getippt via onKey/Touch-Chip, Autopilot bei ≥ 3 Zielen),
+  `game.zapper` lädt bei jedem frischen Anlauf (Resume behält den
+  Verbrauch), Feind-Schüsse verpuffen sofort, Bursts über spawnShotEvent
+  (kein Flipper-Paar für gezappte Tanker), Blitz 1980 (renderer.flash) +
+  2026 (flashEl über view.zap) + Replay (Event 'zap'), zapPatch, HUD
+  'Z ZAP', INFO-Zeile, ZAP-Chip (gedimmt = verbraucht). Ausblick-Haken:
+  Nachladen beim Level-Aufstieg = `game.zapper = true`.
 
 ### 6. Level-Tabelle
 

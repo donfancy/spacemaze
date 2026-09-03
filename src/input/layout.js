@@ -64,7 +64,11 @@ function chipSets(ui) {
   }
   switch (ui.state) {
     case State.PLAYING:
-      return { main: [['X', 'MAP']], small: [...small, [KEY_MIRROR, 'SWAP']] };
+      return {
+        // ZAP nur in Schiess-Levels (ui.zapper undefined sonst); verbraucht = gedimmt.
+        main: [...(ui.zapper != null ? [['Z', 'ZAP', !ui.zapper]] : []), ['X', 'MAP']],
+        small: [...small, [KEY_MIRROR, 'SWAP']],
+      };
     case State.MAP:
       return {
         main: [
@@ -119,7 +123,7 @@ function layoutRow(items, cx, cy, h, anchor, maxW = Infinity) {
 //   taps    unsichtbare Tipp-Baender ueber den Startscreen-Zeilen (beim Loslassen)
 //   gesture Wisch-/Tipp-Flaeche (Startscreen: Wischen = Pfeile, Tipp = S/X)
 //   labels  Beschriftungen unter Pad/Ring
-// ui: { state, demo, info, shoot, drive, active, reached, gameOver, hasReplay,
+// ui: { state, demo, info, shoot, drive, active, reached, gameOver, hasReplay, zapper,
 //       cams, engine, arrows, mirror }
 export function deckModel(layout, ui) {
   const deck = layout.deck;

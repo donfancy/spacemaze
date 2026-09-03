@@ -54,15 +54,16 @@ import {
 import { pulsarsStep, pulsarPlayerTouch, pulsarOpenings } from '../world/pulsars.js';
 import { createGyro, startSpin, gyroStep, gyroDirs, shortestRoll } from '../world/gyro.js';
 import { alignTurn } from '../world/align.js';
-import { createAutopilot, autopilotStep } from '../world/autopilot.js';
+import { AUTOPILOT, createAutopilot, autopilotStep } from '../world/autopilot.js';
 import { createShotsState, aimYaw, fireShot, shotsStep } from '../world/shots.js';
+import { ZAPPER, zapTargets, startZap, zapStep } from '../world/zapper.js';
 import { PHOSPHOR_GREEN, NEON_MAGENTA, TANKER_RED } from '../render/colors.js';
 import { SHATTER } from '../render/shatter.js';
 import { createRng } from '../util/rng.js';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams,
   shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch, whirrPatch, gyroPatch,
-  tumblePatch,
+  tumblePatch, zapPatch,
 } from '../sound/patches.js';
 import { inGoalZone } from '../world/goal.js';
 import { STARS, createStars } from '../world/stars.js';
@@ -139,6 +140,8 @@ export function createPlaying(game) {
   let flippers = [];      // X-Flipper ab Level 21 (liegen auf game.flippers)
   let pulsars = [];       // Pulsare ab Level 26 (liegen auf game.pulsars)
   let openings = [];      // Wandphantome der Pulsare dieses Frames (pulsarOpenings)
+  let zapQueue = [];      // Superzapper: Feinde, die noch explodieren (nah -> fern)
+  let zapAt = -Infinity;  // Szenenzeit des letzten Zaps (weisser Blitz)
   let foeShots = [];      // sirrende Spinner-Schuesse (ab Level 21)
   let foeRng = null;      // deterministischer Zufall fuers Spinner-Feuern
   let spinnerCol = PHOSPHOR_GREEN; // Spinner-Farbe des Levels (ab 21 gelb)
@@ -248,6 +251,25 @@ export function createPlaying(game) {
 
   function recordState() {
     game.playerState = { px, pz, yaw };
+  }
+
+  // SUPERZAPPER (Z/Y, einer pro Anlauf): alle aktiven Feinde im Sichtfeld
+  // sind sofort entschaerft und explodieren nah -> fern (zapStep in
+  // update), alle Feind-Schuesse erloeschen auf der Stelle. Lauerer,
+  // Spikes und Pulsare bleiben (world/zapper.js).
+  function zap() {
+    if (!game.zapper || !shoot || crash || reached) return;
+    game.zapper = false;
+    zapAt = sceneT;
+    zapQueue = startZap(zapTargets(maze, { px, pz, yaw }, { enemies, spinners, flippers }, { unit }), sceneT);
+    for (const sh of foeShots) {
+      const [x, z] = spinnerShotPos(sh);
+      pushBurst({ born: sceneT, center: [x, SPINNER.height * cell, z], seed: burstSeq++, count: 10, speed: 1.8 * cell, life: 0.4, size: 0.08 * cell, color: SHOT_COLOR });
+    }
+    foeShots.length = 0;
+    game.audio?.play(zapPatch());
+    recEvent('sound', { name: 'zap' });
+    recEvent('zap', {});
   }
 
   let lastSpeed = 0; // erreichtes Tempo (normiert) -- fuer Motor-Klang im Replay
@@ -374,6 +396,9 @@ export function createPlaying(game) {
       pulsars = game.pulsars ?? [];
       openings = [];
       maze.openings = null;
+      zapQueue = [];
+      zapAt = -Infinity;
+      if (!game.resume) game.zapper = true; // neues Leben: Superzapper geladen (Resume behaelt den Verbrauch)
       foeShots = [];
       foeRng = createRng((maze.seed ^ 0x27d4eb2f) >>> 0);
       spinnerCol = spinnerColor(game.level);
@@ -481,6 +506,9 @@ export function createPlaying(game) {
         ? autopilotStep(ap, { px, pz, yaw }, {
           drive, shoot, orient: gyro.orient,
           steer: drive ? driveState.steer : walkState.steer,
+          zap: !!game.zapper && shoot,
+          zapWorth: shoot && game.zapper
+            && zapTargets(maze, { px, pz, yaw }, { enemies, spinners, flippers }, { unit }).length >= AUTOPILOT.zapCount,
           flippers: flippers.filter((f) => seen(flipperPos(f))),
           foes: shoot ? [
             ...enemies.filter((e) => e.alive && e.mode === 'hunt').map((e) => [e.x, e.z]),
@@ -495,6 +523,7 @@ export function createPlaying(game) {
         up: keys.has('ArrowUp'),
         down: keys.has('ArrowDown'),
       };
+      if (keys.has('Z') || keys.has('Y')) zap(); // Superzapper (gehalten oder vom Autopiloten)
       // Tasten-Eingabe: im Fahrt-Modus rotiert das GANZE Kreuz "logisch"
       // unter der aktuellen Blick-Verdrehung (gyroDirs -- ohne Pulsar-
       // Beruehrung ist orient 0 und alles bleibt beim Gewohnten):
@@ -666,6 +695,13 @@ export function createPlaying(game) {
         }
       }
 
+      // Superzapper: faellige Explosionen (nah -> fern) zuenden.
+      if (zapQueue.length) {
+        for (const item of zapStep(zapQueue, sceneT)) {
+          spawnShotEvent({ type: item.kind, x: item.x, z: item.z });
+        }
+      }
+
       // Schiessen: Space als Dauerfeuer, Tempest-Regel (max 8 unterwegs).
       // Zielrichtung = Blick + Lenk-Ausschlag zum Abschusszeitpunkt.
       if (shoot) {
@@ -796,7 +832,7 @@ export function createPlaying(game) {
       // Verdrehung: bei 90/270 Grad lenkt man mit runter/rauf. In der Demo
       // entfaellt sie (keine Controls -- das PRESS-S-Overlay liegt drueber).
       if (!game.demo) {
-        const hint = playHint({ drive, shoot, orient: gyro.orient });
+        const hint = playHint({ drive, shoot, orient: gyro.orient, zapper: game.zapper });
         renderer.drawText(hint, {
           x: w - 24, y: h - 20, size: fitSize(hint, 13, w - 48),
           align: 'right', baseline: 'bottom', intensity: 0.5,
@@ -819,6 +855,10 @@ export function createPlaying(game) {
           align: 'center', baseline: 'middle',
         });
       }
+
+      // Superzapper-Blitz (weiss, quadratisch ausklingend).
+      const zt = sceneT - zapAt;
+      if (zt < ZAPPER.flash) renderer.flash(0.7 * (1 - zt / ZAPPER.flash) ** 2);
 
       if (crash) {
         renderer.popShatter();
@@ -856,12 +896,15 @@ export function createPlaying(game) {
       return { maze, cell, unit, px, pz, yaw, sceneT, reached, reachedAt, bump,
         drive, roll: bank + rollOsc.x + gyro.roll, pitch: pitchOsc.x, bank,
         orient: gyro.orient, foeShots, openings,
+        zapper: !!game.zapper && shoot,
+        zap: sceneT - zapAt < ZAPPER.flash ? { t: sceneT - zapAt } : null,
         shoot, steer: drive ? driveState.steer : walkState.steer,
         shots: shotsState ? shotsState.shots : [], bursts,
         crash: crash ? { t: crashT, x: crashPos.x, z: crashPos.z } : null };
     },
 
     onKey(key) {
+      if (key === 'Z' || key === 'Y') { zap(); return; } // Superzapper (Tastendruck/Touch-Chip)
       if (key !== 'X' || crash) return; // waehrend der Explosion kein Abheben mehr
       // Frisch am Ziel schwingt die 2026-Kamera in die Aussenpose
       // (END_CAM_BLEND 0.8s) -- X darf die Blende ausklingen lassen, sonst
