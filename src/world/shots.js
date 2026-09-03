@@ -1,5 +1,12 @@
 // Schiessen (ab Level 11), Tempest-Regel: die Feuertaste darf gehalten
 // werden, aber es sind nie mehr als `max` Projektile gleichzeitig unterwegs.
+// Sturm-Tuning (Boris, 3.9.2026): die Feuerrate ist hoch genug, dass bei
+// gehaltenem Knopf eine 8er-SALVE rausgeht (0.67 s) und danach die
+// 8er-Grenze drosselt -- jeder weitere Schuss loest sich erst, wenn einer
+// ankommt oder trifft (wie im Original; vorher tropfte es mit 5/s und die
+// Grenze griff praktisch nie). Folge fuers Spiel: wer die Salve zu frueh
+// raushaut, hat im entscheidenden Moment (Flipper-Rettungsschuss) keine
+// Munition.
 // Projektile fliegen geradeaus in der ZIELRICHTUNG zum Abschusszeitpunkt
 // (Blickrichtung + Lenk-Ausschlag) und "verpuffen" an der ersten Wand.
 // Reine Daten + Berechnung, kein Canvas -> headless testbar.
@@ -14,7 +21,7 @@ import { enemyHit } from './enemies.js';
 
 export const SHOTS = {
   max: 8,        // maximal gleichzeitig unterwegs (Tempest)
-  rate: 5,       // Schuesse/s bei Dauerfeuer
+  rate: 12,      // Schuesse/s bei Dauerfeuer (Mindestabstand 0.083 s = 0.67 Gangbreiten)
   speed: 8,      // Flugtempo (Gangbreiten/s)
   life: 4,       // s Sicherheits-Lebensdauer (falls nie eine Wand kommt)
   deflect: 0.35, // rad: Fadenkreuz-/Ziel-Ausschlag bei vollem Lenkeinschlag

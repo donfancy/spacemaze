@@ -420,7 +420,9 @@ test('Diagonal-Kill: im Fenster um 45 Grad trifft der gerade Schuss, ausserhalb 
 // Frame, ob gefeuert wird (flipT = Zeit seit Klappbeginn oder null).
 // Liefert true, wenn der Flipper stirbt, bevor seine Ebene den Spieler
 // erreicht.
-function rescueRun(fire, phase = 0) {
+// `preload` (optional): so viele Schuesse liegen schon als weit entfernte
+// Dauerflieger in der Liste (die 8er-Grenze greift).
+function rescueRun(fire, phase = 0, preload = 0) {
   const maze = corridorMaze();
   const { flippers } = makeFlipper();
   const f = flippers[0];
@@ -430,6 +432,11 @@ function rescueRun(fire, phase = 0) {
   const player = { px: f.along + 3 * CELL, pz: f.cross, yaw: Math.PI / 2 }; // Blick -x, auf den Flipper
   const shotsState = createShotsState();
   shotsState.cooldown = phase;
+  for (let i = 0; i < preload; i++) {
+    // Im Seitengang (x=1, y=1..5) steckend, Richtung +z mit winzigem Tempo:
+    // bleibt lange begehbar, also lange "unterwegs".
+    shotsState.shots.push({ x: 3.5, z: 3.5, dx: 0, dz: 1e-4, age: 0, phase: 100 + i });
+  }
   const radius = 0.25 * CELL;
   const dt = 1 / 60;
   let flipStart = null;
@@ -462,7 +469,11 @@ test('RETTUNGSSCHUSS: ein gezielter Schuss beim Klappbeginn trifft sicher, ohne 
   assert.equal(tooEarly, false, 'zu frueh gefeuert: die Diagonale kommt erst spaeter');
 });
 
-test('RETTUNGSSCHUSS-STATISTIK: Dauerfeuer mit zufaelliger Phase rettet nur etwa jedes zweite Mal', () => {
+test('RETTUNGSSCHUSS-STATISTIK: mit der Salven-Feuerrate rettet Dauerfeuer zuverlaessig -- solange Munition da ist', () => {
+  // Sturm-Tuning (Boris): Rate 12/s -> der Schussabstand (0.083 s) liegt
+  // unter dem Diagonal-Fenster (~0.08 s + Kreuzungs-Toleranz), Dauerfeuer
+  // trifft die Diagonale praktisch immer. Der Preis ist die 8er-Grenze:
+  // wer die Salve zu frueh raushaut, hat im Klapp-Moment nichts mehr.
   const N = 40;
   let hits = 0;
   for (let i = 0; i < N; i++) {
@@ -470,5 +481,13 @@ test('RETTUNGSSCHUSS-STATISTIK: Dauerfeuer mit zufaelliger Phase rettet nur etwa
     if (rescueRun(() => true, phase)) hits++;
   }
   const rate = hits / N;
-  assert.ok(rate >= 0.25 && rate <= 0.75, `Dauerfeuer ist Glueckssache: ${(rate * 100).toFixed(0)} % (25..75 erwartet)`);
+  assert.ok(rate >= 0.9, `Dauerfeuer trifft die Diagonale: ${(rate * 100).toFixed(0)} % (>= 90 erwartet)`);
+  // Salve zu frueh: 8 Schuesse sind schon unterwegs (lange Flugbahn),
+  // wenn der Flipper klappt -- die 8er-Grenze verweigert den Rettungsschuss.
+  let fired = 0;
+  const wasted = rescueRun((t, flipT) => {
+    if (flipT != null && fired < 8) { fired++; return true; }
+    return false;
+  }, 0, 8);
+  assert.equal(wasted, false, 'volle Liste: kein Schuss frei fuer die Diagonale');
 });

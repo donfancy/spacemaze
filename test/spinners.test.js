@@ -739,7 +739,7 @@ test('Abgeschnittenes Spike-Stueck zerstoert den Spinner-Schuss darin (sonst una
   const shots = [];
   spinnerFire(spinners, shots, 1 / 60, () => 0, duelPose(s, 20), cell); // Schuss startet bei t = 2 (Koerper)
   const sh = shots[0];
-  sh.t = 9.0; // im letzten Stueck vor der Spitze (10 - shorten*cell = 8.25 .. 10)
+  sh.t = 9.0; // im letzten Stueck vor der Spitze (10 - shorten*cell .. 10, plus Abfang-Radius dahinter)
   const [tx, tz] = spinnerTip(s);
   const ev = spinnerShotHit(spinners, tx - s.dir * 0.2, tz, cell, shots);
   assert.equal(ev.type, 'spike');

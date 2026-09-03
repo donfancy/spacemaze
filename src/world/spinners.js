@@ -51,12 +51,12 @@ export const SPINNER = {
   advance: 0.5,     // Vorlauf-Tempo (Gangbreiten/s) -- der Koerper schiebt die Spitze
   retreat: 0.8,     // Rueckzugs-Tempo (Gangbreiten/s)
   step: 0.4,        // Gangbreiten: jeder Vorlauf reicht so viel weiter als der vorige
-  shorten: 0.45,    // Spike-Kuerzung pro Treffer (Gangbreiten) -- die Kuerz-Rate
-                    // bei Dauerfeuer (SHOTS.rate x shorten = 2.25 Gangbreiten/s)
+  shorten: 0.2,     // Spike-Kuerzung pro Treffer (Gangbreiten) -- die Kuerz-Rate
+                    // bei Dauerfeuer (SHOTS.rate 12 x shorten = 2.4 Gangbreiten/s)
                     // muss die Reisegeschwindigkeit (DRIVE.cruise 1.5) DEUTLICH
                     // schlagen: im Fahrt-Modus kann man nicht bremsen, und jeder
                     // Schuss, der einen Spinner-Schuss abfaengt, kuerzt nicht --
-                    // mit 0.35 (Rate 1.75) lief der reitende Spieler in die Spitze
+                    // bei Rate 5 x 0.35 (1.75) lief der reitende Spieler in die Spitze
   capMargin: 1.0,   // der Spike laesst mindestens so viel vom Gangstueck frei
   exclude: 3,       // so viele Weg-Kammern um S und G bleiben spinnerfrei
   wakeTurns: 2,     // Ecken: so nah muss der Spieler kommen, bevor der Spinner loslegt
