@@ -104,6 +104,17 @@ eingerastet (Fadenkreuz-Seitenzielen). Neu:
   Monte-Carlo: Timing-Schuss 100 %, Dauerfeuer in [0.3, 0.7].
 - Gilt für jede Diagonale (auch die zufälligen Flips unterwegs).
 - Flipper-Paare gibt es damit auch in Level 11–15 (Spec: einheitlich).
+- **UMGESETZT (Stufe 2, 3.9.2026), Messwerte:** Zwangs-Flip bei 1.2
+  Gangbreiten, Diagonal-Fenster ±12°, Treffer = exaktes Ebenen-KREUZEN
+  (shots.js reicht dem hitTest jetzt das Schuss-Objekt mit der Vor-Lage —
+  ein Treffer-Radius dehnte das Fenster zeitlich und machte Dauerfeuer zum
+  Selbstläufer, 100 %). Ergebnis (60 Hz): Dauerfeuer ~51 %, gezielter
+  Schuss trifft bis ~0.03 s nach Klappbeginn. Die „nach Klappbeginn"-Regel
+  aus dem Vorschlag ist NICHT nötig. OFFEN fürs Tuning (Boris fühlen
+  lassen): das Timing ist Experten-Niveau — physikalisch ist die Diagonale
+  nur ~0.08 s lang, und Dauerfeuer darf nur ~50 % treffen; wer es
+  menschenfreundlicher will, muss Fenster UND Schussintervall zusammen
+  anheben oder Tippen (Space-Flanke) von Halten unterscheiden.
 
 ### 3. Spinner: Wandern statt Dauerwachstum
 

@@ -53,10 +53,11 @@ export function fireShot(state, pose, steer, opts = {}) {
 
 // Ein Simulationsschritt: Projektile fliegen, verpuffen an Waenden, treffen
 // Feinde (markiert sie tot). opts = { unit, cell, enemies?, enemyRadius?,
-// hitTest?, params? }. `hitTest(x, z)` erlaubt weitere Ziele (z.B. Spinner/
-// Spikes): liefert es ein Ereignis-Objekt, stirbt der Schuss und das Ereignis
-// wird durchgereicht. Liefert Ereignisse [{ type: 'wall'|'enemy'|..., x, z }]
-// fuer Effekte/Sound.
+// hitTest?, params? }. `hitTest(x, z, shot)` erlaubt weitere Ziele (z.B.
+// Spinner/Spikes): liefert es ein Ereignis-Objekt, stirbt der Schuss und das
+// Ereignis wird durchgereicht; `shot` traegt in x/z die Lage VOR dem Substep
+// (Ebenen-Kreuzungen exakt erkennen -- der Flipper-Rettungsschuss). Liefert
+// Ereignisse [{ type: 'wall'|'enemy'|..., x, z }] fuer Effekte/Sound.
 export function shotsStep(maze, state, dt, opts) {
   const { unit, cell, enemies = [], enemyRadius = 0, hitTest = null } = opts;
   const params = { ...SHOTS, ...(opts.params ?? {}) };
@@ -82,7 +83,7 @@ export function shotsStep(maze, state, dt, opts) {
         dead = true;
         break;
       }
-      const custom = hitTest ? hitTest(nx, nz) : null;
+      const custom = hitTest ? hitTest(nx, nz, shot) : null;
       if (custom) {
         events.push(custom);
         dead = true;

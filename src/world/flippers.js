@@ -15,10 +15,22 @@
 //   Wand -- man muss den Lenk-Ausschlag des Fadenkreuzes nutzen und etwas
 //   zur Seite zielen. Unten/oben fliegen die Schuesse drueber/drunter.
 // - Sie sind etwas schneller als die Tanker (rote Rauten, ENEMY.patrolSpeed).
-// - Einzeln bewachen sie lange Gangstuecke (Platzierung wie die Spinner);
-//   zusaetzlich entsteht ein PAAR (links + rechts), wenn ein Tanker aus
-//   3 oder mehr Feldern Entfernung abgeschossen wird (spawnFlipperPair) --
-//   die Strafe fuers Feige-von-weitem-Schiessen.
+// - Seit dem STURM-Branch (Boris, 3.9.2026) entstehen sie NUR noch als
+//   PAAR (links + rechts) aus JEDEM Tanker-Abschuss (spawnFlipperPair);
+//   createFlippers bleibt als Platzierungs-Baustein fuer Tests/Experimente.
+// - RETTUNGSSCHUSS (Sturm): spaetestens `flipDist` vor dem Spieler klappt
+//   ein Flipper IMMER (Zwangs-Flip, aus jeder Stellung, einmal pro
+//   Annaeherung). WAEHREND des Klappens -- in der Diagonale (45 Grad +-
+//   diagWindow) -- zerstoert ihn ein GERADER Schuss (Gangmitte). Das
+//   Fenster ist kurz (+-12 Grad = 0.08 s der 0.3-s-Drehung), und der
+//   Treffer ist ein exaktes KREUZEN der Flipper-Ebene (Vorzeichenwechsel
+//   zwischen zwei Substeps; ein Treffer-Radius verlaengerte das Fenster
+//   zeitlich und machte Dauerfeuer zum Selbstlaeufer): wer beim Klappbeginn
+//   gezielt drueckt, trifft sicher (Flugzeit 1.2 Gangbreiten / 8 = 0.15 s,
+//   der Flipper kommt entgegen -> Ankunft ~0.135 s, mitten im Fenster);
+//   Dauerfeuer (5/s, Ebenen-Kreuzungen alle ~0.18 s, Phase zufaellig zum
+//   Klappbeginn) erwischt es nur etwa jedes zweite Mal -- Glueck, kein
+//   Verlass (abgesichert per Monte-Carlo-Test).
 
 import { cellAt, cellCenter } from './mazeWorld.js';
 import { randInt } from '../util/rng.js';
@@ -41,8 +53,12 @@ export const FLIPPER = {
   holdJitter: 0.8, // ... plus/minus dieser Streuung (pro Flipper gewuerfelt)
   holdShort: 0.3,  // s: oben/unten nur kurz "einrasten", dann weiterklappen
   flipTime: 0.3,   // s fuer eine 90-Grad-Drehung
-  pairFields: 3,   // ab dieser Abschuss-Distanz (in Feldern) entsteht das Paar
   pairGap: 0.6,    // Versatz des zweiten Paar-Flippers (Gangbreiten)
+  flipDist: 1.2,   // Gangbreiten: spaetestens hier vor dem Spieler klappt er (Zwangs-Flip)
+  flipReset: 1.8,  // Gangbreiten: ab diesem Abstand ist der Zwangs-Flip wieder scharf
+  diagWindow: Math.PI / 15, // rad: Diagonal-Fenster um 45 Grad (+-12) fuer den Rettungsschuss
+  diagTol: 0.06,   // Gangbreiten: Laengs-Toleranz des Diagonal-Treffers, wenn der
+                   // Aufrufer keine Vor-Lage des Schusses liefert (Schuss-Substep 0.1)
 };
 
 // Eingerastete Seiten-Stellung: +1 (rechts) / -1 (links) / 0 (unten, oben
@@ -63,6 +79,7 @@ function makeFlipper(axis, cross, along, min, max, rnd) {
     prevAlong: along,
     moveDir: 1, rotDir: 1,
     angle: 0, mode: 'hold', hold: 0, from: 0, delta: 0, flipT: 0,
+    forced: false, // Zwangs-Flip dieser Annaeherung schon verbraucht?
     alive: true,
     rnd: rnd >>> 0,
   };
@@ -129,10 +146,31 @@ export function spawnFlipperPair(maze, enemy, player, opts) {
   });
 }
 
+// Flip beginnen: an den Seiten wird die Drehrichtung gewuerfelt (zu Boden
+// ODER Decke), oben/unten klappt es in DERSELBEN Richtung weiter durch.
+function beginFlip(f) {
+  f.mode = 'flip';
+  f.from = f.angle;
+  f.flipT = 0;
+  if (orientIndex(f.angle) % 2 === 1) f.rotDir = nextRnd(f) < 0.5 ? -1 : 1;
+  f.delta = f.rotDir * QUARTER;
+}
+
+// Steht der Flipper in der DIAGONALE (45 Grad +- diagWindow zwischen zwei
+// Rast-Stellungen)? Nur dort trifft ihn der gerade Rettungsschuss.
+export function flipperDiagonal(f) {
+  if (f.mode !== 'flip') return false;
+  const r = ((f.angle % QUARTER) + QUARTER) % QUARTER;
+  return Math.abs(r - QUARTER / 2) <= FLIPPER.diagWindow;
+}
+
 // Ein Simulationsschritt: wandern (an den Gang-Enden wenden) und flippen.
-// An den Seiten wird die naechste Drehrichtung gewuerfelt (zu Boden ODER
-// Decke), oben/unten klappt es in DERSELBEN Richtung direkt weiter durch.
-export function flippersStep(flippers, dt, cell) {
+// `player` = { px, pz } (optional): ZWANGS-FLIP -- steht der Spieler im
+// Gang des Flippers und ist er naeher als flipDist, klappt der Flipper
+// sofort aus jeder Rast-Stellung (einmal pro Annaeherung; erst ab
+// flipReset Abstand wieder scharf). So gibt es vor JEDEM Kontakt genau
+// ein Diagonal-Fenster fuer den Rettungsschuss.
+export function flippersStep(flippers, dt, cell, player = null) {
   for (const f of flippers) {
     if (!f.alive) continue;
     f.prevAlong = f.along;
@@ -140,15 +178,21 @@ export function flippersStep(flippers, dt, cell) {
     if (f.along > f.max) { f.along = f.max; f.moveDir = -1; }
     else if (f.along < f.min) { f.along = f.min; f.moveDir = 1; }
 
+    if (player) {
+      const alongP = f.axis === 'x' ? player.px : player.pz;
+      const crossP = f.axis === 'x' ? player.pz : player.px;
+      const gap = Math.abs(alongP - f.along);
+      if (Math.abs(crossP - f.cross) >= 0.5 * cell || gap > FLIPPER.flipReset * cell) {
+        f.forced = false;
+      } else if (!f.forced && gap <= FLIPPER.flipDist * cell && f.mode === 'hold') {
+        f.forced = true;
+        beginFlip(f);
+      }
+    }
+
     if (f.mode === 'hold') {
       f.hold -= dt;
-      if (f.hold <= 0) {
-        f.mode = 'flip';
-        f.from = f.angle;
-        f.flipT = 0;
-        if (orientIndex(f.angle) % 2 === 1) f.rotDir = nextRnd(f) < 0.5 ? -1 : 1;
-        f.delta = f.rotDir * QUARTER;
-      }
+      if (f.hold <= 0) beginFlip(f);
     } else {
       f.flipT += dt;
       if (f.flipT >= FLIPPER.flipTime) {
@@ -166,21 +210,39 @@ export function flippersStep(flippers, dt, cell) {
   }
 }
 
-// Projektil-Treffer an (x,z): NUR in eingerasteter Links-/Rechts-Stellung --
+// Projektil-Treffer an (x,z): in eingerasteter Links-/Rechts-Stellung --
 // dort kreuzt das hochkant stehende X die Schusshoehe nahe der Wand; man
-// zielt mit dem Lenk-Ausschlag dorthin. Unten/oben (und mitten im Flip)
-// fliegen Schuesse ungehindert vorbei. Liefert das Ereignis oder null.
+// zielt mit dem Lenk-Ausschlag dorthin -- ODER in der DIAGONALE waehrend
+// des Klappens (Rettungsschuss, Sturm-Branch): dann trifft jeder Schuss,
+// der die Flipper-Ebene im eigenen Gang KREUZT (die Diagonale spannt sich
+// quer durch den Gang) -- `prev` = { x, z } ist die Schuss-Lage vor dem
+// Substep (shots.js reicht das Schuss-Objekt), ohne prev gilt die
+// Toleranz diagTol. Unten/oben und ausserhalb des Diagonal-Fensters
+// fliegen Schuesse ungehindert vorbei. Liefert das Ereignis oder null
+// (`diagonal: true` beim Rettungsschuss).
 // WAND SCHUETZT: nur Treffer im EIGENEN Gang zaehlen (Quer-Check wie beim
 // Spieler) -- der Substep-Punkt eines Schusses aus dem Nachbargang kann bis
 // zu 0.5 Einheiten in der Trennwand liegen und kaeme dem Seiten-Trefferpunkt
 // (0.5-lift Gangbreiten vor der Wand) sonst naeher als shotRadius.
-export function flipperShotHit(flippers, x, z, cell) {
+export function flipperShotHit(flippers, x, z, cell, prev = null) {
   for (const f of flippers) {
     if (!f.alive) continue;
-    const side = flipperSide(f);
-    if (side === 0) continue;
     const crossS = f.axis === 'x' ? z : x;
     if (Math.abs(crossS - f.cross) >= 0.5 * cell) continue;
+    if (flipperDiagonal(f)) {
+      const g = (f.axis === 'x' ? x : z) - f.along;
+      const crossed = prev
+        ? ((f.axis === 'x' ? prev.x : prev.z) - f.along) * g <= 0
+        : Math.abs(g) < FLIPPER.diagTol * cell;
+      if (crossed) {
+        f.alive = false;
+        const [hx, hz] = flipperPos(f);
+        return { type: 'flipper', x: hx, z: hz, flipper: f, diagonal: true };
+      }
+      continue;
+    }
+    const side = flipperSide(f);
+    if (side === 0) continue;
     const q = f.cross + side * (0.5 - FLIPPER.lift) * cell;
     const [hx, hz] = f.axis === 'x' ? [f.along, q] : [q, f.along];
     if (Math.hypot(x - hx, z - hz) < FLIPPER.shotRadius * cell) {

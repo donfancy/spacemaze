@@ -10,8 +10,9 @@ import { WALL, OPEN } from '../src/world/maze.js';
 import { createMetric } from '../src/world/metric.js';
 import { createRng } from '../src/util/rng.js';
 import { DRIVE } from '../src/world/drive.js';
+import { createShotsState, fireShot, shotsStep, SHOTS } from '../src/world/shots.js';
 import {
-  FLIPPER, createFlippers, flippersStep, flipperSide, flipperPos,
+  FLIPPER, createFlippers, flippersStep, flipperSide, flipperPos, flipperDiagonal,
   flipperShotHit, flipperPlayerHit, flipperMarkers, flipperSegments,
   flipperTriangles, spawnFlipperPair,
 } from '../src/world/flippers.js';
@@ -335,4 +336,139 @@ test('flipperTriangles: vier Dreiecke in der Querschnitts-Ebene, deckungsgleich 
   assert.ok(segs.some(([a, b]) => [a, b].some(
     (p) => Math.hypot(p[0] - corner[0], p[1] - corner[1], p[2] - corner[2]) < 1e-9,
   )), 'Fluegel-Ecken sind Kontur-Ecken');
+});
+
+// --- STURM-Branch: Zwangs-Flip + Rettungsschuss ------------------------------
+
+test('Zwangs-Flip: spaetestens flipDist vor dem Spieler klappt er -- aus jeder Stellung, einmal pro Annaeherung', () => {
+  const dt = 1 / 60;
+  for (const angle of [QUARTER, 0]) { // seitlich eingerastet bzw. unten
+    const { flippers } = makeFlipper();
+    const f = flippers[0];
+    settle(f, angle);
+    f.hold = 10; // von sich aus klappt er lange nicht
+    f.moveDir = 1;
+    const player = { px: f.along + 3 * CELL, pz: f.cross };
+    let flipAt = null;
+    for (let t = 0; t < 4 && flipAt == null; t += dt) {
+      flippersStep(flippers, dt, CELL, player);
+      if (f.mode === 'flip') flipAt = Math.abs(player.px - f.along);
+    }
+    assert.ok(flipAt != null, `Stellung ${angle}: der Zwangs-Flip kommt`);
+    assert.ok(flipAt <= FLIPPER.flipDist * CELL + 1e-9 && flipAt > (FLIPPER.flipDist - 0.1) * CELL,
+      `Stellung ${angle}: genau bei flipDist (${(flipAt / CELL).toFixed(2)} Gangbreiten)`);
+    assert.equal(f.forced, true);
+    // Einmal pro Annaeherung: nach dem Flip rastet er wieder ein und bleibt
+    // (trotz Naehe) in Ruhe, bis seine eigene Verweildauer ablaeuft.
+    for (let t = 0; t < FLIPPER.flipTime + 0.02; t += dt) flippersStep(flippers, dt, CELL, player);
+    assert.equal(f.mode, 'hold');
+    const holdAfter = f.hold;
+    flippersStep(flippers, dt, CELL, player);
+    assert.equal(f.mode, 'hold', 'kein Dauer-Zwangsklappen');
+    assert.ok(f.hold < holdAfter, 'die normale Verweildauer laeuft');
+  }
+  // Spieler im Nachbargang: kein Zwangs-Flip.
+  const { flippers } = makeFlipper();
+  const f = flippers[0];
+  settle(f, QUARTER);
+  f.hold = 10;
+  for (let t = 0; t < 1; t += dt) {
+    flippersStep(flippers, dt, CELL, { px: f.along + 0.5 * CELL, pz: f.cross + 2 * CELL });
+  }
+  assert.equal(f.mode, 'hold', 'fremder Gang loest nichts aus');
+});
+
+test('Diagonal-Kill: im Fenster um 45 Grad trifft der gerade Schuss, ausserhalb und eingerastet nicht', () => {
+  const { flippers } = makeFlipper();
+  const f = flippers[0];
+  f.mode = 'flip';
+  f.angle = QUARTER / 2; // exakt diagonal
+  assert.equal(flipperDiagonal(f), true);
+  // Nur der eigene Gang zaehlt.
+  assert.equal(flipperShotHit(flippers, f.along, f.cross + 2 * CELL, CELL), null, 'Nachbargang: nichts');
+  assert.equal(flipperShotHit(flippers, f.along + 0.2 * CELL, f.cross, CELL), null,
+    'noch vor der Ebene: kein Treffer (Kreuzen, kein Radius)');
+  const hit = flipperShotHit(flippers, f.along + 0.03 * CELL, f.cross, CELL);
+  assert.ok(hit && hit.diagonal, 'gerader Schuss durch die Diagonale trifft');
+  assert.equal(f.alive, false);
+  // Mit Vor-Lage zaehlt das exakte KREUZEN der Ebene, auch ueber einen weiten Substep.
+  f.alive = true;
+  const crossed = flipperShotHit(flippers, f.along - 0.3 * CELL, f.cross, CELL, { x: f.along + 0.3 * CELL, z: f.cross });
+  assert.ok(crossed && crossed.diagonal, 'Vorzeichenwechsel = Kreuzen = Treffer');
+  f.alive = true;
+  assert.equal(flipperShotHit(flippers, f.along + 0.2 * CELL, f.cross, CELL, { x: f.along + 0.4 * CELL, z: f.cross }), null,
+    'noch diesseits der Ebene: kein Treffer');
+  // Rand des Fensters: knapp innerhalb ja, knapp ausserhalb nein.
+  f.alive = true;
+  f.angle = QUARTER / 2 + FLIPPER.diagWindow - 0.01;
+  assert.ok(flipperDiagonal(f));
+  f.angle = QUARTER / 2 + FLIPPER.diagWindow + 0.01;
+  assert.equal(flipperDiagonal(f), false);
+  assert.equal(flipperShotHit(flippers, f.along, f.cross, CELL), null, 'ausserhalb des Fensters: vorbei');
+  // Auch die anderen Diagonalen (135, 225, 315 Grad) sind Fenster.
+  f.angle = 3 * QUARTER / 2;
+  assert.ok(flipperDiagonal(f));
+  // Eingerastet (hold) ist nie diagonal -- dort gilt nur der Seitenpunkt.
+  settle(f, QUARTER);
+  assert.equal(flipperDiagonal(f), false);
+  assert.equal(flipperShotHit(flippers, f.along, f.cross, CELL), null, 'Gangmitte verfehlt den Seitenpunkt');
+});
+
+// Volle Rettungsschuss-Simulation: stehender Spieler im Hand-Gang, ein
+// Flipper rueckt seitlich eingerastet heran (klappt von sich aus nicht),
+// der Zwangs-Flip kommt bei flipDist. `fire(t, flipT)` entscheidet pro
+// Frame, ob gefeuert wird (flipT = Zeit seit Klappbeginn oder null).
+// Liefert true, wenn der Flipper stirbt, bevor seine Ebene den Spieler
+// erreicht.
+function rescueRun(fire, phase = 0) {
+  const maze = corridorMaze();
+  const { flippers } = makeFlipper();
+  const f = flippers[0];
+  settle(f, QUARTER);
+  f.hold = 10;
+  f.moveDir = 1;
+  const player = { px: f.along + 3 * CELL, pz: f.cross, yaw: Math.PI / 2 }; // Blick -x, auf den Flipper
+  const shotsState = createShotsState();
+  shotsState.cooldown = phase;
+  const radius = 0.25 * CELL;
+  const dt = 1 / 60;
+  let flipStart = null;
+  for (let t = 0; t < 6; t += dt) {
+    const prev = { px: player.px, pz: player.pz };
+    flippersStep(flippers, dt, CELL, player);
+    if (f.alive && f.mode === 'flip' && flipStart == null) flipStart = t;
+    if (fire(t, flipStart == null ? null : t - flipStart)) fireShot(shotsState, player, 0);
+    shotsStep(maze, shotsState, dt, { unit: 1, cell: CELL, hitTest: (x, z, shot) => flipperShotHit(flippers, x, z, CELL, shot) });
+    if (!f.alive) return true;
+    if (flipperPlayerHit(flippers, player.px, player.pz, radius, CELL, prev)) return false;
+  }
+  return false;
+}
+
+test('RETTUNGSSCHUSS: ein gezielter Schuss beim Klappbeginn trifft sicher, ohne Feuer stirbt man', () => {
+  let fired = false;
+  const timed = rescueRun((t, flipT) => {
+    if (flipT != null && !fired) { fired = true; return true; }
+    return false;
+  });
+  assert.equal(timed, true, 'der Schuss im richtigen Moment rettet');
+  assert.equal(rescueRun(() => false), false, 'wer nicht schiesst, stirbt an der Ebene');
+  // Ein Schuss deutlich VOR dem Klappen (Flipper noch eingerastet) verpufft an der Wand.
+  let early = false;
+  const tooEarly = rescueRun((t, flipT) => {
+    if (flipT == null && t > 0.5 && !early) { early = true; return true; }
+    return false;
+  });
+  assert.equal(tooEarly, false, 'zu frueh gefeuert: die Diagonale kommt erst spaeter');
+});
+
+test('RETTUNGSSCHUSS-STATISTIK: Dauerfeuer mit zufaelliger Phase rettet nur etwa jedes zweite Mal', () => {
+  const N = 40;
+  let hits = 0;
+  for (let i = 0; i < N; i++) {
+    const phase = (i / N) / SHOTS.rate; // Cooldown-Phase gleichverteilt ueber eine Schuss-Periode
+    if (rescueRun(() => true, phase)) hits++;
+  }
+  const rate = hits / N;
+  assert.ok(rate >= 0.25 && rate <= 0.75, `Dauerfeuer ist Glueckssache: ${(rate * 100).toFixed(0)} % (25..75 erwartet)`);
 });

@@ -599,10 +599,11 @@ export function createPlaying(game) {
         }
       }
 
-      // Flipper: wandern und flippen; ihre Querschnitts-Ebene ist toedlich --
-      // Beruehren oder Kreuzen zerstoert den Spieler (nur ihn).
+      // Flipper: wandern und flippen (Zwangs-Flip knapp vor dem Spieler --
+      // das Diagonal-Fenster fuer den Rettungsschuss); ihre Querschnitts-
+      // Ebene ist toedlich -- Beruehren oder Kreuzen zerstoert den Spieler.
       if (flippers.length) {
-        flippersStep(flippers, dt, cell);
+        flippersStep(flippers, dt, cell, { px, pz });
         const hit = flipperPlayerHit(flippers, px, pz, RADIUS_RATIO * cell, cell,
           { px: prevX, pz: prevZ });
         if (hit && !reached) {
@@ -642,8 +643,8 @@ export function createPlaying(game) {
         // Spike/Spinner-Koerper.
         const events = shotsStep(maze, shotsState, dt, {
           unit, cell, enemies, enemyRadius: ENEMY.shotRadius * cell,
-          hitTest: (x, z) => (foeShots.length ? spinnerShotIntercept(foeShots, x, z, cell) : null)
-            ?? (flippers.length ? flipperShotHit(flippers, x, z, cell) : null)
+          hitTest: (x, z, shot) => (foeShots.length ? spinnerShotIntercept(foeShots, x, z, cell) : null)
+            ?? (flippers.length ? flipperShotHit(flippers, x, z, cell, shot) : null)
             ?? (spinners.length ? spinnerShotHit(spinners, x, z, cell) : null),
         });
         for (const ev of events) {
