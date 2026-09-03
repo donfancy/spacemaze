@@ -129,7 +129,7 @@ test('Level 22: gruenes Thema, lauernde Tanker + feuernde gelbe Spinner, Flipper
   assert.equal(g.stateKey, State.PLAYING);
   assert.equal(r.color, PHOSPHOR_GREEN, 'Level 22 ist wieder gruen');
   assert.ok(Array.isArray(g.flippers), 'Paar-Liste bleibt im Spiel');
-  assert.ok(g.spinners.length > 0 && g.spinners.every((s) => s.shoot), 'Spinner mit shoot-Flag');
+  assert.ok(g.spinners.length > 0 && g.spinners.every((s) => !s.active), 'Spinner schlafen noch an der Wand');
   assert.ok(g.enemies.length > 0 && g.enemies.every((e) => e.mode === 'lurk'),
     'Tanker lauern zu Beginn auf den Kronen');
 

@@ -138,6 +138,22 @@ verwundbar nur beim Vorlauf, an der Wand geschützt. Neu:
   Spitze weiter eine Einbahn-Sperre) — Superzapper-konsistent.
 - Durchkommens-Garantie neu formulieren: Kürz-Rate bei Dauerfeuer gegen
   Verlängerung pro Vorlauf; Test mit echten Konstanten, mit und ohne Feuer.
+- **UMGESETZT (Stufe 3, 3.9.2026), Befunde:** Wander-Zyklus advance 0.5 /
+  retreat 0.8 / step 0.4 Gangbreiten; bis zum Deckel dauert es ~2,5 min
+  (die Zyklen werden länger), typisch steht der Spike bei Ankunft bei 1–2
+  Gangbreiten. Wecken per Ecken-BFS (`wakeSpinners`, WeakMap-Cache, nie in
+  den Spinner-Daten — der Recorder klont sie 30×/s). ZWEI Konsequenzen der
+  Körper-Schüsse: (1) `shorten` 0.35 → **0.45** — im Fahrt-Modus kann man
+  nicht bremsen, die Kürz-Rate (5/s × shorten) muss cruise 1.5 DEUTLICH
+  schlagen, sonst fährt der hinter der zurückweichenden Spitze „reitende"
+  Spieler in die Spitze, sobald ein paar Schüsse zum Abfangen draufgehen;
+  (2) ein aus dem Körper gefeuerter Schuss taucht für den reitenden Spieler
+  erst ~0.1 s vor ihm aus der Spitze auf (eigene Schüsse sterben an der
+  Spitze) → Regel: ein Treffer schneidet das Spitzen-Stück ab, und ein
+  Spinner-Schuss darin (plus Abfang-Radius dahinter) zerplatzt mit. Bleibt
+  „knapp": ein Schuss, den der EXPONIERTE Körper aus 3 Einheiten Distanz
+  abfeuert, ist nicht mehr abfangbar (Stress-Test mit 4× Feuerrate stirbt
+  daran, 2× besteht; real 0.3/s). Tuning-Knöpfe: fireRate, shorten.
 
 ### 4. Pulsare: immer 360°, und die Wand wird durchlässig
 

@@ -1,9 +1,11 @@
-// Tests fuer die Spinner (world/spinners.js): Platzierung an End-Waenden
-// langer Gangstuecke, der Vorlauf/Rueckzug-Zyklus, Verwundbarkeit nur beim
-// Vorlaufen, Spike-Kuerzen per Treffer, Aufspiessen -- und die DURCHKOMMENS-
-// GARANTIE: mit Dauerfeuer bei voller Reisegeschwindigkeit muss man an einem
-// Spinner mit maximalem Spike vorbeikommen (Simulation mit den ECHTEN
-// Konstanten aus shots.js und drive.js).
+// Tests fuer die Spinner (world/spinners.js, Sturm-Modell): Platzierung an
+// End-Waenden langer Gangstuecke, Wecken durch Annaeherung (Ecken-BFS),
+// der Wander-Zyklus (jeder Vorlauf reicht weiter, so waechst der Spike),
+// Verwundbarkeit nur "vorne am Spike", Spike-Kuerzen per Treffer, der
+// Spike eines toten Spinners bleibt stehen, Aufspiessen -- und die
+// DURCHKOMMENS-GARANTIE: mit Dauerfeuer bei voller Reisegeschwindigkeit
+// muss man an einem Spinner mit maximalem Spike vorbeikommen (Simulation
+// mit den ECHTEN Konstanten aus shots.js und drive.js).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,10 +15,10 @@ import { createRng } from '../src/util/rng.js';
 import { createShotsState, fireShot, shotsStep } from '../src/world/shots.js';
 import { DRIVE } from '../src/world/drive.js';
 import {
-  SPINNER, createSpinners, spinnersStep, spinnerShotHit,
+  SPINNER, createSpinners, spinnersStep, spinnerShotHit, spinnerExposed, spinnerShown,
   spinnerPlayerHit, spinnerPos, spinnerTip, spinnerSegments, spinnerMarkers,
   spinnerFire, spinnerShotsStep, spinnerShotPlayerHit, spinnerShotIntercept,
-  spinnerShotPos, spinnerShotSegments,
+  spinnerShotPos, spinnerShotSegments, wakeSpinners, spinnerTurnsAway,
 } from '../src/world/spinners.js';
 import { straightRuns } from '../src/world/foePlacement.js';
 
@@ -33,10 +35,27 @@ function corridorMaze() {
   return { n, grid, start: [1, 5], goal: [1, 3], seed: 42, metric: createMetric(THIN) };
 }
 
-function makeSpinner(seed = 7) {
+// Wacher Spinner im Hand-Gang (die Tests unten wollen meist sofort loslegen).
+function makeSpinner(seed = 7, { awake = true } = {}) {
   const maze = corridorMaze();
   const spinners = createSpinners(maze, { count: 3 }, { unit: 1, cell: 5, rng: createRng(seed) });
+  if (awake) for (const s of spinners) s.active = true;
   return { maze, spinners };
+}
+
+// Spinner lange gewaehren lassen (bis zum Deckel dauert es real ~2.5 min:
+// die Zyklen werden mit jedem Vorlauf laenger -- "kein Laengenthema", der
+// Spieler ist laengst da), dann Spike am Deckel, Koerper an der Wand vor dem
+// naechsten Vorlauf (deterministische Ausgangslage fuer Simulationen).
+function grow(spinners, cell, seconds = 30) {
+  const dt = 1 / 60;
+  for (let t = 0; t < seconds; t += dt) spinnersStep(spinners, dt, cell);
+  for (const s of spinners) {
+    s.spike = s.cap;
+    s.offset = 0;
+    s.mode = 'advance';
+    s.reach = s.cap;
+  }
 }
 
 test('straightRuns findet die maximalen geraden Gangstuecke beider Achsen', () => {
@@ -49,8 +68,8 @@ test('straightRuns findet die maximalen geraden Gangstuecke beider Achsen', () =
   assert.equal(side.chambers, 3);
 });
 
-test('createSpinners: sitzt an einer End-Wand des langen Gangs, S/G-Gang bleibt frei', () => {
-  const { spinners } = makeSpinner();
+test('createSpinners: sitzt an einer End-Wand des langen Gangs, schlaeft, S/G-Gang bleibt frei', () => {
+  const { spinners } = makeSpinner(7, { awake: false });
   assert.equal(spinners.length, 1, 'nur der lange Gang ist unbewacht und lang genug');
   const s = spinners[0];
   assert.equal(s.axis, 'x');
@@ -58,10 +77,13 @@ test('createSpinners: sitzt an einer End-Wand des langen Gangs, S/G-Gang bleibt 
   assert.equal(s.runLen, 35, '6 Kammern x 5 + 5 Zwischenwaende x 1');
   // Wandflaeche an einem der beiden Enden, Blick in den Gang hinein.
   assert.ok((s.wall === 1 && s.dir === 1) || (s.wall === 36 && s.dir === -1));
-  assert.equal(s.cap, Math.min(SPINNER.spikeCap * 5, 35 - (SPINNER.maxOffset + SPINNER.capMargin) * 5));
-  assert.equal(s.mode, 'advance');
+  assert.equal(s.cap, 35 - SPINNER.capMargin * 5, 'Deckel: der Einstieg bleibt frei');
+  assert.equal(s.mode, 'idle');
+  assert.equal(s.active, false, 'schlaeft, bis der Spieler naht');
   assert.equal(s.spike, 0);
+  assert.equal(s.offset, 0);
   assert.ok(s.alive);
+  assert.equal(s.shoot, undefined, 'kein shoot-Flag mehr: Spinner feuern immer');
 });
 
 test('createSpinners ist deterministisch bei gleichem Seed', () => {
@@ -91,39 +113,91 @@ test('Platzierung im generierten Level-Maze: End-Wand hinter dem Ruecken, freier
   }
 });
 
-test('Zyklus: Spike waechst, ab Schwellenlaenge Rueckzug zur Wand, gekuerzt geht es wieder vor', () => {
+// Hand-Maze mit ECKEN: langer Gang y=1 (x=1..11), von seinem hohen Ende
+// (11,1) ein Stich nach unten bis (11,5), von dort nach links bis (7,5),
+// von dort nach unten bis (7,9). S/G liegen auf den letzten beiden Stichen
+// (ihre Schutzzonen erreichen den langen Gang nicht).
+function zigzagMaze() {
+  const n = 13;
+  const grid = Array.from({ length: n }, () => Array(n).fill(WALL));
+  for (let x = 1; x <= 11; x++) grid[1][x] = OPEN;
+  for (let y = 1; y <= 5; y++) grid[y][11] = OPEN;
+  for (let x = 7; x <= 11; x++) grid[5][x] = OPEN;
+  for (let y = 5; y <= 9; y++) grid[y][7] = OPEN;
+  return { n, grid, start: [7, 9], goal: [9, 5], seed: 3, metric: createMetric(THIN) };
+}
+
+test('Wecken: der Spinner legt erst los, wenn der Spieler hoechstens zwei Ecken entfernt ist', () => {
+  const maze = zigzagMaze();
+  const cell = 5;
+  const spinners = createSpinners(maze, { count: 1 }, { unit: 1, cell, rng: createRng(5) });
+  assert.equal(spinners.length, 1, 'der lange Gang traegt den Spinner');
+  const s = spinners[0];
+  // Zellmitten in Welt-Koordinaten (Metrik: Wand 1, Gang 5, unit 1).
+  const center = (g) => (Math.floor(g / 2) * 6 + (g % 2 === 1 ? 1 + 2.5 : 0.5));
+  const turns = (gx, gy) => spinnerTurnsAway(maze, s, center(gx), center(gy), 1);
+  assert.equal(turns(5, 1), 0, 'im Gang selbst: null Ecken');
+  assert.equal(turns(11, 3), 1, 'im ersten Stich: eine Ecke');
+  assert.equal(turns(9, 5), 2, 'zweiter Stich: zwei Ecken');
+  assert.equal(turns(7, 7), 3, 'dritter Stich: drei Ecken');
+  assert.equal(turns(0, 0), -1, 'Wand: unerreichbar');
+
+  // Drei Ecken weit: nichts; der Spinner ruehrt sich nicht.
+  assert.deepEqual(wakeSpinners(spinners, maze, center(7), center(7), 1), []);
+  assert.equal(s.active, false);
+  spinnersStep(spinners, 1, cell);
+  assert.equal(s.spike, 0, 'schlafend waechst kein Spike');
+  assert.equal(s.offset, 0);
+  // Zwei Ecken weit: geweckt -- und ab da laeuft der Zyklus.
+  assert.deepEqual(wakeSpinners(spinners, maze, center(9), center(5), 1), [s]);
+  assert.equal(s.active, true);
+  spinnersStep(spinners, 0.5, cell);
+  assert.ok(s.spike > 0, 'geweckt waechst der Spike');
+  // Einmal wach bleibt wach (auch wenn der Spieler wieder weg ist).
+  assert.deepEqual(wakeSpinners(spinners, maze, center(7), center(9), 1), []);
+  assert.equal(s.active, true);
+});
+
+test('Wander-Zyklus: jeder Vorlauf reicht um step weiter und schiebt die Spitze vor, Rueckzug bis zur Wand', () => {
   const { spinners } = makeSpinner();
   const s = spinners[0];
   const cell = 5;
   const dt = 1 / 60;
 
-  // Vorlaufen: offset waechst bis maxOffset, Spike waechst mit.
-  for (let t = 0; t < 3; t += dt) spinnersStep(spinners, dt, cell);
-  assert.equal(s.mode, 'advance');
-  assert.ok(Math.abs(s.offset - SPINNER.maxOffset * cell) < 1e-9, 'voll ausgefahren');
-  assert.ok(s.spike > 0.8 * cell, 'Spike gewachsen');
-
-  // Weiterdrehen bis zur Rueckzugs-Schwelle.
-  for (let t = 0; t < 8 && s.mode === 'advance'; t += dt) spinnersStep(spinners, dt, cell);
-  assert.equal(s.mode, 'retreat');
-  for (let t = 0; t < 3; t += dt) spinnersStep(spinners, dt, cell);
+  // Erster Vorlauf bis step, dabei Spitze = Koerper.
+  let maxOffset = 0;
+  while (s.mode !== 'retreat') {
+    spinnersStep(spinners, dt, cell);
+    maxOffset = Math.max(maxOffset, s.offset);
+    assert.ok(Math.abs(s.spike - s.offset) < 1e-9, 'beim Vorlaufen ist der Koerper die Spitze');
+  }
+  assert.ok(Math.abs(maxOffset - SPINNER.step * cell) < 1e-9, 'erster Vorlauf reicht step weit');
+  // Rueckzug bis zur Wand: die Spitze bleibt stehen.
+  while (s.mode === 'retreat') {
+    spinnersStep(spinners, dt, cell);
+    assert.ok(Math.abs(s.spike - SPINNER.step * cell) < 1e-9, 'Spike bleibt beim Rueckzug');
+  }
   assert.equal(s.offset, 0, 'an der Wand angekommen');
-  assert.equal(s.spike, s.cap, 'Spike am Deckel (waechst nie ueber cap)');
-
-  // Kuerzen deutlich unter die Vorlauf-Schwelle -> er traut sich wieder vor.
-  // (Knapp darunter reicht nicht: im selben Schritt waechst der Spike weiter.)
-  s.spike = SPINNER.spikeAdvance * cell - SPINNER.shorten * cell;
-  spinnersStep(spinners, dt, cell);
-  assert.equal(s.mode, 'advance');
+  assert.ok(Math.abs(s.reach - 2 * SPINNER.step * cell) < 1e-9, 'naechster Vorlauf um step weiter');
+  // Der zweite Vorlauf verlaengert den Spike ueber die alte Spitze hinaus.
+  while (s.mode === 'advance') spinnersStep(spinners, dt, cell);
+  assert.ok(Math.abs(s.spike - 2 * SPINNER.step * cell) < 1e-9, 'Spike um step gewachsen');
+  // Langfristig endet der Spike am Deckel und wandert dort weiter (15 Zyklen
+  // zu je 0.65 s pro Einheit Reichweite: ~156 s bis zum Deckel).
+  for (let t = 0; t < 200; t += dt) spinnersStep(spinners, dt, cell);
+  assert.equal(s.spike, s.cap, 'Spike am Deckel (nie darueber)');
+  assert.ok(s.offset >= 0 && s.offset <= s.cap + 1e-9, 'Koerper pendelt innerhalb des Spikes');
+  assert.ok(SPINNER.step > SPINNER.shorten * 0.5, 'Wachstum pro Zyklus spuerbar');
 });
 
-test('Schuss-Treffer: Spike faengt ab und wird gekuerzt; Koerper nur beim Vorlaufen toedlich', () => {
+test('Schuss-Treffer: der Spike faengt ab und wird gekuerzt; der Koerper stirbt nur "vorne am Spike"', () => {
   const cell = 5;
   const { spinners } = makeSpinner();
   const s = spinners[0];
   s.offset = 2;
   s.spike = 8;
   s.mode = 'retreat';
+  assert.equal(spinnerExposed(s), false, 'hinter der Spitze geschuetzt');
 
   // Treffer in der Spike-Spanne: kuerzt um shorten, Funken an der Spitze.
   const [tx, tz] = spinnerTip(s);
@@ -132,21 +206,67 @@ test('Schuss-Treffer: Spike faengt ab und wird gekuerzt; Koerper nur beim Vorlau
   assert.equal(evSpike.x, tx);
   assert.equal(s.spike, 8 - SPINNER.shorten * cell);
 
-  // Koerper-Treffer im Rueckzug: prallt ab, Spinner lebt.
-  s.spike = 0; // freie Schusslinie zum Koerper
+  // Schuss direkt am Koerper, aber der Spike reicht noch darueber hinaus:
+  // der Spike faengt ihn ab (kein Schild mehr -- einfach Spike-Kuerzung).
   const [bx, bz] = spinnerPos(s);
-  const evShield = spinnerShotHit(spinners, bx, bz, cell);
-  assert.equal(evShield.type, 'shield');
+  const evBody = spinnerShotHit(spinners, bx, bz, cell);
+  assert.equal(evBody.type, 'spike', 'im Spike-Bereich zaehlt der Spike');
   assert.ok(s.alive);
 
-  // Beim Vorlaufen: Abschuss.
-  s.mode = 'advance';
+  // Spike unter die Koerperlage gekuerzt: der Koerper ist frei -> Abschuss.
+  s.spike = 1.5;
+  assert.equal(spinnerExposed(s), true, 'zurueckgedraengt: Koerper frei');
   const evKill = spinnerShotHit(spinners, bx, bz, cell);
   assert.equal(evKill.type, 'spinner');
   assert.equal(s.alive, false);
 
-  // Tote Spinner treffen nichts mehr.
-  assert.equal(spinnerShotHit(spinners, bx, bz, cell), null);
+  // Beim Vorlaufen IST der Koerper die Spitze: dort trifft man ihn direkt.
+  const { spinners: two } = makeSpinner();
+  const v = two[0];
+  v.offset = 6; v.spike = 6; v.mode = 'advance';
+  assert.equal(spinnerExposed(v), true);
+  const [vx, vz] = spinnerPos(v);
+  assert.equal(spinnerShotHit(two, vx, vz, cell).type, 'spinner');
+  // An der Wand mit Spike 0: verwundbar (der alte Schild entfaellt).
+  const { spinners: three } = makeSpinner();
+  const w = three[0];
+  const [wx, wz] = spinnerPos(w);
+  assert.equal(spinnerShotHit(three, wx, wz, cell).type, 'spinner', 'ohne Spike an der Wand: verwundbar');
+});
+
+test('Der Spike eines TOTEN Spinners bleibt stehen: kuerzbar, spiesst auf, aber waechst nicht', () => {
+  const cell = 5;
+  const radius = 0.25 * cell;
+  const { spinners } = makeSpinner();
+  const s = spinners[0];
+  s.offset = 0; s.spike = 10; s.mode = 'advance'; s.reach = 20;
+  s.alive = false;
+  assert.equal(spinnerShown(s), true, 'sichtbar bleibt der Spike');
+  spinnersStep(spinners, 2, cell);
+  assert.equal(s.spike, 10, 'kein Wachstum mehr');
+  assert.equal(s.offset, 0, 'kein Wandern mehr');
+  // Kuerzbar per Treffer, keine Koerper-Treffer mehr.
+  const [tx, tz] = spinnerTip(s);
+  assert.equal(spinnerShotHit(spinners, tx - s.dir * 0.3, tz, cell).type, 'spike');
+  assert.equal(s.spike, 10 - SPINNER.shorten * cell);
+  const [bx, bz] = spinnerPos(s);
+  assert.equal(spinnerShotHit(spinners, bx + s.dir * 0.2, bz, cell)?.type ?? 'spike', 'spike',
+    'am Koerper zaehlt nur noch der Spike');
+  // Die Spitze spiesst weiter auf (Kreuzen von vorn), der Koerper toetet nicht mehr.
+  // (Ein Schritt dazwischen: prevTip folgt dem Kuerzen erst im naechsten
+  // Frame -- die zurueckspringende Spitze ist nie toedlich, wie immer.)
+  spinnersStep(spinners, 1 / 60, cell);
+  const at = (t) => (s.axis === 'x' ? { px: s.wall + s.dir * t, pz: s.cross } : { px: s.cross, pz: s.wall + s.dir * t });
+  const tip = s.spike;
+  const b = at(tip + radius - 0.2);
+  const hit = spinnerPlayerHit(spinners, b.px, b.pz, radius, cell, at(tip + radius + 1));
+  assert.ok(hit && hit.impale, 'tote Spitze spiesst weiter auf');
+  const body = at(radius + 0.1);
+  assert.equal(spinnerPlayerHit(spinners, body.px, body.pz, radius, cell), null, 'toter Koerper ist harmlos');
+  // Ganz weggeschossen: nichts mehr da.
+  s.spike = 0;
+  assert.equal(spinnerShown(s), false);
+  assert.equal(spinnerMarkers(spinners).length, 0, 'Karte zeigt tote Spinner nicht');
 });
 
 test('Aufspiessen nur von VORN: Kreuzen der Spitze toetet, Schaft und Ueberholen sind sicher', () => {
@@ -155,7 +275,8 @@ test('Aufspiessen nur von VORN: Kreuzen der Spitze toetet, Schaft und Ueberholen
   const { spinners } = makeSpinner();
   const s = spinners[0];
   s.offset = 2;
-  s.spike = 8; // Spitze bei t = 10 (Abstand von der Wand)
+  s.spike = 10; // Spitze bei t = 10 (Abstand von der Wand), Koerper dahinter
+  s.mode = 'retreat';
   const at = (t, dq = 0) => {
     const along = s.wall + s.dir * t;
     return s.axis === 'x' ? { px: along, pz: s.cross + dq } : { px: s.cross + dq, pz: along };
@@ -185,15 +306,18 @@ test('Aufspiessen nur von VORN: Kreuzen der Spitze toetet, Schaft und Ueberholen
   // Ueberholen von hinten (MIT der Spike-Richtung ueber die Spitze): sicher.
   assert.equal(hitFrom(9, 11.6), null, 'Einbahn-Sperre: von hinten passierbar');
 
-  // Die Spitze waechst/laeuft in den Spieler hinein -> aufgespiesst
-  // (Kreuzung durch die Spinner-Bewegung, via prevTip aus spinnersStep).
-  const still = at(11.3); // Vorderkante knapp VOR der Spitze
+  // Der Koerper schiebt die Spitze beim Vorlauf in den stehenden Spieler
+  // hinein: im Sturm-Modell IST der Koerper dabei die Spitze -- die
+  // Beruehrung toetet (der Koerper-Radius reicht weiter als die Spitze).
+  s.offset = 10; s.mode = 'advance'; s.reach = 14; // Koerper an der Spitze, will weiter
+  const still = at(13.0); // Vorderkante vor der Spitze, ausserhalb des Koerper-Radius
   assert.equal(spinnerPlayerHit(spinners, still.px, still.pz, radius, cell), null, 'noch knapp davor');
-  spinnersStep(spinners, 0.1, cell); // Spitze rueckt vor (Wachstum + Vorlauf)
+  for (let t = 0; t < 1; t += 0.05) spinnersStep(spinners, 0.05, cell); // Koerper + Spitze ruecken vor
   const grown = spinnerPlayerHit(spinners, still.px, still.pz, radius, cell);
-  assert.ok(grown && grown.impale, 'die vorrueckende Spitze spiesst auf');
+  assert.ok(grown, 'der vorrueckende Spinner erwischt den Stehenden');
 
   // Koerper-Beruehrung bleibt rundum toedlich (ohne impale).
+  s.offset = 2;
   const [bx, bz] = spinnerPos(s);
   const hitBody = spinnerPlayerHit(spinners, bx + radius, bz, radius, cell);
   assert.ok(hitBody && !hitBody.impale);
@@ -204,7 +328,7 @@ test('Waende schuetzen: Spinner an der Wand toetet NICHT durch die Wand (Boris\'
   const radius = 0.25 * cell;
   const { spinners } = makeSpinner();
   const s = spinners[0];
-  s.offset = 0; // zurueckgezogen: Koerper sitzt AUF der Wandflaeche
+  s.offset = 0; // an der Wand: Koerper sitzt AUF der Wandflaeche
   s.spike = 8;
   s.mode = 'retreat';
   const at = (t, dq = 0) => {
@@ -262,12 +386,12 @@ test('ENTSCHAERFTE ECKEN-FALLE: hinter der Spitze eingestiegen entkommt man in S
   const cell = 5;
   const radius = 0.25 * cell;
   const dt = 1 / 60;
-  // Spinner lange gewaehren lassen: Spike am Deckel, zurueckgezogen an der Wand.
-  for (let t = 0; t < 60; t += dt) spinnersStep(spinners, dt, cell);
+  grow(spinners, cell); // Spike am Deckel, Koerper an der Wand vor dem Vorlauf
 
   // Einstieg nahe der Ecke HINTER der Spitze, dann volle Fahrt in Spike-
   // Richtung davon (Boris' Todesfalle) -- OHNE einen einzigen Schuss muss
-  // man ueber den Schaft und die Spitze hinweg entkommen (Einbahn-Sperre).
+  // man ueber den Schaft und die Spitze hinweg entkommen (Einbahn-Sperre;
+  // der langsamer vorlaufende Koerper holt einen nicht ein).
   let along = s.wall + s.dir * 4.0; // knapp ausserhalb des Koerper-Radius
   const out = s.wall + s.dir * (s.runLen - 0.5 * cell); // fernes Gang-Ende
   let hit = null;
@@ -282,6 +406,7 @@ test('ENTSCHAERFTE ECKEN-FALLE: hinter der Spitze eingestiegen entkommt man in S
   }
   assert.equal(hit, null, 'nicht aufgespiesst');
   assert.ok(s.dir * (out - along) <= 0, `aus dem Gang entkommen (t=${t.toFixed(2)}s)`);
+  assert.ok(SPINNER.advance < DRIVE.cruise, 'der Koerper ist langsamer als die Fahrt');
 });
 
 test('DURCHKOMMENS-GARANTIE: Dauerfeuer bei Reisegeschwindigkeit ueberwindet den vollen Spike', () => {
@@ -291,11 +416,8 @@ test('DURCHKOMMENS-GARANTIE: Dauerfeuer bei Reisegeschwindigkeit ueberwindet den
   const unit = 1;
   const radius = 0.25 * cell;
   const dt = 1 / 60;
-
-  // Spinner lange gewaehren lassen: Spike am Deckel, zurueckgezogen an der Wand.
-  for (let t = 0; t < 60; t += dt) spinnersStep(spinners, dt, cell);
+  grow(spinners, cell);
   assert.equal(s.spike, s.cap);
-  assert.equal(s.offset, 0);
 
   // Spieler betritt den Gang am GEGENUEBERLIEGENDEN Ende und faehrt mit
   // Reisegeschwindigkeit frontal auf den Spinner zu -- Dauerfeuer ab Betreten.
@@ -325,7 +447,7 @@ test('DURCHKOMMENS-GARANTIE: Dauerfeuer bei Reisegeschwindigkeit ueberwindet den
   }
   assert.ok(!impaled, `nicht aufgespiesst (bei t=${t.toFixed(2)}s)`);
   assert.ok(s.dir * (goalAlong - along) >= 0, 'letzte Kammer vor der Wand erreicht');
-  assert.equal(s.alive, false, 'der vorlaufende Spinner wurde unterwegs abgeschossen');
+  assert.equal(s.alive, false, 'der freigeschossene Spinner wurde unterwegs abgeschossen');
 });
 
 test('OHNE Feuern wird der Spieler aufgespiesst (der Spike ist eine echte Sperre)', () => {
@@ -334,7 +456,7 @@ test('OHNE Feuern wird der Spieler aufgespiesst (der Spike ist eine echte Sperre
   const cell = 5;
   const radius = 0.25 * cell;
   const dt = 1 / 60;
-  for (let t = 0; t < 60; t += dt) spinnersStep(spinners, dt, cell);
+  grow(spinners, cell);
 
   let along = s.wall + s.dir * (s.runLen - 0.5 * cell);
   let impaled = false;
@@ -349,7 +471,7 @@ test('OHNE Feuern wird der Spieler aufgespiesst (der Spike ist eine echte Sperre
   assert.ok(impaled);
 });
 
-test('spinnerSegments: Spirale quer zum Gang auf Spike-Hoehe, Spike bis zur Spitze', () => {
+test('spinnerSegments: Spirale quer zum Gang am Koerper, Spike von der Wand bis zur Spitze', () => {
   const cell = 5;
   const { spinners } = makeSpinner();
   const s = spinners[0];
@@ -359,14 +481,17 @@ test('spinnerSegments: Spirale quer zum Gang auf Spike-Hoehe, Spike bis zur Spit
   assert.ok(segs.length > 10);
   const h = SPINNER.height * cell;
   let maxSpikeReach = 0;
+  let minReach = Infinity;
   for (const [a, b] of segs) {
     for (const p of [a, b]) {
       assert.ok(Math.abs(p[1] - h) <= SPINNER.size * cell + 1e-9, 'Hoehe um die Spike-Ebene');
-      const t = (s.axis === 'x' ? p[0] : p[2]) - s.wall;
-      maxSpikeReach = Math.max(maxSpikeReach, t * s.dir);
+      const t = ((s.axis === 'x' ? p[0] : p[2]) - s.wall) * s.dir;
+      maxSpikeReach = Math.max(maxSpikeReach, t);
+      minReach = Math.min(minReach, t);
     }
   }
-  assert.ok(Math.abs(maxSpikeReach - (s.offset + s.spike)) < 1e-9, 'Spike reicht exakt bis zur Spitze');
+  assert.ok(Math.abs(maxSpikeReach - s.spike) < 1e-9, 'Spike reicht exakt bis zur Spitze');
+  assert.ok(Math.abs(minReach) < 1e-9, 'und beginnt an der Wand');
 
   // Ohne Spike: nur die Spirale in der Koerper-Ebene.
   s.spike = 0;
@@ -376,15 +501,18 @@ test('spinnerSegments: Spirale quer zum Gang auf Spike-Hoehe, Spike bis zur Spit
       assert.ok(Math.abs(along - (s.wall + s.dir * s.offset)) < 1e-9, 'alles in der Spiralebene');
     }
   }
+  // Toter Spinner: nur der Spike, keine Spirale mehr.
+  s.spike = 6;
+  s.alive = false;
+  for (const [a, b] of spinnerSegments(s, 0, { cell })) {
+    for (const p of [a, b]) {
+      const t = ((s.axis === 'x' ? p[0] : p[2]) - s.wall) * s.dir;
+      assert.ok(t >= -1e-9 && t <= s.spike + 1e-9, 'nur noch Spike-Linien');
+    }
+  }
 });
 
-// --- Spinner-Schuesse (ab Level 21, config.shoot) -------------------------
-
-function makeShootingSpinner(seed = 7) {
-  const maze = corridorMaze();
-  const spinners = createSpinners(maze, { count: 3, shoot: true }, { unit: 1, cell: 5, rng: createRng(seed) });
-  return { maze, spinners };
-}
+// --- Spinner-Schuesse (immer, aus dem Koerper) ------------------------------
 
 // rng-Stub: "feuert" bei jedem n-ten Aufruf (liefert 0, sonst 0.99) --
 // deterministisch und unabhaengig von SPINNER.fireRate.
@@ -403,31 +531,27 @@ function duelPose(s, t, dq = 0) {
     : { px: s.cross + dq, pz: along, yaw };
 }
 
-test('createSpinners uebernimmt das shoot-Flag aus der Level-Config', () => {
-  assert.equal(makeSpinner().spinners[0].shoot, false);
-  assert.equal(makeShootingSpinner().spinners[0].shoot, true);
-});
-
-test('spinnerFire: nur im Duell (Spieler im Gang, Blick auf den Spinner) -- Stellung egal', () => {
+test('spinnerFire: nur im Duell (Spieler im Gang, Blick auf den Spinner) -- aus dem Koerper, Stellung egal', () => {
   const cell = 5;
-  const { spinners } = makeShootingSpinner();
+  const { spinners } = makeSpinner();
   const s = spinners[0];
   s.offset = 2;
   s.spike = 6;
   const shots = [];
   const duel = duelPose(s, 20);
 
-  // rng() = 0 < fireRate*dt: feuert; der Schuss sitzt an der Spike-Spitze.
+  // rng() = 0 < fireRate*dt: feuert; der Schuss startet im KOERPER (und
+  // fliegt durch den eigenen Spike).
   const fired = spinnerFire(spinners, shots, 1 / 60, () => 0, duel, cell);
   assert.equal(fired.length, 1);
   assert.equal(shots.length, 1);
-  assert.equal(shots[0].t, s.offset + s.spike);
-  assert.deepEqual(spinnerShotPos(shots[0]), spinnerTip(s));
+  assert.equal(shots[0].t, s.offset);
+  assert.deepEqual(spinnerShotPos(shots[0]), spinnerPos(s));
   assert.equal(shots[0].axis, s.axis);
   assert.equal(shots[0].dir, s.dir);
 
-  // Auch ZURUECKGEZOGEN an der Wand feuert er weiter (Boris 14.7.2026:
-  // an den Vorlauf gekoppelt schossen alle nur am Level-Anfang).
+  // Auch an der Wand feuert er weiter (Boris 14.7.2026: an den Vorlauf
+  // gekoppelt schossen alle nur am Level-Anfang).
   s.mode = 'retreat';
   s.offset = 0;
   assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0, duel, cell).length, 1);
@@ -441,17 +565,14 @@ test('spinnerFire: nur im Duell (Spieler im Gang, Blick auf den Spinner) -- Stel
   // Spieler schaut WEG (Flucht): kein Schuss in den Ruecken.
   assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0,
     { ...duel, yaw: duel.yaw + Math.PI }, cell).length, 0);
-  // Tot oder ohne shoot-Flag: still.
+  // Tot: still (der Spike schiesst nicht).
   s.alive = false;
-  assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0, duel, cell).length, 0);
-  s.alive = true;
-  s.shoot = false;
   assert.equal(spinnerFire(spinners, shots, 1 / 60, () => 0, duel, cell).length, 0);
 });
 
 test('spinnerShotsStep: Flug mit shotSpeed die Gangmitte entlang, am fernen Ende Wand-Verpuffen', () => {
   const cell = 5;
-  const { spinners } = makeShootingSpinner();
+  const { spinners } = makeSpinner();
   const s = spinners[0];
   s.offset = 1;
   s.spike = 2;
@@ -482,11 +603,11 @@ test('spinnerShotsStep: Flug mit shotSpeed die Gangmitte entlang, am fernen Ende
 test('spinnerShotPlayerHit: Kreuzen toetet ueber die GANZE Gangbreite, Parallelgang und Wand-Ruecken sicher', () => {
   const cell = 5;
   const radius = 0.25 * cell;
-  const { spinners } = makeShootingSpinner();
+  const { spinners } = makeSpinner();
   const s = spinners[0];
   const shots = [];
-  s.offset = 1;
-  s.spike = 4;
+  s.offset = 5;
+  s.spike = 5;
   spinnerFire(spinners, shots, 1 / 60, () => 0, duelPose(s, 20), cell); // Schuss bei t = 5
   const sh = shots[0];
 
@@ -518,7 +639,7 @@ test('spinnerShotPlayerHit: Kreuzen toetet ueber die GANZE Gangbreite, Parallelg
 
 test('spinnerShotIntercept: eigenes Projektil faengt den Schuss ab (zap), sonst null', () => {
   const cell = 5;
-  const { spinners } = makeShootingSpinner();
+  const { spinners } = makeSpinner();
   const shots = [];
   spinners[0].offset = 1;
   spinners[0].spike = 4;
@@ -538,7 +659,7 @@ test('spinnerShotIntercept: eigenes Projektil faengt den Schuss ab (zap), sonst 
 
 test('spinnerShotSegments: Funken-Stern QUER zum Gang an der Schuss-Position', () => {
   const cell = 5;
-  const { spinners } = makeShootingSpinner();
+  const { spinners } = makeSpinner();
   const shots = [];
   spinners[0].offset = 1;
   spinners[0].spike = 4;
@@ -557,14 +678,13 @@ test('spinnerShotSegments: Funken-Stern QUER zum Gang an der Schuss-Position', (
 });
 
 test('DURCHKOMMENS-GARANTIE gilt auch gegen FEUERNDE Spinner: Dauerfeuer faengt die Schuesse ab', () => {
-  const { maze, spinners } = makeShootingSpinner();
+  const { maze, spinners } = makeSpinner();
   const s = spinners[0];
   const cell = 5;
   const unit = 1;
   const radius = 0.25 * cell;
   const dt = 1 / 60;
-
-  for (let t = 0; t < 60; t += dt) spinnersStep(spinners, dt, cell);
+  grow(spinners, cell);
   assert.equal(s.spike, s.cap);
 
   const far = s.wall + s.dir * (s.runLen - 0.5 * cell);
@@ -577,10 +697,13 @@ test('DURCHKOMMENS-GARANTIE gilt auch gegen FEUERNDE Spinner: Dauerfeuer faengt 
     ? { px: along, pz: s.cross, yaw }
     : { px: s.cross, pz: along, yaw });
 
-  // Der Spinner feuert im Vorlauf ZUVERLAESSIG alle ~0.75 s (jeder 45. rng-
-  // Aufruf bei 60 fps) -- deutlich oefter als real (fireRate 0.3/s), als
-  // Stress-Test: das Dauerfeuer muss die Schuesse trotzdem alle abfangen.
-  const foeRng = fireEvery(45);
+  // Der Spinner feuert ZUVERLAESSIG alle 1.5 s (jeder 90. rng-Aufruf bei
+  // 60 fps) -- doppelt so oft wie real (fireRate 0.3/s), als Stress-Test:
+  // das Dauerfeuer muss die Schuesse trotzdem alle abfangen. (Die alte
+  // Vierfach-Rate ist mit Schuessen aus dem KOERPER nicht mehr haltbar:
+  // wer dicht hinter der zurueckweichenden Spitze reitet, sieht einen aus
+  // dem Spike auftauchenden Schuss nur ~0.1 s -- Boris: "darf knapp werden".)
+  const foeRng = fireEvery(90);
   const foeShots = [];
   const shotsState = createShotsState();
   let dead = null;
@@ -595,7 +718,7 @@ test('DURCHKOMMENS-GARANTIE gilt auch gegen FEUERNDE Spinner: Dauerfeuer faengt 
     shotsStep(maze, shotsState, dt, {
       unit, cell,
       hitTest: (x, z) => spinnerShotIntercept(foeShots, x, z, cell)
-        ?? spinnerShotHit(spinners, x, z, cell),
+        ?? spinnerShotHit(spinners, x, z, cell, foeShots),
     });
     const p = pose();
     dead = spinnerPlayerHit(spinners, p.px, p.pz, radius, cell, prev)
@@ -606,18 +729,43 @@ test('DURCHKOMMENS-GARANTIE gilt auch gegen FEUERNDE Spinner: Dauerfeuer faengt 
   assert.ok(s.dir * (goalAlong - along) >= 0, 'letzte Kammer vor der Wand erreicht');
 });
 
+test('Abgeschnittenes Spike-Stueck zerstoert den Spinner-Schuss darin (sonst unabfangbar)', () => {
+  const cell = 5;
+  const { spinners } = makeSpinner();
+  const s = spinners[0];
+  s.offset = 2;
+  s.spike = 10;
+  s.mode = 'retreat';
+  const shots = [];
+  spinnerFire(spinners, shots, 1 / 60, () => 0, duelPose(s, 20), cell); // Schuss startet bei t = 2 (Koerper)
+  const sh = shots[0];
+  sh.t = 9.0; // im letzten Stueck vor der Spitze (10 - shorten*cell = 8.25 .. 10)
+  const [tx, tz] = spinnerTip(s);
+  const ev = spinnerShotHit(spinners, tx - s.dir * 0.2, tz, cell, shots);
+  assert.equal(ev.type, 'spike');
+  assert.equal(ev.zapped, 1, 'der Schuss im abgeschnittenen Stueck ist weg');
+  assert.equal(shots.length, 0);
+  // Tiefer im Spike (jenseits des Abfang-Radius hinter dem Stueck) ueberlebt er.
+  spinnerFire(spinners, shots, 1 / 60, () => 0, duelPose(s, 20), cell);
+  shots[0].t = 3;
+  const ev2 = spinnerShotHit(spinners, spinnerTip(s)[0] - s.dir * 0.2, tz, cell, shots);
+  assert.equal(ev2.type, 'spike');
+  assert.equal(ev2.zapped, 0);
+  assert.equal(shots.length, 1, 'tief im Spike geschuetzt');
+});
+
 test('OHNE eigenes Feuer toetet der Spinner-Schuss den Spieler im Gang', () => {
   const cell = 5;
   const radius = 0.25 * cell;
   const dt = 1 / 60;
-  const { spinners } = makeShootingSpinner();
+  const { spinners } = makeSpinner();
   const s = spinners[0];
 
   // Spieler steht weit hinten im Gang (ausserhalb der Spike-Reichweite)
   // und blickt dem Spinner entgegen -- das Duell, in dem er feuern darf.
   const standT = s.runLen - 0.8 * cell;
   const stand = duelPose(s, standT);
-  assert.ok(standT > (SPINNER.maxOffset + SPINNER.spikeCap) * cell, 'ausser Spike-Reichweite');
+  assert.ok(standT > s.cap, 'ausser Spike-Reichweite');
 
   const foeRng = fireEvery(45);
   const foeShots = [];
@@ -635,20 +783,25 @@ test('spinnerMarkers: nur lebende Spinner, an der Koerper-Position', () => {
   const { spinners } = makeSpinner();
   const s = spinners[0];
   s.offset = 3;
-  const [bx, bz] = spinnerPos(s);
-  assert.deepEqual(spinnerMarkers(spinners), [{ x: bx, z: bz, alive: true }]);
+  const [x, z] = spinnerPos(s);
+  assert.deepEqual(spinnerMarkers(spinners), [{ x, z, alive: true }]);
   s.alive = false;
   assert.deepEqual(spinnerMarkers(spinners), []);
-  assert.equal(spinnerMarkers(null), null);
+  assert.deepEqual(spinnerMarkers(null), null);
 });
 
 test('spinnerShotsStep kompaktiert in place: der mittlere von drei verpufft', () => {
   const cell = 5;
-  const mk = (t) => ({ axis: 'x', dir: 1, wall: 0, cross: 0, runLen: 100, t, prevT: t, phase: 0 });
-  const shots = [mk(10), mk(99.9), mk(20)];
-  const [first, , third] = shots;
-  const events = spinnerShotsStep(shots, 0.1, cell); // +2.2*5*0.1 = 1.1 -> der mittlere ueberschreitet 100
+  const shots = [
+    { axis: 'x', dir: 1, wall: 0, cross: 0, runLen: 100, t: 5, prevT: 5 },
+    { axis: 'x', dir: 1, wall: 0, cross: 0, runLen: 100, t: 99.9, prevT: 99.9 },
+    { axis: 'x', dir: 1, wall: 0, cross: 0, runLen: 100, t: 7, prevT: 7 },
+  ];
+  const keep = [shots[0], shots[2]];
+  const events = spinnerShotsStep(shots, 0.1, cell);
   assert.equal(events.length, 1);
   assert.equal(events[0].type, 'wall');
-  assert.deepEqual(shots, [first, third], 'Ueberlebende ruecken auf, Reihenfolge bleibt');
+  assert.equal(shots.length, 2);
+  assert.equal(shots[0], keep[0]);
+  assert.equal(shots[1], keep[1]);
 });

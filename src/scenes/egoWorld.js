@@ -8,7 +8,7 @@
 // Alles rein aus uebergebenem Zustand -- kein eigener Szenen-Zustand.
 
 import { enemySegments } from '../world/enemies.js';
-import { SPINNER, spinnerSegments, spinnerShotSegments } from '../world/spinners.js';
+import { SPINNER, spinnerSegments, spinnerShotSegments, spinnerShown } from '../world/spinners.js';
 import { flipperSegments } from '../world/flippers.js';
 import { pulsarSegments } from '../world/pulsars.js';
 import { shotSegments } from '../world/shots.js';
@@ -236,7 +236,7 @@ export function renderEgoWorld(renderer, camera, ctx) {
     foeOverlay(segs, ctx.enemyCol);
   }
 
-  const aliveSpinners = (ctx.spinners ?? []).filter((s) => s.alive);
+  const aliveSpinners = (ctx.spinners ?? []).filter(spinnerShown); // auch stehen gebliebene Spikes
   if (aliveSpinners.length) {
     const segs = [];
     for (const s of aliveSpinners) segs.push(...spinnerSegments(s, t, { cell }));

@@ -53,6 +53,7 @@ import { FIREWORK, FIREWORK_COLORS, fireworkBeams } from '../world/fireworks.js'
 import { growthOutline } from '../world/mazeGeometry.js';
 import {
   SPINNER, spinnerMarkers, spinnerSegments, spinnerShotSegments, spinnerShotPos,
+  spinnerShown,
 } from '../world/spinners.js';
 import { flipperMarkers, flipperSegments, flipperTriangles } from '../world/flippers.js';
 import { pulsarMarkers, pulsarSegments } from '../world/pulsars.js';
@@ -1153,6 +1154,7 @@ export function createBackend2026(container = document.body) {
   // Frame); Listen und Farben haengen an game/view und kommen als Argumente.
   const FOE_KINDS = [
     { list: (game) => game.spinners, color: (game) => spinnerColor(game.level),
+      show: spinnerShown, // auch der stehen gebliebene Spike eines toten Spinners
       segs: (s, view) => spinnerSegments(s, view.sceneT, { cell: view.cell }) },
     { list: (game) => game.flippers, color: () => NEON_MAGENTA,
       segs: (f, view) => flipperSegments(f, { cell: view.cell }) },
@@ -1164,7 +1166,7 @@ export function createBackend2026(container = document.body) {
     if (!world.foeLines) world.foeLines = FOE_KINDS.map(() => null);
     const k = world.kLocal;
     FOE_KINDS.forEach((kind, i) => {
-      const alive = (kind.list(game) ?? []).filter((f) => f.alive);
+      const alive = (kind.list(game) ?? []).filter(kind.show ?? ((f) => f.alive));
       let m = world.foeLines[i];
       if (!alive.length) {
         if (m) m.hide();

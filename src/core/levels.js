@@ -16,11 +16,12 @@
 //                      Abschuss hinterlaesst ein Flipper-PAAR (world/flippers.js)
 // Ab Level 16 (wieder blau, neue Feinde):
 //   `spinners`         { count }: gruene Spiral-Spinner an den End-Waenden
-//                      langer Gangstuecke (world/spinners.js); ihr Spike
-//                      sperrt den Gang und will per Dauerfeuer gekuerzt werden
+//                      langer Gangstuecke (world/spinners.js); sie wandern
+//                      und verlaengern dabei ihren Spike, der den Gang
+//                      sperrt und per Dauerfeuer gekuerzt werden will --
+//                      und sie FEUERN (seit dem Sturm-Branch in allen
+//                      Spinner-Levels, kein shoot-Flag mehr)
 // Ab Level 21 (wieder gruen):
-//   `spinners.shoot`   Spinner feuern beim Vorlaufen sirrende Schuesse
-//                      (abfangbar per Dauerfeuer)
 //   `spinners.color`   Linienfarbe der Spinner (gelb -- auf gruenen Waenden
 //                      waere das Spinner-Gruen unsichtbar); spinnerColor()
 //   Flipper (magenta X, world/flippers.js) werden NICHT mehr platziert --
@@ -71,22 +72,22 @@ export const LEVELS = [
     spinners: { count: 8 }, enemies: { count: 12 } },                                                    // Level 20
   // Level 21-25: wieder Phosphor-GRUEN, die Labyrinthe wachsen weiter
   // (41-45), straight bleibt 0.8. Level 21 nur Tanker-Alleys (volle
-  // Gruppen), ab 22 kehren die Spinner zurueck -- jetzt GELB (auf Gruen)
-  // und FEUERND (shoot). Bis 25 steigt alles.
+  // Gruppen), ab 22 kehren die Spinner zurueck -- jetzt GELB (auf Gruen).
+  // Bis 25 steigt alles.
   { n: 41, metric: THIN, drive: true, straight: 0.8, shoot: true,
     enemies: { count: 10 } },                                                                            // Level 21
   { n: 43, metric: THIN, drive: true, straight: 0.8, shoot: true,
     enemies: { count: 10 },
-    spinners: { count: 5, shoot: true, color: ARCADE_YELLOW } },                                         // Level 22
+    spinners: { count: 5, color: ARCADE_YELLOW } },                                         // Level 22
   { n: 43, metric: THIN, drive: true, straight: 0.8, shoot: true,
     enemies: { count: 12 },
-    spinners: { count: 6, shoot: true, color: ARCADE_YELLOW } },                                         // Level 23
+    spinners: { count: 6, color: ARCADE_YELLOW } },                                         // Level 23
   { n: 45, metric: THIN, drive: true, straight: 0.8, shoot: true,
     enemies: { count: 13 },
-    spinners: { count: 7, shoot: true, color: ARCADE_YELLOW } },                                         // Level 24
+    spinners: { count: 7, color: ARCADE_YELLOW } },                                         // Level 24
   { n: 45, metric: THIN, drive: true, straight: 0.8, shoot: true,
     enemies: { count: 14 },
-    spinners: { count: 8, shoot: true, color: ARCADE_YELLOW } },                                         // Level 25
+    spinners: { count: 8, color: ARCADE_YELLOW } },                                         // Level 25
   // Level 26-30: ARCADE-ROT, die Labyrinthe wachsen weiter (47-51), bunte
   // Sterne, und ALLE bisherigen Feinde treten an -- Tanker jetzt BLAU (Rot
   // ist die Wandfarbe), Spinner wieder gruen (gelb gehoert den Neuen),
@@ -94,19 +95,19 @@ export const LEVELS = [
   // Zackenlinien, deren Beruehrung die Blickachse um 360 Grad verdreht.
   { n: 47, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
     pulsars: { count: 3 }, enemies: { count: 12, color: TEMPEST_BLUE },
-    spinners: { count: 6, shoot: true } },                                        // Level 26
+    spinners: { count: 6 } },                                        // Level 26
   { n: 47, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
     pulsars: { count: 4 }, enemies: { count: 12, color: TEMPEST_BLUE },
-    spinners: { count: 7, shoot: true } },                                        // Level 27
+    spinners: { count: 7 } },                                        // Level 27
   { n: 49, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
     pulsars: { count: 5 }, enemies: { count: 13, color: TEMPEST_BLUE },
-    spinners: { count: 7, shoot: true } },                                        // Level 28
+    spinners: { count: 7 } },                                        // Level 28
   { n: 49, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
     pulsars: { count: 6 }, enemies: { count: 14, color: TEMPEST_BLUE },
-    spinners: { count: 8, shoot: true } },                                        // Level 29
+    spinners: { count: 8 } },                                        // Level 29
   { n: 51, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
     pulsars: { count: 8 }, enemies: { count: 15, color: TEMPEST_BLUE },
-    spinners: { count: 8, shoot: true } },                                        // Level 30
+    spinners: { count: 8 } },                                        // Level 30
 ];
 
 export const MIN_LEVEL = 1;

@@ -78,8 +78,9 @@ test('Levels 21-25: wieder gruen, KEINE platzierten Flipper (nur Paare), Spinner
     assert.equal(levelConfig(level).flippers, undefined,
       `Level ${level}: Flipper werden nie platziert (Sturm-Regel: nur Paare aus Tankern)`);
   }
-  for (let level = 1; level <= 20; level++) {
-    assert.equal(levelConfig(level).spinners?.shoot, undefined, `Level ${level}: Spinner feuern nicht`);
+  for (let level = 1; level <= 30; level++) {
+    assert.equal(levelConfig(level).spinners?.shoot, undefined,
+      `Level ${level}: kein shoot-Flag -- Spinner feuern immer (Sturm-Regel)`);
   }
   assert.equal(levelConfig(21).spinners, undefined, 'Level 21: nur Tanker-Alleys (volle Gruppen)');
   let prevSpinners = 0;
@@ -90,7 +91,6 @@ test('Levels 21-25: wieder gruen, KEINE platzierten Flipper (nur Paare), Spinner
     assert.ok(cfg.enemies.count >= prevEnemies, `Level ${level}: Tanker als Paar-Quelle dabei`);
     if (level >= 22) {
       assert.ok(cfg.spinners.count >= prevSpinners, `Level ${level}: Spinner-Anzahl sinkt nie`);
-      assert.equal(cfg.spinners.shoot, true, `Level ${level}: Spinner feuern`);
       prevSpinners = cfg.spinners.count;
     }
     prevEnemies = cfg.enemies.count;
@@ -135,7 +135,6 @@ test('Pulsar-Levels 26-30: volles Feind-Quartett, Tanker blau, bunte Sterne', ()
     assert.ok(cfg.pulsars.count >= prevPulsars, `Level ${level}: Pulsar-Anzahl sinkt nie`);
     assert.ok(cfg.enemies.count > 0 && cfg.spinners.count > 0,
       `Level ${level}: alle bisherigen Feinde treten an`);
-    assert.equal(cfg.spinners.shoot, true, `Level ${level}: Spinner feuern weiter`);
     assert.equal(enemyColor(level), TEMPEST_BLUE, `Level ${level}: Tanker blau (Rot = Wandfarbe)`);
     assert.equal(cfg.rainbowStars, true, `Level ${level}: bunte Sterne`);
     prevPulsars = cfg.pulsars.count;

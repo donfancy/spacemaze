@@ -16,12 +16,12 @@
 // Tempest-Regel, Fadenkreuz mit Lenk-Ausschlag); Feindberuehrung = krachende
 // Explosion und Game Over -> Karte (S dort: Level-Neustart).
 // Ab Level 16 (`spinners`): gruene Spiral-Spinner an den End-Waenden langer
-// Gaenge (world/spinners.js) -- ihr Spike ist eine Einbahn-Sperre: frontal
-// sperrt die Spitze den Gang und will per Dauerfeuer gekuerzt werden
-// (Kreuzen von vorn oder Koerper-Beruehrung = Crash), von hinten harmlos.
-// Ab Level 21: Spinner GELB (auf gruenen Waenden) und feuernd
-// (`spinners.shoot` -- sirrende Schuesse in flirrenden Farben, abfangbar per
-// Dauerfeuer).
+// Gaenge (world/spinners.js) -- sie wachen auf, wenn der Spieler sich bis
+// auf zwei Ecken naehert, wandern vor und zurueck und verlaengern dabei
+// ihren Spike (Einbahn-Sperre: frontal sperrt die Spitze den Gang und will
+// per Dauerfeuer gekuerzt werden, von hinten harmlos), feuern sirrende
+// Schuesse (abfangbar) und sind nur "vorne am Spike" verwundbar; ihr Spike
+// ueberlebt sie. Ab Level 21: Spinner GELB (auf gruenen Waenden).
 // Ab Level 26 (`pulsars`, rote Waende, bunte Sterne, Tanker blau): gelbe
 // PULSARE (world/pulsars.js) -- unzerstoerbare Zackenlinien im Querschnitt,
 // die Schuessen nach oben/unten ausweichen. Beruehrung toetet NICHT: die
@@ -43,9 +43,9 @@ import { DRIVE, createDriveState, driveStep } from '../world/drive.js';
 import { WALK, createWalkState, walkStep } from '../world/walk.js';
 import { ENEMY, enemiesStep, enemyHit, enemyFire } from '../world/enemies.js';
 import {
-  SPINNER, spinnersStep, spinnerShotHit, spinnerPlayerHit, spinnerTip,
+  SPINNER, spinnersStep, spinnerShotHit, spinnerPlayerHit, spinnerTip, spinnerShown,
   spinnerFire, spinnerShotsStep, spinnerShotPlayerHit, spinnerShotIntercept,
-  spinnerShotPos,
+  spinnerShotPos, wakeSpinners,
 } from '../world/spinners.js';
 import {
   flippersStep, flipperPlayerHit, flipperShotHit, spawnFlipperPair, flipperPos,
@@ -222,6 +222,10 @@ export function createPlaying(game) {
     } else if (ev.type === 'spike') {
       sfx('clink', clinkPatch);
       pushBurst({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 6, speed: 1.4 * cell, life: 0.3, size: 0.06 * cell, color: spinnerCol });
+      if (ev.zapped) { // ein Spinner-Schuss im abgeschnittenen Stueck: weisses Zerplatzen
+        sfx('poof', poofPatch);
+        pushBurst({ born: sceneT, center: [ev.x, hs, ev.z], seed: burstSeq++, count: 10, speed: 1.8 * cell, life: 0.4, size: 0.08 * cell, color: SHOT_COLOR });
+      }
     } else if (ev.type === 'spinner') {
       // Ohne Truemmer-Platten (Boris): Spinner sind reine LINIEN-Wesen --
       // flaechige Truemmer passen zu Tankern und Flippern, nicht hier.
@@ -475,7 +479,7 @@ export function createPlaying(game) {
           flippers: flippers.filter((f) => seen(flipperPos(f))),
           foes: shoot ? [
             ...enemies.filter((e) => e.alive && e.mode === 'hunt').map((e) => [e.x, e.z]),
-            ...spinners.filter((s) => s.alive).map(spinnerTip),
+            ...spinners.filter((s) => spinnerShown(s) && s.spike > 0).map(spinnerTip),
             ...foeShots.map(spinnerShotPos),
           ].filter(seen) : null,
         }).keys
@@ -566,10 +570,12 @@ export function createPlaying(game) {
         }
       }
 
-      // Spinner: Spike waechst, Vorlauf/Rueckzug pendelt; Koerper-Beruehrung
-      // ODER frontales Kreuzen der Spitze = Game Over (der Spinner
-      // ueberlebt beides -- Feinde explodieren nicht mit).
+      // Spinner: wachen bei Annaeherung auf (zwei Ecken), wandern und
+      // verlaengern den Spike; Koerper-Beruehrung ODER frontales Kreuzen der
+      // Spitze = Game Over (der Spinner ueberlebt beides -- Feinde
+      // explodieren nicht mit).
       if (spinners.length) {
+        wakeSpinners(spinners, maze, px, pz, unit);
         spinnersStep(spinners, dt, cell);
         const hit = spinnerPlayerHit(spinners, px, pz, RADIUS_RATIO * cell, cell,
           { px: prevX, pz: prevZ });
@@ -577,9 +583,9 @@ export function createPlaying(game) {
           startCrash(hit, { color: spinnerCol, height: SPINNER.height * cell });
           return;
         }
-        // Ab Level 21 (spinners.shoot): steht man im Gang eines Spinners
-        // und hat ihn vor sich, loest sich gelegentlich ein sirrender
-        // Schuss von der Spike-Spitze -- das Duell, nicht die Ferne.
+        // Steht man im Gang eines Spinners und hat ihn vor sich, loest
+        // sich gelegentlich ein sirrender Schuss aus seinem Koerper -- das
+        // Duell, nicht die Ferne.
         if (spinnerFire(spinners, foeShots, dt, foeRng, { px, pz, yaw }, cell).length) {
           game.audio?.play(whirrPatch());
           recEvent('sound', { name: 'whirr' });
@@ -645,7 +651,7 @@ export function createPlaying(game) {
           unit, cell, enemies, enemyRadius: ENEMY.shotRadius * cell,
           hitTest: (x, z, shot) => (foeShots.length ? spinnerShotIntercept(foeShots, x, z, cell) : null)
             ?? (flippers.length ? flipperShotHit(flippers, x, z, cell, shot) : null)
-            ?? (spinners.length ? spinnerShotHit(spinners, x, z, cell) : null),
+            ?? (spinners.length ? spinnerShotHit(spinners, x, z, cell, foeShots) : null),
         });
         for (const ev of events) {
           spawnShotEvent(ev);
