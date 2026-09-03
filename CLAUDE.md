@@ -103,7 +103,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 492 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 509 grün auf sturm-feinde).
 - `npm run build` — Deployment-Build nach `dist/` (tools/build.mjs, pure
   Kopie: index.html an die Wurzel + favicon.ico + public/ + src/, ohne
   proto2026; Inhalt 1:1 in den WEBROOT von mazestorm.io/.de — wegen der
@@ -180,7 +180,39 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   `aheadEnd` (foePlacement) ist die geteilte "Ende voraus"-Logik von
   Spinnern und Alleys. Sound `tumblePatch`. Sichtpruefungs-Skript
   cdp-alley.mjs (Scratchpad, Demo-Autopilot per `g.demo = true` +
-  `current.onKey('S')` ohne die 30 s Idle; --use-angle=swiftshader).
+  `current.onKey('S')` ohne die 30 s Idle; --use-angle=swiftshader;
+  FALLE: das Backend faellt bei einem Ladefehler STILL auf 1980 zurueck --
+  im ERRORS-Log nachsehen, `node --check` auf backend/world3d nach jedem
+  Import-Umbau). STUFE 2 (Flipper): Zwangs-Flip bei flipDist 1.2 vor dem
+  Spieler (einmal pro Annaeherung, forced/flipReset), Diagonal-
+  RETTUNGSSCHUSS (flipperDiagonal, 45 +-12 Grad) als exaktes Ebenen-
+  KREUZEN -- shots.js reicht dem hitTest jetzt das Schuss-Objekt (x/z =
+  Vor-Lage des Substeps); Dauerfeuer ~51 %, gezielt bis 0.03 s nach
+  Klappbeginn (Experten-Timing, Tuning offen). STUFE 3 (Spinner): Spike
+  WANDVERANKERT (Spitze bei t = spike), Koerper pendelt Wand<->Spitze
+  (advance 0.5/retreat 0.8, jeder Vorlauf `step` 0.4 weiter = Wachstum),
+  schlaeft bis `wakeSpinners` (Ecken-BFS turnMap, WeakMap-Cache, rohes
+  Grid), verwundbar nur `spinnerExposed` (an der Spitze/freigekuerzt), kein
+  Schild, feuert IMMER aus dem Koerper (shoot-Flag weg), toter Spinner
+  laesst den Spike stehen (`spinnerShown` in egoWorld/backend-FOE_KINDS.
+  show); Treffer schneidet Spitzen-Stueck + zerstoert Spinner-Schuesse
+  darin (+intercept dahinter); shorten 0.45 (Kuerz-Rate MUSS cruise
+  schlagen -- im Fahrt-Modus kann man nicht bremsen). STUFE 4 (Pulsare):
+  Gyro immer 360 (GYRO.amounts=[2pi]); `maze.openings` Overlay (Set
+  y*n+x, `openingKey`) in isOpenCell -> alle Begehbarkeits-/Sichtlinien-
+  Leser; `pulsarOpenings(pulsars, maze, time)` (Takt closedTime 2.5/
+  openTime 0.8/ramp 0.25 mit Phase, Pulsar traegt fix/lo/hi/mid; seitlich
+  5, oben/unten 3 je Seite, Klappen 1; nie Rand/Einmuendung),
+  `resolveWallOverlap` drueckt beim Schliessen (Epsilon vor der Kante),
+  Replay rechnet Phantome aus den Puppen; 2026 `installHoles` (onBefore-
+  Compile auf wallMat/lineMat/wallGridMat/mirrorLineMat, MAX_HOLES 16,
+  discard mit 24-Hz-Hash) + `updateHoles` pro Frame. STUFE 5 (Superzapper
+  Z/Y): world/zapper.js (zapTargets Kegel+Sichtlinie nah->fern, startZap
+  setzt `zapAt` = sofort entschaerft/unverwundbar -- die Feind-Module
+  pruefen zapAt --, zapStep toetet gestaffelt); `game.zapper` laedt pro
+  frischem Anlauf, Resume behaelt; Feind-Schuesse verpuffen; Blitz 1980/
+  2026/Replay (Event 'zap'), zapPatch, HUD 'Z ZAP', ZAP-Chip, Autopilot
+  zappt ab AUTOPILOT.zapCount 3. Messlauf-Skript measure.mjs (Scratchpad).
 - **TOUCH + MOBILE (1.9.2026, Boris' Entscheid "Mini-Automat" + Floating
   D-Pad):** Beruehrungen erzeugen EXAKT die Tastatur-Tasten -- die Spiel-
   logik (Rampen, Gyro-Mapping, Autopilot, Recorder/Replay) kennt keinen
