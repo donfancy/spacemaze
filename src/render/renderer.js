@@ -44,6 +44,16 @@ export class Renderer {
     ctx.fillRect(0, 0, this.width, this.height);
   }
 
+  // Transparent loeschen (Overlay-Canvas des Touch-Decks, main.js): der
+  // Hintergrund bleibt sichtbar -- im Querformat liegt das Deck ueber der Welt.
+  clearFrame() {
+    const ctx = this.ctx;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+    ctx.clearRect(0, 0, this.width, this.height);
+  }
+
   // Bildraum-Schwenk (siehe render/sway.js): dreht/verschiebt alles bis popSway
   // um die Bildmitte -- fuer Kurvenneigung und Kollisions-Schwingungen, ohne die
   // (horizontale) 3D-Kamera anzutasten. Immer mit popSway paaren.

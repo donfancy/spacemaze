@@ -39,6 +39,15 @@ Nutzt den eingebauten `node:test`-Runner (keine externen Dependencies).
 - Im Labyrinth (Ego-Ansicht, Tank-Steuerung, Level 1–5): `↑` vor, `↓` zurück,
   `←`/`→` drehen, `X` Rückschwenk zur Karte (am Ziel automatisch nach 20 s);
   Anfahren, Bremsen und Drehen laufen über Beschleunigungs-Rampen
+- **Touch / Mobile** (Handy, Tablet — oder `?touch=1`): das Spiel erzeugt aus
+  Berührungen exakt dieselben Tasten. Im HOCHFORMAT wird das Handy zum
+  Mini-Automaten: oben die Welt, unten ein Bedien-Deck mit Floating-D-Pad
+  (links; das Kreuz entsteht, wo der Daumen aufsetzt, Ziehen = Pfeile, acht
+  Richtungen), FIRE-Ring (rechts, ab Level 11, Halten = Dauerfeuer) und
+  Chips für die jeweils gültigen Aktionen (START/MAP/RETURN/REPLAY/EXIT,
+  INFO, SOUND, SWAP tauscht die Seiten). Im QUERFORMAT liegt dasselbe Deck
+  durchsichtig über der Welt (Chips oben rechts). Startbildschirm: Wischen
+  links/rechts = Level, rauf/runter = Engine, Tippen = Start
 - `M` schaltet den Sound stumm/laut (alles synthetisch per Web Audio: leises
   Fahrgeräusch, dumpfer Bump an der Wand, ab Level 6 Motor + Kurven-Sirren und
   elektrisches Brutzeln bei Kollisionen, Drei-Ton-Fanfare am Ziel; dazu ein

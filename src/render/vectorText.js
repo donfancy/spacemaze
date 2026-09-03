@@ -27,6 +27,14 @@ export function measureText(text, opts = {}) {
   };
 }
 
+// Groesste Glyphenhoehe <= `size`, bei der `text` in `maxWidth` Pixel passt
+// (Hochformat/schmale Fenster: Hinweiszeilen und die Info-Tabelle schrumpfen,
+// statt aus dem Bild zu laufen).
+export function fitSize(text, size, maxWidth, opts = {}) {
+  const w = measureText(text, { ...opts, size }).width;
+  return w > maxWidth && w > 0 ? size * (maxWidth / w) : size;
+}
+
 // Erzeugt die Polylinien fuer `text`.
 // opts:
 //   x, y      Ankerposition in Pixeln

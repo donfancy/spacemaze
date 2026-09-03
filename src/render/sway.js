@@ -12,7 +12,12 @@
 // Vorzeichen: roll > 0 = Kamera legt sich nach rechts -> Bild dreht sich
 // ENTGEGEN (Canvas-Winkel -roll). pitch > 0 = Blick hebt sich -> Szene
 // wandert im Bild nach unten (dy > 0, Canvas-y waechst nach unten).
+import { focalLength, narrowExtent } from './projection.js';
+
 export function swayTransform(roll, pitch, viewport) {
-  const focal = (viewport.height / 2) / Math.tan(viewport.fov / 2); // Pixel
+  // Brennweite nach der Schmale-Achse-Regel (render/projection.js): ohne
+  // width (alte Aufrufer/Tests) zaehlt die Hoehe.
+  const extent = narrowExtent(viewport.width ?? viewport.height, viewport.height);
+  const focal = focalLength(viewport.fov, extent); // Pixel
   return { angle: -roll, dy: Math.tan(pitch) * focal };
 }

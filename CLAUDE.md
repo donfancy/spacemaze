@@ -103,7 +103,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 448 grün).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 492 grün).
 - `npm run build` — Deployment-Build nach `dist/` (tools/build.mjs, pure
   Kopie: index.html an die Wurzel + favicon.ico + public/ + src/, ohne
   proto2026; Inhalt 1:1 in den WEBROOT von mazestorm.io/.de — wegen der
@@ -111,6 +111,8 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - `node server.js` / `npm start` — Dev-Server auf Port 3001.
   **Boris startet den Server selbst** in einer eigenen Shell — NICHT für ihn starten.
 - Debug-Overlay im Browser: `http://localhost:3001/?debug`.
+- Touch-Deck am Desktop erzwingen: `?touch=1` (Maus bedient das Deck; `?touch=0`
+  schaltet es auf dem Handy ab). Sichtpruefung: Scratchpad `cdp-touch.mjs`.
 - 2026-Engine (PLAN2026.md): `http://localhost:3001/?engine=2026` (Stand:
   Stufe 5 — ALLE Levels 1–30 komplett in 2026: voller Zyklus, Startscreen
   in Prototyp-Optik samt **Live-Schalter „1980 / 2026“** (←/→ Level, ↑/↓
@@ -144,6 +146,8 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   corridorCandidates/straightRuns/openSpan + Querschnitts-Kinematik der
   Flipper/Pulsare), gyro (Blickachsen-Rotation ab 26), shots, stars
 - `src/render/` — renderer.js (EINZIGER Canvas-Teil), projection.js, occlusion.js
+- `src/input/` — layout.js (Bildschirm-Aufteilung + Bedien-Deck, pur), touch.js
+  (Touch-Automat Finger → Tasten, pur), touchDraw.js (Deck ueber die Renderer-API)
 - `src/sound/` — patches.js (Klaenge als reine Daten, testbar), audio.js
   (EINZIGER Web-Audio-Teil, analog renderer.js)
 - `src/core/` — states.js (Zustands-Automat), game.js (Orchestrierung; dispatch
@@ -153,6 +157,41 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   (gemeinsamer Flächen-Renderer)
 
 ## Stand & wichtige technische Punkte
+- **TOUCH + MOBILE (1.9.2026, Boris' Entscheid "Mini-Automat" + Floating
+  D-Pad):** Beruehrungen erzeugen EXAKT die Tastatur-Tasten -- die Spiel-
+  logik (Rampen, Gyro-Mapping, Autopilot, Recorder/Replay) kennt keinen
+  Touch. `input/layout.js` (pur): `screenLayout` teilt das Fenster -- im
+  HOCHFORMAT Welt oben (VIEW_SHARE 0.6) + Deck unten (Handy = kleiner
+  Arcade-Automat), im QUERFORMAT Welt voll + Deck als durchsichtiges
+  Overlay; `deckModel` liefert pro Zustand Pad/FIRE/Chips/Tipp-Baender/
+  Wisch-Flaeche in Fenster-Pixeln (Chip-Saetze folgen den Hinweiszeilen
+  aus core/hud.js; Demo = Startscreen-Satz; Karte im Querformat stapelt
+  die Chips im Seitenrand; Reihen schrumpfen auf die Deck-Breite --
+  Label-Breite per measureText, die Schaetzung war 2x zu breit). `input/
+  touch.js` (pur): Floating-D-Pad (Ursprung = Aufsetzpunkt, PAD_DEAD 14 px,
+  8 Sektoren a 45 Grad, diagonal = zwei Pfeile), Feuer-Zone haelt Space,
+  Chips tippen beim AUFSETZEN (Arcade-Knopf), Gesten entscheiden beim
+  LOSLASSEN (Wisch >= 40 px = Pfeil in Wischrichtung, Tipp = S bzw. X bei
+  offener Info, Tipp-Baender ueber LEVEL-/Engine-Zeile). main.js: Touch-
+  Modus per `?touch=1/0`, sonst `(pointer: coarse)` + erste echte Beruehrung;
+  gehaltene Tasten spiegeln keydown/keyup in game.keys (in der Demo nicht),
+  getippte laufen nur durch handleKey; Overlay-Canvas `#touch` mit eigenem
+  Renderer (`clearFrame` transparent) ueber BEIDEN Engines, Farbe = Level-
+  Farbe; SWAP-Chip spiegelt Pad/FIRE (localStorage mazestorm.touchMirror --
+  Boris' Frage "am Keyboard ist Feuer links"; Default = Touch-Konvention
+  Lenken links, Feuern rechts). Sichere Raender per env(safe-area-inset-*)
+  ueber ein Padding-Probe-Element; viewport-fit=cover; touchstart/touchmove
+  preventDefault + overscroll-behavior gegen Scroll/Zoom/Pull-to-Refresh.
+  SCHMALE-ACHSE-REGEL (render/projection.js): `fov` gilt ueber die
+  SCHMALERE Bildachse -- `project` nimmt min(width,height) als Brennweiten-
+  Basis, `verticalFov` liefert das Three.js-Pendant (backend.applyFov bei
+  setFov UND resize); Hochformat hatte vorher Tunnelblick (~39 Grad
+  horizontal) und abgeschnittene Karten/Platten. Folgen: sway.js braucht
+  `width` im Viewport (alte Aufrufer ohne width: Hoehe), faceDockPose fuellt
+  die schmale Achse, Minimap-Radius an min(hh, hw); 2026-Overlays in
+  cq-Einheiten (Wurzel `container-type:size`, Groesse/Lage aus resize(rect)),
+  1980-Texte per `fitSize` (vectorText.js) auf die Breite gekuerzt (Steuer-
+  zeile, Info-Tabelle). Debug-Haken `window.mazestormTouch()` = Trefferzonen.
 - **END-KAMERA-SCHNITT + Feind ueberlebt (1.9.2026, Boris' Politur-Paket):**
   (1) Beim Spieler-Crash explodiert der FEIND nicht mehr mit (startCrash
   ohne `kill` -- der Sieger bleibt stehen, wie schon immer beim
@@ -257,8 +296,8 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   — der Licht-Verlauf läuft am Schnitt weiter; Rahmen-Glow blendet
   (setLineGlow(markerFade) bzw. (fade)); GLANZLICHT wischt beim
   Ankommen/Abschied diagonal über die Platte (`sweepSheen`). Details:
-  PLAN2026.md Stufe 6 (dort auch die offene Ego-Hälfte: Wände als
-  gefrästes Volumen + Deckel).
+  PLAN2026.md Stufe 6 (die Ego-Hälfte — Wände als gefrästes Volumen — ist
+  1.9.2026 GESTRICHEN, die Deckel reichen).
 - **Stufe 6 — MINI-MAP statt Kompass (29.8.2026):** die 2026-Ego-Ansicht
   hat rechts unten eine runde, MITDREHENDE Ausschnitts-Karte (heading up
   wie die 1980-Kompass-Rose: oben = Blickrichtung). `render2026/minimap.js`
@@ -670,10 +709,19 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   **Stufenplan: PLAN2026.md** (dort auch die Testrezepte: CDP-Headless-Chrome,
   Server auf 3999, NIE 3001). Prototyp + gelernte GPU-Fallen:
   public/proto2026/ (README). Three.js r185 vendored, kein Build-Tool.
-- Nächste mögliche Themen: **TOUCH-BEDIENUNG (Backlog-Pflicht, Boris
-  31.8.2026 — seit dem Live-Gang auf mazestorm.io testet er andere
-  Plattformen, mobil ist das Spiel ohne Tasten unspielbar)**; echter
-  "Trench Run", Politur; Score/HUD.
+- TOUCH-BEDIENUNG + MOBILE: UMGESETZT 1.9.2026 (s. Stand oben). Daumen-Test
+  3.9.2026 bestanden (iPad 2022 + iPhone 13, beide Engines fluessig, Boris:
+  "fuehlt sich fantastisch an"). EINZIGER offener Punkt: Safari im
+  Browser-QUERFORMAT mit eingeblendeter Tab-Leiste -- das Bild wird zu
+  schmal/niedrig; Idee: PWA (site.webmanifest hat display fullscreen, per
+  "Zum Home-Bildschirm" ohne Browser-Chrome) oder Layout-Regel fuer sehr
+  flache Viewports. Anderes Mal.
+  GESTRICHEN (Boris' Aufräum-Entscheid 1.9.2026 — nicht wieder
+  vorschlagen): Score/HUD, Gestaltungs-Pass (Kleinigkeiten „on call"),
+  Fräsen-Ego-Hälfte (Deckel reichen), Trench Run (wird mal ein EIGENES
+  Spiel — MAZESTORM bleibt ein Labyrinth), Sound-Reste, kleine
+  Design-Fragen, Eine-HTML-Datei. Danach bleiben: Performance-Pass,
+  proto2026-Abschied, playing.js-Zerlegung, optional WebGPU.
   Aufgeschobene (Performance-)Ideen mit Messwerten: siehe IDEAS.md.
 - Performance-Basics sind drin: kollineare Wandzüge werden zusammengefasst
   (`mergeCollinear` — Unter-/Oberkanten lang, Pfosten bleiben an jeder

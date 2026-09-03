@@ -27,3 +27,9 @@ test('Blick hebt sich (pitch > 0) -> Szene wandert nach unten, skaliert mit der 
   const tele = swayTransform(0, 0.05, { height: 600, fov: Math.PI / 4 });
   assert.ok(tele.dy > dy);
 });
+
+test('Hochformat: die Brennweite folgt der BREITE (Schmale-Achse-Regel)', () => {
+  const a = swayTransform(0, 0.05, { width: 600, height: 800, fov: Math.PI / 2 });
+  const b = swayTransform(0, 0.05, { width: 600, height: 600, fov: Math.PI / 2 });
+  assert.ok(Math.abs(a.dy - b.dy) < 1e-12, 'gleiche Breite = gleiche Brennweite');
+});

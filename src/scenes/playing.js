@@ -31,6 +31,7 @@
 
 import { GameEvent } from '../core/states.js';
 import { playHint } from '../core/hud.js';
+import { fitSize } from '../render/vectorText.js';
 import { createRecording, recordFrame, recordEvent } from '../core/recorder.js';
 import { createCamera } from '../math/camera.js';
 import { createOscillator } from '../math/oscillator.js';
@@ -700,7 +701,7 @@ export function createPlaying(game) {
       // Roll um die Blickachse ist exakt eine 2D-Rotation um die Bildmitte,
       // auch bei 90/180/270 Grad Dauerzustand.
       if (drive) {
-        renderer.pushSway(swayTransform(bank + rollOsc.x + gyro.roll, pitchOsc.x, { height: renderer.height, fov: camera.fov }));
+        renderer.pushSway(swayTransform(bank + rollOsc.x + gyro.roll, pitchOsc.x, { width: renderer.width, height: renderer.height, fov: camera.fov }));
       }
       // Die komplette Welt (Waende, Sterne, Ziel, Feuerwerk, Wellen, Feinde,
       // Schuesse, Splitter) zeichnet der gemeinsame Welt-Zeichner -- exakt
@@ -750,8 +751,9 @@ export function createPlaying(game) {
       // Verdrehung: bei 90/270 Grad lenkt man mit runter/rauf. In der Demo
       // entfaellt sie (keine Controls -- das PRESS-S-Overlay liegt drueber).
       if (!game.demo) {
-        renderer.drawText(playHint({ drive, shoot, orient: gyro.orient }), {
-          x: w - 24, y: h - 20, size: 13,
+        const hint = playHint({ drive, shoot, orient: gyro.orient });
+        renderer.drawText(hint, {
+          x: w - 24, y: h - 20, size: fitSize(hint, 13, w - 48),
           align: 'right', baseline: 'bottom', intensity: 0.5,
         });
       }

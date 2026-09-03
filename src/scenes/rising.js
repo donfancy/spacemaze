@@ -74,7 +74,7 @@ export function createRising(game) {
       // horizontal) klingt mit dem Ease auf 0 ab -- die Karte kommt aufrecht an.
       const roll = (game.viewRoll ?? 0) * (1 - e);
       if (Math.abs(roll) > 1e-4) {
-        renderer.pushSway(swayTransform(roll, 0, { height: renderer.height, fov: camera.fov }));
+        renderer.pushSway(swayTransform(roll, 0, { width: renderer.width, height: renderer.height, fov: camera.fov }));
       }
 
       // Nach dem Crash beginnt der Schwenk voll ZERSCHERBT (nahtlos zum

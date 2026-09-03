@@ -34,7 +34,9 @@ export function pickDockFace(viewDir, faces = SIDE_FACES) {
 }
 
 // Frontalsicht-Pose senkrecht vor einer Flaeche; das Quadrat (Kantenlaenge
-// `squareSize`) fuellt den Screen vertikal zu `fill`. Liefert {position, yaw, pitch}.
+// `squareSize`) fuellt die SCHMALE Bildachse zu `fill` (fov gilt nach der
+// Schmale-Achse-Regel, render/projection.js -- im Hochformat also die
+// Breite). Liefert {position, yaw, pitch}.
 export function faceDockPose(face, squareSize, fov, fill = 0.85) {
   const half = squareSize / 2;
   const dist = squareSize / (2 * Math.tan(fov / 2) * fill);

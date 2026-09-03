@@ -290,7 +290,7 @@ export function createReplay(game) {
       const sway = Math.abs(cur.roll) > 1e-4 || Math.abs(cur.pitch) > 1e-4;
       if (sway) {
         renderer.pushSway(swayTransform(cur.roll, cur.pitch, {
-          height: renderer.height, fov: camera.fov,
+          width: renderer.width, height: renderer.height, fov: camera.fov,
         }));
       }
       renderEgoWorld(renderer, camera, {

@@ -4,9 +4,28 @@
 // View-Space-Konvention (siehe camera.js): die Kamera schaut entlang -z,
 // sichtbare Punkte haben also z < 0 (vor der Kamera).
 
-// Brennweite in Pixeln aus vertikalem Sichtfeld und Bildhoehe.
-export function focalLength(fov, height) {
-  return (height / 2) / Math.tan(fov / 2);
+// Brennweite in Pixeln aus Sichtfeld und Bild-AUSDEHNUNG (Pixel) der Achse,
+// auf die sich das Sichtfeld bezieht.
+export function focalLength(fov, extent) {
+  return (extent / 2) / Math.tan(fov / 2);
+}
+
+// SCHMALE-ACHSE-REGEL (1.9.2026, Mobile/Hochformat): `fov` ist das Sichtfeld
+// ueber die SCHMALERE Bildachse -- im Querformat wie immer die Hoehe, im
+// Hochformat die Breite. Ein festes VERTIKALES Sichtfeld liess im Hochformat
+// horizontal nur ~39 Grad uebrig (Tunnelblick) und schnitt Karte/Platte
+// links und rechts ab; jetzt bleibt die Weltbreite im Bild erhalten und die
+// hohe Achse zeigt einfach mehr Himmel/Boden. Gilt fuer BEIDE Engines
+// (2026 rechnet daraus per verticalFov das Three.js-fov).
+export function narrowExtent(width, height) {
+  return Math.min(width, height);
+}
+
+// Vertikales Sichtfeld, das im Bild (width x height) genau `fov` ueber die
+// schmale Achse ergibt (Querformat: unveraendert).
+export function verticalFov(fov, width, height) {
+  if (width >= height) return fov;
+  return 2 * Math.atan(Math.tan(fov / 2) * (height / width));
 }
 
 // Projiziert einen einzelnen View-Space-Punkt auf den Bildschirm.
@@ -19,7 +38,7 @@ export function project(viewPoint, viewport) {
   // Sichtbar nur, wenn weiter weg als die Near-Plane (z negativer als -near).
   if (vz > -near) return null;
 
-  const f = focalLength(fov, height);
+  const f = focalLength(fov, narrowExtent(width, height)); // Schmale-Achse-Regel
   const depth = -vz; // positive Tiefe vor der Kamera
   return {
     x: width / 2 + (f * vx) / depth,

@@ -27,6 +27,7 @@
 
 import { GameEvent } from '../core/states.js';
 import { blinkOn, copyrightLine, INFO_TITLE, INFO_LINES } from '../core/hud.js';
+import { fitSize } from '../render/vectorText.js';
 import { drawSelector } from './demoOverlay.js';
 import { TITLE, TITLE_WORD, titleZoom, titleAlpha, titleColor, titleFlash } from '../world/title.js';
 import { stepLevel, levelColor, MIN_LEVEL, MAX_LEVEL } from '../core/levels.js';
@@ -198,9 +199,11 @@ export function createStartscreen(game) {
     const w = renderer.width;
     const h = renderer.height;
     const size = Math.max(18, Math.min(42, h * 0.05));
-    const rowSize = size * 0.5;
-    const rowH = rowSize * 1.8;
     const gutter = size * 0.6;             // Luft zwischen Tasten- und Text-Spalte
+    // Hochformat: die laengste Zeile muss rechts der Mitte Platz haben.
+    const longest = INFO_LINES.reduce((m, [, t]) => (t.length > m.length ? t : m), '');
+    const rowSize = fitSize(longest, size * 0.5, w / 2 - gutter - 16);
+    const rowH = rowSize * 1.8;
     const top = Math.max(48, h * 0.14) + size * 2.6;
 
     renderer.drawText(INFO_TITLE, {

@@ -29,6 +29,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { State } from '../core/states.js';
+import { verticalFov } from '../render/projection.js';
 import {
   playHint, mapHint, replayHint, replayStatus, gameOverColor, blinkOn, displayLevel,
   selectorArrows, copyrightLine, INFO_TITLE, INFO_LINES,
@@ -258,7 +259,10 @@ export function createBackend2026(container = document.body) {
   // Alles DOM (Canvas + Overlays) lebt in EINEM Wurzel-Element -- der Live-
   // Engine-Schalter (Stufe 3) blendet damit die ganze 2026-Ausgabe ein/aus.
   const root = document.createElement('div');
-  root.style.cssText = 'position:fixed;inset:0;';
+  // Groesse/Lage setzt resize() (Touch/Mobile: im Hochformat nur der obere
+  // Teil, darunter das Bedien-Deck); container-type macht die cq-Einheiten
+  // der Overlays relativ zu DIESEM Ausschnitt statt zum Fenster.
+  root.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;container-type:size;';
   container.appendChild(root);
 
   // --- Renderer + Bloom-Kette (Rezept aus public/proto2026/) ------------------
@@ -271,12 +275,23 @@ export function createBackend2026(container = document.body) {
 
   const camera = new THREE.PerspectiveCamera(EGO_FOV, 1, 0.1, 2000);
   camera.rotation.order = 'YXZ'; // erst Gieren (yaw), dann Nicken, dann Rollen
+  // Schmale-Achse-Regel (render/projection.js, 1.9.2026): das gewuenschte
+  // fov gilt ueber die SCHMALERE Bildachse -- im Hochformat wird daraus
+  // ein weiteres vertikales Three.js-fov (sonst Tunnelblick + abgeschnittene
+  // Karte). reqFov = Wunsch, curFov = effektives vertikales Kamera-fov.
+  let reqFov = EGO_FOV;
   let curFov = EGO_FOV;
-  function setFov(f) {
-    if (Math.abs(f - curFov) < 1e-3) return;
-    curFov = f;
-    camera.fov = f;
+  function applyFov() {
+    const eff = THREE.MathUtils.radToDeg(
+      verticalFov(THREE.MathUtils.degToRad(reqFov), camera.aspect, 1));
+    if (Math.abs(eff - curFov) < 1e-3) return;
+    curFov = eff;
+    camera.fov = eff;
     camera.updateProjectionMatrix();
+  }
+  function setFov(f) {
+    reqFov = f;
+    applyFov();
   }
 
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -303,19 +318,19 @@ export function createBackend2026(container = document.body) {
     return el;
   }
   const label = overlay('left:14px;bottom:12px;font-size:12px;line-height:1.5;');
-  const title = overlay('left:0;right:0;top:9vh;text-align:center;' +
-    'font-size:min(5vh,42px);letter-spacing:.18em;');
-  const switchLine = overlay('left:0;right:0;top:calc(9vh + min(6.5vh,54px));' +
-    'text-align:center;font-size:min(2.6vh,22px);letter-spacing:.18em;');
-  const press = overlay('left:0;right:0;bottom:9vh;text-align:center;' +
-    'font-size:min(5vh,42px);letter-spacing:.18em;');
-  const headline = overlay('left:0;right:0;top:12vh;text-align:center;' +
-    'font-size:min(7vh,52px);letter-spacing:.18em;');
+  const title = overlay('left:0;right:0;top:9cqh;text-align:center;' +
+    'font-size:min(5cqh,42px,7cqw);letter-spacing:.18em;');
+  const switchLine = overlay('left:0;right:0;top:calc(9cqh + min(6.5cqh,54px));' +
+    'text-align:center;font-size:min(2.6cqh,22px,4cqw);letter-spacing:.18em;');
+  const press = overlay('left:0;right:0;bottom:9cqh;text-align:center;' +
+    'font-size:min(5cqh,42px,7cqw);letter-spacing:.18em;');
+  const headline = overlay('left:0;right:0;top:12cqh;text-align:center;' +
+    'font-size:min(7cqh,52px,9cqw);letter-spacing:.18em;');
   // Info-Seite "HOW TO PLAY" (I im Startscreen, Attract-Pause): Inhalt aus
   // core/hud.js (INFO_TITLE/INFO_LINES), einmal statisch aufgebaut.
   const infoEl = overlay('left:50%;top:50%;transform:translate(-50%,-52%);' +
-    'font-size:min(2.4vh,18px);letter-spacing:.14em;line-height:2;' +
-    'background:rgba(0,10,4,.55);padding:2.5vh 4vw;border:1px solid rgba(80,255,140,.3);');
+    'font-size:min(2.4cqh,18px,3cqw);letter-spacing:.14em;line-height:2;' +
+    'background:rgba(0,10,4,.55);padding:2.5cqh 4cqw;border:1px solid rgba(80,255,140,.3);');
   infoEl.innerHTML =
     `<div style="text-align:center;font-size:1.5em;margin-bottom:.7em">${INFO_TITLE}</div>` +
     '<table style="border-spacing:1.6em .1em">' +
@@ -325,12 +340,12 @@ export function createBackend2026(container = document.body) {
     '</table>';
   infoEl.style.display = 'none';
   // Dezenter Hinweis auf die Info-Seite, ganz unten (wie 1980).
-  const infoHint = overlay('left:0;right:0;bottom:2.5vh;text-align:center;' +
-    'font-size:min(1.8vh,14px);letter-spacing:.18em;opacity:.5;');
+  const infoHint = overlay('left:0;right:0;bottom:2.5cqh;text-align:center;' +
+    'font-size:min(1.8cqh,14px,3cqw);letter-spacing:.18em;opacity:.5;');
   // Arcade-Copyright unterm Titel-Display (Boris 1.9.2026): klein aber
   // sichtbar, unter der kamera-verankerten Voxel-Schrift-Ebene.
-  const copyEl = overlay('left:0;right:0;top:64vh;text-align:center;' +
-    'font-size:min(2vh,16px);letter-spacing:.22em;');
+  const copyEl = overlay('left:0;right:0;top:64cqh;text-align:center;' +
+    'font-size:min(2cqh,16px,3.5cqw);letter-spacing:.22em;');
 
   // Weisser Einschlag-Blitz des Crashs (Stufe 4) -- das 2026-Pendant zu
   // renderer.flash; liegt UNTER dem Fade (der Szenen-Uebergang deckt alles).
@@ -1591,9 +1606,11 @@ export function createBackend2026(container = document.body) {
     // Kamera-Verankerung: Pose 1:1 uebernehmen und die Scheibe rechts unten
     // in den Sichtkegel legen (Radius als fester Anteil der Bildhoehe).
     const hh = Math.tan((curFov * Math.PI) / 360) * MM_DIST; // halbe Bildhoehe bei MM_DIST
-    const r = MM_SCREEN * 2 * hh;
-    const margin = MM_MARGIN * 2 * hh;
-    mmOffset.set(hh * camera.aspect - r - margin, -(hh - r - margin), -MM_DIST)
+    const hw = hh * camera.aspect;                              // halbe Bildbreite
+    const base = Math.min(hh, hw); // Hochformat: an der Breite messen, sonst riesig
+    const r = MM_SCREEN * 2 * base;
+    const margin = MM_MARGIN * 2 * base;
+    mmOffset.set(hw - r - margin, -(hh - r - margin), -MM_DIST)
       .applyQuaternion(camera.quaternion);
     mm.group.position.copy(camera.position).add(mmOffset);
     mm.group.quaternion.copy(camera.quaternion);
@@ -2380,12 +2397,19 @@ export function createBackend2026(container = document.body) {
       };
     },
 
-    resize(cssWidth, cssHeight, dpr = 1) {
+    // rect = Lage des Welt-Ausschnitts im Fenster (input/layout.js); ohne
+    // rect bleibt die Wurzel am Fenster-Ursprung.
+    resize(cssWidth, cssHeight, dpr = 1, rect = null) {
       renderer.setPixelRatio(dpr); // Deckelung (max 2) macht der Aufrufer
       renderer.setSize(cssWidth, cssHeight);
       composer.setSize(cssWidth, cssHeight);
       camera.aspect = cssWidth / cssHeight;
       camera.updateProjectionMatrix();
+      applyFov(); // Schmale-Achse-Regel neu auswerten
+      root.style.left = (rect?.x ?? 0) + 'px';
+      root.style.top = (rect?.y ?? 0) + 'px';
+      root.style.width = cssWidth + 'px';
+      root.style.height = cssHeight + 'px';
     },
 
     // Hartes Lebensende (kompletter Rueckbau): Welt, Startscreen-Szene,
