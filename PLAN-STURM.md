@@ -190,6 +190,21 @@ verwundbar nur beim Vorlauf, an der Wand geschützt. Neu:
   wallMat und verschwinden mit. Kein Geometrie-Umbau.
 - Karte/Trail: ein Gangwechsel zeichnet die Weglinie durch die Wand — so
   soll es sein (die Karte erzählt die Geschichte).
+- **UMGESETZT (Stufe 4, 3.9.2026):** `maze.openings` (Set aus Zellschlüsseln
+  y·n+x, `openingKey`) als Overlay in `isOpenCell` — damit sehen
+  `isWalkable`/`rectWalkable`/`hasLineOfSight`/Schüsse/Fahr-Kollision die
+  Phantome automatisch; die Spinner-Ecken-Karte liest bewusst das rohe
+  Grid. `pulsarOpenings(pulsars, maze, time)` ist eine reine Funktion der
+  Pulsar-Daten (fix/lo/hi/mid im Pulsar) + Zeit (Takt `cycleClock` mit
+  Phase, closedTime 2.5 / openTime 0.8 / ramp 0.25) → Replay rechnet sie
+  aus den Puppen nach. `resolveWallOverlap` (mazeWorld) drückt beim
+  Schließen auf die nähere Seite (Epsilon vor der Wandebene, sonst zählt
+  die Kante als Wand). 2026: `installHoles` (world3d) injiziert per
+  onBeforeCompile eine Loch-Liste (MAX_HOLES 16, xz-Boxen) in wallMat,
+  lineMat, wallGridMat, mirrorLineMat — Fragment-discard mit 24-Hz-
+  Raum-Zeit-Hash (12 % bleiben stehen = Flirren); `updateHoles` im Backend
+  füllt sie pro Frame (nächste zuerst), resetWorldFrame nullt sie. Die
+  Boden-Kontur bleibt als Geist des Stücks. Gyro: amounts = [2π].
 
 ### 5. Superzapper
 

@@ -60,7 +60,8 @@ import { pulsarMarkers, pulsarSegments } from '../world/pulsars.js';
 import { GLIDER } from '../world/glider.js';
 import {
   buildWorld, applyTheme, disposeWorld, hdr, setWallHeight, setMarkerFade,
-  UNITS_PER_CELL, FOG_DENSITY, HEADLIGHT_INTENSITY, EGO_BOOST, MIRROR_LINE_DIM,
+  UNITS_PER_CELL, FOG_DENSITY, HEADLIGHT_INTENSITY, EGO_BOOST, MIRROR_LINE_DIM,,
+  MAX_HOLES,
 } from './world3d.js';
 import { buildStartscreenScene } from './startscreen3d.js';
 import { skyTheme } from './skyTheme.js';
@@ -551,7 +552,29 @@ export function createBackend2026(container = document.body) {
 
   // Grundzustand pro Frame (jeder Zeichner setzt danach nur, was er braucht --
   // sonst schleppt ein Szenenwechsel die Sichtbarkeiten der Vorszene mit).
+  // Pulsar-WANDPHANTOME (Sturm): die Zell-Footprints der gerade offenen
+  // Wandstuecke als Loch-Boxen in die Shader-Uniforms (world3d.installHoles),
+  // die naechsten zuerst (Deckel MAX_HOLES). Zeit fuers Flirren.
+  function updateHoles(view) {
+    const h = world.holes;
+    const list = view.openings ?? [];
+    if (!list.length) { h.uHoleCount.value = 0; return; }
+    const k = world.kLocal;
+    const near = list.map((o) => {
+      const cx = (world.u(o.gx) + world.u(o.gx + 1)) / 2;
+      const cz = (world.u(o.gy) + world.u(o.gy + 1)) / 2;
+      return { o, d: Math.hypot(cx - view.px * k, cz - view.pz * k) };
+    }).sort((a, b) => a.d - b.d).slice(0, MAX_HOLES);
+    near.forEach(({ o }, i) => {
+      h.uHoles.value[i].set(world.u(o.gx) - 0.02, world.u(o.gy) - 0.02,
+        world.u(o.gx + 1) + 0.02, world.u(o.gy + 1) + 0.02);
+    });
+    h.uHoleCount.value = near.length;
+    h.uHoleTime.value = view.sceneT;
+  }
+
   function resetWorldFrame() {
+    world.holes.uHoleCount.value = 0;
     world.scene.fog.density = 0;
     world.headlight.intensity = 0;
     world.bumpLight.intensity = 0;
@@ -1946,6 +1969,7 @@ export function createBackend2026(container = document.body) {
     updateFoeShots(view, k);
     updateShotLights(view, k);
     updateFireworks(view);
+    updateHoles(view);
     if (view.crash && view.crash.t < CRASH_LIGHT_TIME) {
       const lp = world.crashLight.position;
       lp.set(view.crash.x * k, EYE, view.crash.z * k);
@@ -2212,6 +2236,7 @@ export function createBackend2026(container = document.body) {
     updateFoeShots(view, k);
     updateShotLights(view, k);
     updateFireworks(view);
+    updateHoles(view);
     updateSparks(view, view.bump, k, color); // Fahrt-Aufpraelle funken wie live
 
     // Crash in der Aufnahme: greller Licht-Puls am Einschlag (der weisse

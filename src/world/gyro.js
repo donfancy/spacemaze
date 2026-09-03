@@ -1,8 +1,11 @@
 // Gyro (ab Level 26): die ROTATION der Blickachse nach einer Pulsar-
 // Beruehrung. Der Blick rollt um die eigene Achse -- kurz rasch beschleunigt,
-// dann ebenso rasch gebremst (Dreiecks-Tempoprofil) -- und rastet nach 270,
-// 360 oder 450 Grad wieder im 90-Grad-Raster ein. Das Spiel laeuft in der
-// verdrehten Welt weiter (bis zum naechsten Pulsar). Reine Berechnung.
+// dann ebenso rasch gebremst (Dreiecks-Tempoprofil) -- und rastet wieder im
+// 90-Grad-Raster ein. STURM-Branch (Boris, 3.9.2026): der Betrag ist IMMER
+// 360 Grad (links- oder rechtsherum) -- die verdrehte Welt war unspielbar;
+// die Maschinerie fuer 270/450 (orient, gyroDirs, das rotierende
+// Tastenkreuz) bleibt liegen und ist mit orient 0 wirkungslos. Reine
+// Berechnung.
 //
 // WICHTIG (Hidden-Lines-Falle 4): der Roll geht NIE in die 3D-Kamerabasis,
 // sondern als Bildraum-Sway (render/sway.js) aufs fertige Bild -- ein Roll
@@ -17,7 +20,7 @@
 // haelt `orient` die zuletzt eingerastete Stellung getrennt vom Winkel.
 
 export const GYRO = {
-  amounts: [1.5 * Math.PI, 2 * Math.PI, 2.5 * Math.PI], // 270/360/450 Grad
+  amounts: [2 * Math.PI], // immer 360 Grad (Sturm-Branch; frueher 270/360/450)
   accel: 16, // rad/s^2: bis zur Haelfte beschleunigen, dann ebenso bremsen
              // (360 Grad dauern damit ~1.25 s, Spitze ~10 rad/s -- krass)
 };

@@ -1,5 +1,6 @@
 // Tests fuer den Gyro (world/gyro.js): die Blickachsen-Rotation nach einer
-// Pulsar-Beruehrung -- Betrag 270/360/450 Grad, Dreiecks-Tempoprofil (rasch
+// Pulsar-Beruehrung -- Betrag IMMER 360 Grad (Sturm-Branch; die 270/450-
+// Maschinerie bleibt als Funktion erhalten), Dreiecks-Tempoprofil (rasch
 // beschleunigt, rasch gebremst), exaktes Einrasten im 90-Grad-Raster -- und
 // das "logische" Tasten-Mapping unter der Verdrehung.
 
@@ -17,8 +18,9 @@ function fixedRng(values) {
   return () => values[i++ % values.length];
 }
 
-test('startSpin: Betrag 270/360/450 Grad, Richtung aus dem rng, Dauer aus dem Profil', () => {
-  for (const [pick, theta] of [[0, 1.5 * Math.PI], [0.4, 2 * Math.PI], [0.9, 2.5 * Math.PI]]) {
+test('startSpin: Betrag IMMER 360 Grad (Sturm), Richtung aus dem rng, Dauer aus dem Profil', () => {
+  assert.deepEqual(GYRO.amounts, [2 * Math.PI], 'nur noch die volle Drehung -- die verdrehte Welt war unspielbar');
+  for (const [pick, theta] of [[0, 2 * Math.PI], [0.4, 2 * Math.PI], [0.9, 2 * Math.PI]]) {
     for (const [dirPick, dir] of [[0.2, -1], [0.8, 1]]) {
       const g = createGyro();
       const dur = startSpin(g, fixedRng([pick, dirPick]));
@@ -55,19 +57,20 @@ test('gyroStep: rasch beschleunigt, rasch gebremst, rastet EXAKT im Raster ein',
   assert.equal(g.orient, 0);
 });
 
-test('270/450 Grad enden quer; Rotationen akkumulieren (auch 180 ist erreichbar)', () => {
+test('Jede Rotation endet AUFRECHT (360 Grad): orient bleibt 0, auch nach mehreren Drehungen', () => {
   const run = (g, pick, dirPick) => {
     startSpin(g, fixedRng([pick, dirPick]));
     for (let i = 0; i < 10000 && g.spinning; i++) gyroStep(g, 1 / 120);
     return g;
   };
-  const g1 = run(createGyro(), 0, 0.9);   // +270 Grad
-  assert.equal(g1.orient, 3, '+270 Grad rasten bei 270 ein (netto -90)');
-  const g2 = run(createGyro(), 0.9, 0.9); // +450 -> Netto +90
-  assert.equal(g2.orient, 1, '+450 Grad rasten bei 90 ein');
-  run(g2, 0.9, 0.9);                      // nochmal +450: 90 + 450 = 540 -> 180
-  assert.equal(g2.orient, 2, 'zwei Rotationen summieren sich -- kopfueber ist erreichbar');
-  assert.equal(g2.roll, Math.PI);
+  const g1 = run(createGyro(), 0, 0.9);
+  assert.equal(g1.orient, 0, 'aufrecht');
+  assert.equal(g1.roll, 0);
+  const g2 = run(createGyro(), 0.9, 0.2); // linksherum
+  assert.equal(g2.orient, 0);
+  run(g2, 0.9, 0.9);
+  assert.equal(g2.orient, 0, 'auch zwei Drehungen enden aufrecht');
+  assert.equal(g2.roll, 0);
 });
 
 test('gyroTurn: das Mapping folgt der Verdrehung ("druecke den Pfeil zur Zielseite")', () => {
@@ -118,12 +121,14 @@ test('gyroDirs: das GANZE Tastenkreuz rotiert gemeinsam mit der Verdrehung', () 
 
 test('Mapping wechselt erst beim Einrasten: waehrend des Spins bleibt orient alt', () => {
   const g = createGyro();
-  startSpin(g, fixedRng([0.9, 0.9])); // +450 Grad
+  g.orient = 1; // (nur noch als Funktion pruefbar -- 360 Grad aendern orient nie)
+  g.roll = Math.PI / 2;
+  startSpin(g, fixedRng([0.9, 0.9]));
   gyroStep(g, g.dur / 2);
-  assert.ok(g.spinning && g.roll > 0, 'mitten in der Rotation');
-  assert.equal(g.orient, 0, 'orient haelt die alte Stellung');
+  assert.ok(g.spinning && g.roll > Math.PI / 2, 'mitten in der Rotation');
+  assert.equal(g.orient, 1, 'orient haelt die alte Stellung');
   gyroStep(g, g.dur); // zu Ende drehen
-  assert.equal(g.orient, 1, 'beim Einrasten uebernimmt die neue Stellung');
+  assert.equal(g.orient, 1, 'beim Einrasten: 90 + 360 = wieder 90');
 });
 
 test('startSpin ist mit echtem rng deterministisch und liefert gueltige Betraege', () => {

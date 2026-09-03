@@ -44,8 +44,18 @@ export function isPillar(x, y) {
 
 // Offene Zelle im Grid (mit Rand-Check) -- der gemeinsame Grundbaustein
 // fuer Feind-Platzierung, Fahr-Kollision und Kollisionswellen.
+// OEFFNUNGS-OVERLAY (Sturm-Branch, Pulsar-Wandphantome): `maze.openings`
+// (Set aus Zellschluesseln y*n+x, s. openingKey; null = keine) zaehlt als
+// offen, ohne das Grid anzufassen -- die Geometrie-Caches haengen am
+// unveraenderlichen Grid, nur die BEGEHBARKEIT wechselt kurz.
 export function isOpenCell(maze, x, y) {
-  return x >= 0 && x < maze.n && y >= 0 && y < maze.n && maze.grid[y][x] === OPEN;
+  if (x < 0 || x >= maze.n || y < 0 || y >= maze.n) return false;
+  return maze.grid[y][x] === OPEN || (maze.openings != null && maze.openings.has(y * maze.n + x));
+}
+
+// Schluessel einer Zelle fuer das Oeffnungs-Overlay.
+export function openingKey(maze, x, y) {
+  return y * maze.n + x;
 }
 
 // Alle Kammern eines Quadranten (bezogen auf die Grid-Mitte m=(n-1)/2).

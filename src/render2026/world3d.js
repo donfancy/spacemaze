@@ -162,9 +162,53 @@ export function disposeWorld(world) {
 // (setWallHeight skaliert die Gruppe in y). Die BODEN-Kontur bleibt getrennt
 // (world.outlineLines, feste Hoehe knapp ueber dem Boden) -- sie ist die
 // "flache Karte", auf der die Waende aufwachsen.
+// WANDPHANTOME (Sturm-Branch): die Waende sind zusammengefasste Quads --
+// ein einzelnes Wandstueck laesst sich nicht ausblenden. Stattdessen
+// schneidet der Fragment-Shader LOECHER: eine Uniform-Liste von xz-Boxen
+// (Zell-Footprints in 3D-Einheiten), in denen Fragmente verworfen werden --
+// FLIRREND (Raum-Zeit-Hash, nur ein Rest bleibt stehen). Wirkt auf
+// Flaechen, Kronen/Pfosten, Zellgrenzen-Linien, Deckel (teilen wallMat)
+// und das Spiegelbild (gleiche Uniforms; nur xz zaehlt, die Spiegelung
+// kippt y). Die Boden-Kontur bleibt als "Geist" des Stuecks stehen.
+export const MAX_HOLES = 16;
+
+function installHoles(world, mat) {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uHoles = world.holes.uHoles;
+    shader.uniforms.uHoleCount = world.holes.uHoleCount;
+    shader.uniforms.uHoleTime = world.holes.uHoleTime;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vHoleW;')
+      .replace('#include <project_vertex>',
+        '#include <project_vertex>\nvHoleW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vHoleW;
+uniform vec4 uHoles[${MAX_HOLES}];
+uniform int uHoleCount;
+uniform float uHoleTime;`)
+      .replace('void main() {', `void main() {
+  for (int i = 0; i < ${MAX_HOLES}; i++) {
+    if (i >= uHoleCount) break;
+    vec4 h = uHoles[i];
+    if (vHoleW.x > h.x && vHoleW.x < h.z && vHoleW.z > h.y && vHoleW.z < h.w) {
+      vec2 cellId = floor(vHoleW.xz * 0.7) + floor(uHoleTime * 24.0) * 7.0;
+      float n = fract(sin(dot(cellId, vec2(12.9898, 78.233))) * 43758.5453);
+      if (n > 0.12) discard;
+    }
+  }`);
+  };
+  mat.customProgramCacheKey = () => 'holes';
+}
+
 function buildWallsAndLines(world, maze) {
   const { H, scene, u } = world;
   const segs = mergeCollinear(corridorOutline(maze));
+  world.holes = {
+    uHoles: { value: Array.from({ length: MAX_HOLES }, () => new THREE.Vector4()) },
+    uHoleCount: { value: 0 },
+    uHoleTime: { value: 0 },
+  };
 
   world.wallGroup = new THREE.Group();
   scene.add(world.wallGroup);
@@ -207,9 +251,11 @@ function buildWallsAndLines(world, maze) {
     // Linien sauber gewinnen (kein Z-Fighting).
     polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
   });
+  installHoles(world, world.wallMat);
   world.wallGroup.add(new THREE.Mesh(wallGeo, world.wallMat));
 
   world.lineMat = new THREE.LineBasicMaterial({ color: hdr(PHOSPHOR_GREEN) });
+  installHoles(world, world.lineMat);
 
   // Wandkronen + senkrechte Eck-Pfosten (wachsen mit der Wandhoehe mit).
   const lp = [];
@@ -312,6 +358,7 @@ function buildWallsAndLines(world, maze) {
     color: new THREE.Color(PHOSPHOR_GREEN).multiplyScalar(0.3),
     transparent: true, opacity: 0.8,
   });
+  installHoles(world, world.wallGridMat);
   world.wallGroup.add(new THREE.LineSegments(wallGridGeo, world.wallGridMat));
 
   // Geometrien fuers Spiegelbild aufheben (buildMirror).
@@ -561,6 +608,7 @@ function buildMirror(world) {
   world.mirrorLineMat = new THREE.LineBasicMaterial({
     color: new THREE.Color(PHOSPHOR_GREEN).multiplyScalar(0.85),
   });
+  installHoles(world, world.mirrorLineMat);
   // Alles mit Hoehe in eine eigene Untergruppe: setWallHeight skaliert sie
   // synchron zur echten Wandgruppe (die Schwenks wachsen im Spiegel mit).
   const mw = new THREE.Group();

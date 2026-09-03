@@ -38,7 +38,8 @@ import { createRecording, recordFrame, recordEvent } from '../core/recorder.js';
 import { createCamera } from '../math/camera.js';
 import { createOscillator } from '../math/oscillator.js';
 import { generateMaze } from '../world/maze.js';
-import { cellCenter, startFacingYaw, hasLineOfSight } from '../world/mazeWorld.js';
+import { cellCenter, startFacingYaw, hasLineOfSight, resolveWallOverlap } from '../world/mazeWorld.js';
+import { openingKey } from '../world/maze.js';
 import { DRIVE, createDriveState, driveStep } from '../world/drive.js';
 import { WALK, createWalkState, walkStep } from '../world/walk.js';
 import { ENEMY, enemiesStep, enemyHit, enemyFire } from '../world/enemies.js';
@@ -50,7 +51,7 @@ import {
 import {
   flippersStep, flipperPlayerHit, flipperShotHit, spawnFlipperPair, flipperPos,
 } from '../world/flippers.js';
-import { pulsarsStep, pulsarPlayerTouch } from '../world/pulsars.js';
+import { pulsarsStep, pulsarPlayerTouch, pulsarOpenings } from '../world/pulsars.js';
 import { createGyro, startSpin, gyroStep, gyroDirs, shortestRoll } from '../world/gyro.js';
 import { alignTurn } from '../world/align.js';
 import { createAutopilot, autopilotStep } from '../world/autopilot.js';
@@ -137,6 +138,7 @@ export function createPlaying(game) {
   let spinners = [];      // Spinner (liegen auf game.spinners, s. enter())
   let flippers = [];      // X-Flipper ab Level 21 (liegen auf game.flippers)
   let pulsars = [];       // Pulsare ab Level 26 (liegen auf game.pulsars)
+  let openings = [];      // Wandphantome der Pulsare dieses Frames (pulsarOpenings)
   let foeShots = [];      // sirrende Spinner-Schuesse (ab Level 21)
   let foeRng = null;      // deterministischer Zufall fuers Spinner-Feuern
   let spinnerCol = PHOSPHOR_GREEN; // Spinner-Farbe des Levels (ab 21 gelb)
@@ -370,6 +372,8 @@ export function createPlaying(game) {
       spinners = game.spinners ?? [];
       flippers = game.flippers ?? [];
       pulsars = game.pulsars ?? [];
+      openings = [];
+      maze.openings = null;
       foeShots = [];
       foeRng = createRng((maze.seed ^ 0x27d4eb2f) >>> 0);
       spinnerCol = spinnerColor(game.level);
@@ -429,6 +433,7 @@ export function createPlaying(game) {
       // startet voll zerscherbt, und mit derselben Mitte behalten alle
       // Scherben ihre Flugbahn (sonst ruckte die Scherbenlage am Uebergang).
       game.crashScreen = crash ? crashScreen : null;
+      maze.openings = null; // Wandphantome gelten nur in der Begehung
       game.audio?.engine(null); // Motor-Klang ausblenden (die Karte ist still)
     },
 
@@ -511,6 +516,31 @@ export function createPlaying(game) {
         }
       }
       const prevX = px, prevZ = pz; // Lage VOR dem Schritt (Spike-Kreuzungs-Check)
+
+      // Pulsar-WANDPHANTOME (Sturm): welche Wandstuecke sind gerade weg?
+      // Das Overlay maze.openings macht sie begehbar (und fuer Schuesse/
+      // Sichtlinien durchsichtig); schliesst sich ein Stueck, in dem der
+      // Spieler steht, drueckt die Wand ihn auf die naehere Seite hinaus
+      // (Rueckdruecken oder ganz in den Nachbargang) -- mit Bump-Feedback.
+      if (pulsars.length) {
+        const now = pulsarOpenings(pulsars, maze, sceneT);
+        const keys = new Set(now.map((o) => openingKey(maze, o.gx, o.gy)));
+        const closed = openings.filter((o) => !keys.has(openingKey(maze, o.gx, o.gy)));
+        openings = now;
+        maze.openings = keys.size ? keys : null;
+        if (closed.length && !crash) {
+          const r = resolveWallOverlap(maze, px, pz, RADIUS_RATIO * cell, unit, closed);
+          if (r.pushed) {
+            const axis = r.px !== px ? 'x' : 'z';
+            const side = axis === 'x' ? Math.sign(px - r.px) : Math.sign(pz - r.pz);
+            px = r.px;
+            pz = r.pz;
+            game.audio?.play(sizzlePatch(0.6));
+            bump = { at: sceneT, axis, side, impact: 0.6, x: px, z: pz };
+            recEvent('bump', { axis, side, impact: 0.6, x: px, z: pz });
+          }
+        }
+      }
 
       if (drive) {
         updateDrive(turn, dt, boost);
@@ -825,7 +855,7 @@ export function createPlaying(game) {
       if (!maze) return null; // vor enter() -- gleicher Vertrag wie alle Szenen
       return { maze, cell, unit, px, pz, yaw, sceneT, reached, reachedAt, bump,
         drive, roll: bank + rollOsc.x + gyro.roll, pitch: pitchOsc.x, bank,
-        orient: gyro.orient, foeShots,
+        orient: gyro.orient, foeShots, openings,
         shoot, steer: drive ? driveState.steer : walkState.steer,
         shots: shotsState ? shotsState.shots : [], bursts,
         crash: crash ? { t: crashT, x: crashPos.x, z: crashPos.z } : null };

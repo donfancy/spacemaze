@@ -8,7 +8,7 @@
 // (uniforme Metrik) ist unit einfach die alte Zellgroesse. Waende ragen von
 // y=0 bis y=height nach oben.
 
-import { OPEN } from './maze.js';
+import { isOpenCell } from './maze.js';
 import { corridorOutline, mergeCollinear } from './mazeGeometry.js';
 import { mazeMetric } from './metric.js';
 
@@ -84,11 +84,11 @@ export function cellCenter(maze, gx, gy, unit = 1) {
   return [toUnits(gx + 0.5) * unit, toUnits(gy + 0.5) * unit];
 }
 
-// Ist die Weltposition begehbar (in einer offenen Zelle)?
+// Ist die Weltposition begehbar (in einer offenen Zelle -- inkl. der
+// Pulsar-Wandphantome aus maze.openings, s. isOpenCell)?
 export function isWalkable(maze, worldX, worldZ, unit = 1) {
   const [gx, gy] = cellAt(maze, worldX, worldZ, unit);
-  if (gx < 0 || gx >= maze.n || gy < 0 || gy >= maze.n) return false;
-  return maze.grid[gy][gx] === OPEN;
+  return isOpenCell(maze, gx, gy);
 }
 
 // Sind ALLE Zellen offen, die das achsparallele Rechteck [x0,x1] x [z0,z1]
@@ -104,10 +104,35 @@ export function rectWalkable(maze, x0, x1, z0, z1, unit = 1) {
   if (gx0 < 0 || gx1 >= maze.n || gy0 < 0 || gy1 >= maze.n) return false;
   for (let gy = gy0; gy <= gy1; gy++) {
     for (let gx = gx0; gx <= gx1; gx++) {
-      if (maze.grid[gy][gx] !== OPEN) return false;
+      if (!isOpenCell(maze, gx, gy)) return false;
     }
   }
   return true;
+}
+
+// RUECKDRUECKEN beim Schliessen eines Wandphantoms (Sturm-Branch): liegt
+// das Spieler-Quadrat (Halbbreite radius) in einer der `cells` (wieder
+// geschlossene Wandzellen [{gx, gy}]), wird es senkrecht zur duenneren
+// Ueberlapp-Achse auf die NAEHERE Seite gesetzt -- die Mitte entscheidet:
+// wer schon mehr als halb drueben ist, wird ganz in den anderen Gang
+// geschoben, sonst zurueck (Boris' Spec). Liefert { px, pz, pushed }.
+export function resolveWallOverlap(maze, px, pz, radius, unit, cells) {
+  const { toUnits } = mazeMetric(maze);
+  let x = px;
+  let z = pz;
+  for (const c of cells) {
+    const x0 = toUnits(c.gx) * unit, x1 = toUnits(c.gx + 1) * unit;
+    const z0 = toUnits(c.gy) * unit, z1 = toUnits(c.gy + 1) * unit;
+    if (x + radius <= x0 || x - radius >= x1 || z + radius <= z0 || z - radius >= z1) continue;
+    const ox = Math.min(x + radius - x0, x1 - (x - radius)); // Ueberlapp-Tiefe je Achse
+    const oz = Math.min(z + radius - z0, z1 - (z - radius));
+    // Ein Epsilon von der Wandebene weg: exakt auf der Kante zaehlt das
+    // Quadrat (rectWalkable, floor-Semantik) noch als in der Wand.
+    const eps = 1e-6 * unit;
+    if (ox <= oz) x = x < (x0 + x1) / 2 ? x0 - radius - eps : x1 + radius + eps;
+    else z = z < (z0 + z1) / 2 ? z0 - radius - eps : z1 + radius + eps;
+  }
+  return { px: x, pz: z, pushed: x !== px || z !== pz };
 }
 
 // Freie SICHTLINIE zwischen zwei Welt-Punkten (keine Wandzelle dazwischen)?
@@ -138,8 +163,7 @@ export function hasLineOfSight(maze, x0, z0, x1, z1, unit = 1) {
     if (Math.min(tx, tz) >= dist) return true; // Ziel liegt vor der naechsten Kante
     if (tx <= tz) gx += dx > 0 ? 1 : -1;
     else gz += dz > 0 ? 1 : -1;
-    if (gx < 0 || gx >= maze.n || gz < 0 || gz >= maze.n) return false;
-    if (maze.grid[gz][gx] !== OPEN) return false;
+    if (!isOpenCell(maze, gx, gz)) return false; // (Rand-Check inklusive; Phantome sind durchsichtig)
   }
   return true;
 }
@@ -148,7 +172,7 @@ export function hasLineOfSight(maze, x0, z0, x1, z1, unit = 1) {
 // forward(yaw, pitch=0) = (-sin yaw, 0, -cos yaw).
 export function startFacingYaw(maze) {
   const [sx, sy] = maze.start;
-  const open = (x, y) => x >= 0 && x < maze.n && y >= 0 && y < maze.n && maze.grid[y][x] === OPEN;
+  const open = (x, y) => isOpenCell(maze, x, y);
   if (open(sx, sy - 1)) return 0;            // Blick -z
   if (open(sx + 1, sy)) return -Math.PI / 2; // Blick +x
   if (open(sx, sy + 1)) return Math.PI;      // Blick +z

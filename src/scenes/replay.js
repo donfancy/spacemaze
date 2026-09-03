@@ -23,7 +23,7 @@ import { swayTransform } from '../render/sway.js';
 import { levelConfig, spinnerColor, enemyColor } from '../core/levels.js';
 import { spinnerMarkers } from '../world/spinners.js';
 import { flipperMarkers } from '../world/flippers.js';
-import { pulsarMarkers } from '../world/pulsars.js';
+import { pulsarMarkers, pulsarOpenings } from '../world/pulsars.js';
 import { NEON_MAGENTA, ARCADE_YELLOW } from '../render/colors.js';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams, fallPatch, risePatch,
@@ -351,6 +351,8 @@ export function createReplay(game) {
         reached: d.reached, reachedAt: d.reachedAt,
         bump: d.bump, bursts: d.bursts, crash: d.crash,
         shots: cur.shots ?? [], foeShots: cur.foeShots ?? [],
+        // Wandphantome: reine Funktion der aufgezeichneten Pulsare + Zeit.
+        openings: cur.pulsars ? pulsarOpenings(cur.pulsars, maze, tau) : [],
         foes: {
           enemies: puppets, spinners: cur.spinners,
           flippers: cur.flippers, pulsars: cur.pulsars,

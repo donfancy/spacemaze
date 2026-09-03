@@ -4,8 +4,9 @@ import { generateMaze, OPEN, WALL } from '../src/world/maze.js';
 import { corridorOutline, mergeCollinear } from '../src/world/mazeGeometry.js';
 import {
   mazeWalls, wallFootprints, cellAt, cellCenter, isWalkable, tryMove,
-  startFacingYaw, hasLineOfSight,
+  startFacingYaw, hasLineOfSight, rectWalkable, resolveWallOverlap,
 } from '../src/world/mazeWorld.js';
+import { openingKey, isOpenCell } from '../src/world/maze.js';
 import { createMetric } from '../src/world/metric.js';
 
 // Mini-Labyrinth fuer praezise Kollisionstests: nur Mitte (1,1) offen.
@@ -206,4 +207,56 @@ test('hasLineOfSight: schmale Metrik -- die schraege 1-Einheit-Wand blockiert ex
   // Im selben schmalen Gang bleibt die Sicht frei (auch leicht schraeg).
   assert.equal(hasLineOfSight(m, toUnits(1.1), midRow(1) - 1.5, toUnits(3.9), midRow(1) + 1.5),
     true, 'schraeg im eigenen Gang');
+});
+
+// --- Sturm-Branch: Oeffnungs-Overlay (Pulsar-Wandphantome) --------------------
+
+// Zwei parallele Gaenge (Reihen 1 und 3) mit der Zwischenwand-Reihe 2.
+function twoLanes() {
+  const n = 7;
+  const grid = Array.from({ length: n }, () => Array(n).fill(WALL));
+  for (let x = 1; x <= 5; x++) { grid[1][x] = OPEN; grid[3][x] = OPEN; }
+  return { n, grid, metric: createMetric({ wall: 1, corridor: 5 }) };
+}
+
+test('maze.openings: ein Wandphantom ist begehbar, durchschiessbar und durchsichtig -- ohne das Grid anzufassen', () => {
+  const m = twoLanes();
+  const unit = 1;
+  // Zwischenwand-Stueck (3,2) zwischen Kammer (3,1) und (3,3): x 7..12, z 6..7
+  // (Metrik: Wand 1, Gang 5 -> toUnits(3) = 7, toUnits(4) = 12).
+  assert.equal(isOpenCell(m, 3, 2), false);
+  assert.equal(isWalkable(m, 9.5, 6.5, unit), false);
+  assert.equal(rectWalkable(m, 8, 11, 5, 8, unit), false, 'Spieler-Quadrat ueber der Wand: nein');
+  assert.equal(hasLineOfSight(m, 9.5, 3.5, 9.5, 9.5, unit), false, 'Sichtlinie durch die Wand: nein');
+  m.openings = new Set([openingKey(m, 3, 2)]);
+  assert.equal(isOpenCell(m, 3, 2), true, 'Phantom zaehlt als offen');
+  assert.equal(m.grid[2][3], WALL, 'das Grid bleibt unveraendert');
+  assert.equal(isWalkable(m, 9.5, 6.5, unit), true);
+  assert.equal(rectWalkable(m, 8, 11, 5, 8, unit), true, 'durch das Phantom in den Nachbargang');
+  assert.equal(hasLineOfSight(m, 9.5, 3.5, 9.5, 9.5, unit), true, 'und die Sichtlinie ist frei');
+  assert.equal(rectWalkable(m, 2, 5, 5, 8, unit), false, 'die Nachbar-Wandstuecke bleiben zu');
+  m.openings = null;
+  assert.equal(isOpenCell(m, 3, 2), false, 'Overlay weg: wieder Wand');
+});
+
+test('resolveWallOverlap: die schliessende Wand drueckt auf die naehere Seite -- zurueck oder ganz in den Nachbargang', () => {
+  const m = twoLanes();
+  const unit = 1;
+  const radius = 1.25;
+  const cells = [{ gx: 3, gy: 2 }]; // Wand z 6..7
+  // Mitte noch diesseits (z 6.3 < 6.5): zurueck in den eigenen Gang.
+  const back = resolveWallOverlap(m, 9.5, 6.3, radius, unit, cells);
+  assert.ok(back.pushed);
+  assert.equal(back.px, 9.5, 'laengs unveraendert');
+  assert.ok(Math.abs(back.pz - (6 - radius)) < 1e-5, 'Quadrat liegt wieder vor der Wand');
+  // Mitte schon drueben (z 6.8 > 6.5): ganz in den Nachbargang.
+  const over = resolveWallOverlap(m, 9.5, 6.8, radius, unit, cells);
+  assert.ok(Math.abs(over.pz - (7 + radius)) < 1e-5, 'hinter der Wand im Nachbargang');
+  // Kein Ueberlapp: nichts passiert.
+  const none = resolveWallOverlap(m, 9.5, 3.5, radius, unit, cells);
+  assert.equal(none.pushed, false);
+  assert.equal(none.pz, 3.5);
+  // Ergebnis ist begehbar (Quadrat komplett im Gang).
+  assert.ok(rectWalkable(m, back.px - radius, back.px + radius, back.pz - radius, back.pz + radius, unit));
+  assert.ok(rectWalkable(m, over.px - radius, over.px + radius, over.pz - radius, over.pz + radius, unit));
 });

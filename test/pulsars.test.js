@@ -15,7 +15,7 @@ import { DRIVE } from '../src/world/drive.js';
 import { SHOTS } from '../src/world/shots.js';
 import {
   PULSAR, createPulsars, pulsarsStep, pulsarSide, pulsarPos, pulsarSpread,
-  pulsarPlayerTouch, pulsarMarkers, pulsarSegments,
+  pulsarPlayerTouch, pulsarMarkers, pulsarSegments, pulsarOpen, pulsarOpenings,
 } from '../src/world/pulsars.js';
 
 const THIN = { wall: 1, corridor: 5 };
@@ -102,19 +102,99 @@ test('Klapp-Zyklus: in JEDER Stellung lange einrasten, 90-Grad-Schritte', () => 
   assert.ok(held >= PULSAR.holdMin - 2 * dt, 'unten wird nicht sofort weitergeklappt');
 });
 
-test('Pulsieren: die Zackenstrecke atmet zwischen spreadMin und spreadMax', () => {
+test('Takt: 2.5 s zu, 0.8 s offen -- zusammengezogen genau waehrend der Oeffnung, Rampen davor/danach', () => {
   const { pulsars } = makePulsar();
   const p = pulsars[0];
+  const T = PULSAR.closedTime + PULSAR.openTime;
+  let openTime = 0;
   let lo = Infinity;
   let hi = -Infinity;
-  for (let t = 0; t < 3; t += 0.01) {
+  const dt = 0.005;
+  for (let t = 0; t < 10 * T; t += dt) {
     const s = pulsarSpread(p, t);
     lo = Math.min(lo, s);
     hi = Math.max(hi, s);
     assert.ok(s >= PULSAR.spreadMin - 1e-9 && s <= PULSAR.spreadMax + 1e-9);
+    if (pulsarOpen(p, t)) {
+      openTime += dt;
+      assert.ok(Math.abs(s - PULSAR.spreadMin) < 1e-9, 'offen = ganz zusammengezogen');
+    }
   }
-  assert.ok(lo < PULSAR.spreadMin + 0.02, 'zieht sich fast ganz zusammen');
-  assert.ok(hi > PULSAR.spreadMax - 0.02, 'dehnt sich fast ganz aus');
+  assert.ok(Math.abs(openTime / (10 * T) - PULSAR.openTime / T) < 0.01, 'Oeffnungs-Anteil stimmt');
+  assert.ok(Math.abs(lo - PULSAR.spreadMin) < 1e-9 && Math.abs(hi - PULSAR.spreadMax) < 1e-9);
+  // Oeffnung am Stueck (openTime lang), davor die Zusammenzieh-Rampe.
+  let t0 = 0;
+  while (!pulsarOpen(p, t0)) t0 += dt;
+  let t1 = t0;
+  while (pulsarOpen(p, t1)) t1 += dt;
+  assert.ok(Math.abs((t1 - t0) - PULSAR.openTime) < 2 * dt, 'Oeffnung dauert openTime');
+  assert.ok(pulsarSpread(p, t0 - PULSAR.ramp / 2) < PULSAR.spreadMax - 0.05, 'kurz vorher zieht sie sich zusammen');
+  assert.ok(pulsarSpread(p, t0 - PULSAR.ramp - 0.1) > PULSAR.spreadMax - 1e-9, 'davor voll ausgedehnt');
+  assert.ok(pulsarSpread(p, t1 + PULSAR.ramp + 0.1) > PULSAR.spreadMax - 1e-9, 'nach dem Schliessen wieder ausgedehnt');
+  // Individuelle Phase: zwei Pulsare oeffnen nicht im Gleichtakt.
+  const { pulsars: other } = makePulsar(99);
+  let same = 0;
+  let n = 0;
+  for (let t = 0; t < T; t += dt) { n++; if (pulsarOpen(p, t) === pulsarOpen(other[0], t)) same++; }
+  assert.ok(same < n, 'verschiedene Phasen');
+});
+
+// Hand-Maze fuer die Wandphantome: langer Gang in Reihe 5 (x=1..11) mit
+// EINMUENDUNG von oben bei x=5 (Zelle (5,4) offen) und einem Stich bei
+// x=11 nach unten, auf dem S und G liegen (ihre Schutzzone bleibt dort).
+function phantomMaze() {
+  const n = 13;
+  const grid = Array.from({ length: n }, () => Array(n).fill(WALL));
+  for (let x = 1; x <= 11; x++) grid[5][x] = OPEN;
+  grid[4][5] = OPEN; grid[3][5] = OPEN;           // Einmuendung nach oben
+  for (let y = 5; y <= 9; y++) grid[y][11] = OPEN; // Stich mit S/G
+  return { n, grid, start: [11, 9], goal: [11, 7], seed: 42, metric: createMetric(THIN) };
+}
+
+test('Wandphantome: seitlich 5 auf dieser Seite, oben/unten 3 je Seite, im Klappen 1 -- nie Rand, nie Einmuendung', () => {
+  const maze = phantomMaze();
+  const pulsars = createPulsars(maze, { count: 1 }, { unit: 1, cell: CELL, rng: createRng(7) });
+  assert.equal(pulsars.length, 1);
+  const p = pulsars[0];
+  assert.equal(p.axis, 'x');
+  assert.deepEqual([p.fix, p.lo, p.hi, p.mid], [5, 1, 11, 6], 'Grid-Lage des Gangs, Pulsar in der Mitte');
+  const tOpen = (() => { let t = 0; while (!pulsarOpen(p, t)) t += 0.01; return t + 0.1; })();
+  const tClosed = tOpen - PULSAR.openTime - 0.5;
+  const cells = (list) => list.map((o) => `${o.gx},${o.gy}`).sort();
+
+  // Zu: nichts.
+  settle(p, QUARTER); // rechts (+quer = +z = Reihe 6)
+  assert.deepEqual(pulsarOpenings(pulsars, maze, tClosed), []);
+  // Seitlich rechts eingerastet: 5 Stuecke in Reihe 6 um x=6.
+  assert.deepEqual(cells(pulsarOpenings(pulsars, maze, tOpen)), cells([4, 5, 6, 7, 8].map((x) => ({ gx: x, gy: 6 }))));
+  assert.ok(pulsarOpenings(pulsars, maze, tOpen).every((o) => o.side === 1 && o.pulsar === p));
+  // Seitlich links (Reihe 4): die Einmuendung (5,4) ist offen -> nur 4 Stuecke.
+  settle(p, 3 * QUARTER);
+  assert.deepEqual(cells(pulsarOpenings(pulsars, maze, tOpen)), cells([4, 6, 7, 8].map((x) => ({ gx: x, gy: 4 }))));
+  // Unten: 3 je Seite (links faellt wieder die Einmuendung weg).
+  settle(p, 0);
+  assert.deepEqual(cells(pulsarOpenings(pulsars, maze, tOpen)),
+    cells([{ gx: 5, gy: 6 }, { gx: 6, gy: 6 }, { gx: 7, gy: 6 }, { gx: 6, gy: 4 }, { gx: 7, gy: 4 }]));
+  // Im Klappen von rechts nach unten: genau das Mittelstueck auf der rechten Seite.
+  settle(p, QUARTER);
+  p.mode = 'flip'; p.from = QUARTER; p.delta = -QUARTER; p.flipT = 0.1; p.angle = QUARTER / 2;
+  assert.deepEqual(cells(pulsarOpenings(pulsars, maze, tOpen)), ['6,6']);
+  // Im Klappen von unten nach links: das Mittelstueck LINKS (die Seite, auf die zu geklappt wird).
+  p.from = 0; p.delta = QUARTER; p.angle = QUARTER / 2; // 0 -> PI/2 ... (Winkel-Konvention: PI/2 = rechts)
+  assert.deepEqual(cells(pulsarOpenings(pulsars, maze, tOpen)), ['6,6']);
+  p.from = 0; p.delta = -QUARTER; p.angle = -QUARTER / 2; // 0 -> 3PI/2 = links
+  assert.deepEqual(cells(pulsarOpenings(pulsars, maze, tOpen)), ['6,4']);
+});
+
+test('Wandphantome: Aussenwaende bleiben immer -- ein Randgang oeffnet nur zur Innenseite', () => {
+  const { maze, pulsars } = makePulsar(); // Gang in Reihe 1: oben (Reihe 0) ist Rand
+  const p = pulsars[0];
+  const tOpen = (() => { let t = 0; while (!pulsarOpen(p, t)) t += 0.01; return t + 0.1; })();
+  settle(p, 0); // unten: beide Seiten -> nur Reihe 2 bleibt
+  const open = pulsarOpenings(pulsars, maze, tOpen);
+  assert.ok(open.length === 3 && open.every((o) => o.gy === 2), 'nur die Innenseite');
+  settle(p, 3 * QUARTER); // links = -quer = Reihe 0 = Rand
+  assert.deepEqual(pulsarOpenings(pulsars, maze, tOpen), [], 'zur Aussenwand hin oeffnet sich nichts');
 });
 
 test('Ausweichen: ein Schuss im Gang klappt die Seiten-Stellung RECHTZEITIG weg', () => {

@@ -29,7 +29,7 @@
 // Konstanten: Kuerz-Rate bei Dauerfeuer (SHOTS.rate * shorten) gegen das
 // Vorruecken der Spitze -- abgesichert per Test.
 
-import { isOpenCell } from './maze.js';
+import { OPEN } from './maze.js';
 import { cellAt } from './mazeWorld.js';
 import { corridorCandidates, foeMarkers, aheadEnd } from './foePlacement.js';
 
@@ -149,6 +149,9 @@ const turnMaps = new WeakMap();
 
 function turnMap(maze, s) {
   const n = maze.n;
+  // Rohes Grid (ohne Pulsar-Wandphantome, maze.openings): die Karte wird
+  // einmal gebaut und gecacht, ein gerade offenes Phantom darf sie nicht praegen.
+  const isOpenCell = (m, x, y) => x >= 0 && x < n && y >= 0 && y < n && m.grid[y][x] === OPEN;
   const turns = new Int16Array(n * n).fill(-1);
   const axes = new Int8Array(n * n); // 0 = x-Achse, 1 = y-Achse der Ankunft
   const queue = [];
