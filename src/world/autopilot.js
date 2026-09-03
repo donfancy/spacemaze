@@ -46,7 +46,7 @@
 import { findPath } from './maze.js';
 import { cellCenter } from './mazeWorld.js';
 import { gyroTurn, gyroDirs } from './gyro.js';
-import { FLIPPER, flipperSide, flipperPos } from './flippers.js';
+import { FLIPPER, flipperSide, flipperPos, flipperDiagonal } from './flippers.js';
 import { SHOTS } from './shots.js';
 
 export const AUTOPILOT = {
@@ -64,6 +64,8 @@ export const AUTOPILOT = {
   driveSteer: 0.35, // rad: ab hier lenkt der Autopilot im Fahrt-Modus selbst
                     // (Kurven) -- darunter uebernimmt der Ausricht-Assistent
   zapCount: 3,      // ab so vielen Feinden im Sichtfeld zuendet die Demo den Superzapper
+  rescueLead: 0.03, // s: Rettungsschuss -- so frisch muss das Klappen des nahen
+                    // Flippers sein (Flugzeit ~0.135 s landet im Diagonal-Fenster)
   fireDist: 7,      // Gangbreiten: nur so nahe Feinde gelten als "in Sicht"
   fireCone: 0.5,    // rad: halber Oeffnungswinkel des Sicht-Kegels um die
                     // Blickrichtung (deckt den eigenen Gang ab)
@@ -125,6 +127,24 @@ export function foeInSight(pose, foes, cell) {
     const dz = fz - pose.pz;
     if (Math.hypot(dx, dz) > AUTOPILOT.fireDist * cell) continue;
     if (Math.abs(wrapAngle(Math.atan2(-dx, -dz) - pose.yaw)) < AUTOPILOT.fireCone) return true;
+  }
+  return false;
+}
+
+// Rettungsschuss-Gelegenheit: ein lebender Flipper im eigenen Gang, vor
+// dem Spieler, naeher als flipDist, der GERADE zu klappen beginnt (flipT
+// unter rescueLead) oder schon diagonal steht.
+export function rescueChance(pose, flippers, cell) {
+  for (const f of flippers ?? []) {
+    if (!f.alive || f.mode !== 'flip') continue;
+    const crossP = f.axis === 'x' ? pose.pz : pose.px;
+    if (Math.abs(crossP - f.cross) >= 0.5 * cell) continue;
+    const [fx, fz] = flipperPos(f);
+    const dx = fx - pose.px;
+    const dz = fz - pose.pz;
+    if (dx * -Math.sin(pose.yaw) + dz * -Math.cos(pose.yaw) <= 0) continue;
+    if (Math.hypot(dx, dz) > FLIPPER.flipDist * cell * 1.2) continue;
+    if (f.flipT <= AUTOPILOT.rescueLead || flipperDiagonal(f)) return true;
   }
   return false;
 }
@@ -307,6 +327,12 @@ export function autopilotStep(ap, pose, mode = {}) {
           keys.add(keyForRole(mode.orient, 'up'));
         }
       }
+      // RETTUNGSSCHUSS (Sturm): klappt ein naher Flipper im eigenen Gang
+      // gerade los (Zwangs-Flip vor dem Spieler), geht sofort ein gerader
+      // Schuss raus -- Flugzeit ~0.135 s trifft die Diagonale (Experten-
+      // Timing, das die Demo herzeigt). Nur bei neutralem Fadenkreuz.
+      if (mode.shoot && Math.abs(mode.steer ?? 0) < AUTOPILOT.aimTol
+        && rescueChance(pose, mode.flippers, ap.cell)) keys.add(' ');
       // DRIVE-BY-Feuer in JEDER Fahrlage (auch mitten in der Kurve): sobald
       // das Fadenkreuz einen treffbaren Flipper-Punkt in Quer-Toleranz hat,
       // geht ein Schuss raus -- beim Einbiegen in einen bewachten Gang

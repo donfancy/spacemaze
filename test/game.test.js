@@ -267,8 +267,10 @@ test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry',
   advance(g, r, 2.0); // Falling -> Playing
   assert.equal(g.stateKey, State.PLAYING);
 
-  // Feinde stehen: Level 11 hat 6 Rauten, alle lebendig.
-  assert.equal(g.enemies.length, 6);
+  // Feinde stehen: Level 11 hat bis zu 6 Tanker (weniger nur, wenn das
+  // zufaellige Maze zu wenig lange Gaenge hat), alle lebendig.
+  assert.ok(g.enemies.length > 0 && g.enemies.length <= 6);
+  const count = g.enemies.length;
   assert.ok(g.enemies.every((e) => e.alive));
   const bornAt = g.enemies.map((e) => [e.gx, e.gy]); // fuer den Determinismus-Check unten
 
@@ -305,7 +307,7 @@ test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry',
   advance(g, r, 2.0);
   assert.equal(g.stateKey, State.PLAYING);
   assert.equal(g.gameOver, false);
-  assert.equal(g.enemies.length, 6);
+  assert.equal(g.enemies.length, count);
   assert.ok(g.enemies.every((e) => e.alive), 'alle Rauten leben wieder');
   // Dokumentierte Zusage von spawnFoes: deterministisch aus maze.seed --
   // der Retry landet bei DENSELBEN Geburts-Positionen.

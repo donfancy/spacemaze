@@ -41,8 +41,10 @@ import {
 export const FLIPPER = {
   minChambers: 3,  // so viele Kammern braucht ein Gangstueck fuer einen Flipper
   exclude: 3,      // so viele Weg-Kammern um S und G bleiben flipperfrei
-  speed: 0.85,     // Wander-Tempo (Gangbreiten/s) -- schneller als die Tanker
-                   // (ENEMY.patrolSpeed 0.6), aber fliehbar (DRIVE.cruise 1.5)
+  speed: 0.7,      // Wander-Tempo (Gangbreiten/s) -- fliehbar (DRIVE.cruise 1.5);
+                   // Sturm-Tuning 0.85 -> 0.7: seit JEDER Tanker-Abschuss ein
+                   // Paar spawnt, kommen bis zu 12 pro Alley -- der Messlauf
+                   // starb fast nur an Flippern (PLAN-STURM.md)
   length: 0.48,    // halbe Laenge des X entlang der langen Achse (Gangbreiten)
   width: 0.15,     // halbe Breite quer dazu (Gangbreiten)
   notch: 0.1,      // Kerbtiefe der Spitzen-Pfeile (Gangbreiten)

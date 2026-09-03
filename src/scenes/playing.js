@@ -179,15 +179,18 @@ export function createPlaying(game) {
   // Der FEIND explodiert NICHT mit (Boris 1.9.2026): es zerbirst das SCHIFF,
   // der Sieger bleibt stehen (wie schon immer beim Aufspiessen am Spike).
   // opts: `color` (Splitter-Farbe des Einschlags, Standard Feind-Rot),
-  // `height` (Explosions-Hoehe, Standard Augenhoehe).
+  // `height` (Explosions-Hoehe, Standard Augenhoehe), `kind` (Todesursache
+  // fuers Crash-Event: tanker/spinner/impale/foeShot/flipper -- Messlaeufe
+  // und die Wiedergabe lesen sie mit).
   function startCrash(at, opts = {}) {
     crash = true;
     crashT = 0;
     crashPos = { x: at.x, z: at.z };
     game.gameOver = true; // Karte zeigt GAME OVER, S startet den Level neu
+    game.crashKind = opts.kind ?? 'tanker';
     game.audio?.engine(null);
     game.audio?.play(crashPatch());
-    recEvent('crash', { x: at.x, z: at.z });
+    recEvent('crash', { x: at.x, z: at.z, kind: game.crashKind });
     const h = opts.height ?? EYE_RATIO * cell;
     const color = opts.color ?? enemyCol;
     // shardCount/shardSize: flaechige Truemmer NUR fuer die 2026-Engine
@@ -639,7 +642,7 @@ export function createPlaying(game) {
         const hit = spinnerPlayerHit(spinners, px, pz, RADIUS_RATIO * cell, cell,
           { px: prevX, pz: prevZ });
         if (hit && !reached) {
-          startCrash(hit, { color: spinnerCol, height: SPINNER.height * cell });
+          startCrash(hit, { color: spinnerCol, height: SPINNER.height * cell, kind: hit.impale ? 'impale' : 'spinner' });
           return;
         }
         // Steht man im Gang eines Spinners und hat ihn vor sich, loest
@@ -659,7 +662,7 @@ export function createPlaying(game) {
         const hit = spinnerShotPlayerHit(foeShots, px, pz, RADIUS_RATIO * cell, cell,
           { px: prevX, pz: prevZ });
         if (hit && !reached) {
-          startCrash(hit, { color: spinnerCol, height: SPINNER.height * cell });
+          startCrash(hit, { color: spinnerCol, height: SPINNER.height * cell, kind: 'foeShot' });
           return;
         }
       }
@@ -672,7 +675,7 @@ export function createPlaying(game) {
         const hit = flipperPlayerHit(flippers, px, pz, RADIUS_RATIO * cell, cell,
           { px: prevX, pz: prevZ });
         if (hit && !reached) {
-          startCrash(hit, { color: NEON_MAGENTA }); // der Flipper klappt weiter
+          startCrash(hit, { color: NEON_MAGENTA, kind: 'flipper' }); // der Flipper klappt weiter
           return;
         }
       }

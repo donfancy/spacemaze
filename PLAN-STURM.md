@@ -309,6 +309,22 @@ verwundbar nur beim Vorlauf, an der Wand geschützt. Neu:
   „machbar, aber knapp" stellen; Sichtprüfung durch Boris.
 - CLAUDE.md/README aktualisieren, 1980-Minimum prüfen (kein Absturz),
   Entscheidung Branch → main.
+- **MESSLAUF 3.9.2026 (measure.mjs, Demo-Autopilot, 8 Läufe je Level,
+  Todesursache via `game.crashKind`):** Level 11 4–5/8 GOAL, 13 1–3/8,
+  15+ 0/8. Todesursache fast immer **FLIPPER** (Level 13: 7 von 7 Toden,
+  20: 7 von 8, 25: 7 von 8), selten Tanker-Rammstoß oder Spinner-Schuss.
+  Der Mechanismus: jeder Tanker-Abschuss spawnt ein Paar → eine Sechser-
+  Alley liefert 12 Flipper, die bei 0.85 Gangbreiten/s anrücken, während
+  der Fahrt-Modus den Spieler mit 1.5 in sie hineinträgt (Schließrate
+  ~2.3/s) — pro Flipper bleibt ~1 s für Seiten-Zielen oder den
+  Rettungsschuss. Der Autopilot kann das nicht (er duelliert einen nach
+  dem anderen); ein Mensch entscheidet das. Getan: FLIPPER.speed 0.85 →
+  0.7, Autopilot kennt den Rettungsschuss (`rescueChance`) — Zahlen kaum
+  besser (Rauschen). **Tuning-Knöpfe für Boris' Spielgefühl:** Flipper-
+  Tempo, Paar-Versatz (pairGap), Gruppengrößen der Level-Tabelle
+  (enemies.group), Tanker-Jagdtempo/Feuerrate, holdSide der Flipper
+  (Zeitfenster seitlich), Diagonal-Fenster. Das Zapper-Design fängt genau
+  diesen Moment ab (einmal pro Leben).
 
 ## Fallen und Notizen
 

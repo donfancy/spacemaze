@@ -52,6 +52,7 @@ export class Game {
     this.flippers = null;     // X-Flipper (Paare aus Tanker-Abschuessen), gleiche Lebensdauer-Regeln
     this.pulsars = null;      // Pulsare (ab 26), gleiche Lebensdauer-Regeln (sterben aber nie)
     this.gameOver = false;    // Feindberuehrung: Karte zeigt GAME OVER, S startet den Level neu
+    this.crashKind = null;    // Todesursache des letzten Crashs (tanker/spinner/impale/foeShot/flipper)
     this.zapper = true;       // Superzapper verfuegbar (einer pro Leben = pro Anlauf; Playing laedt
                               // bei jedem frischen Anlauf nach, Resume behaelt den Verbrauch)
     this.viewRoll = 0;        // Rest-Verdrehung der Blickachse beim Abheben (Pulsar-

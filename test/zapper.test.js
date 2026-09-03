@@ -127,8 +127,12 @@ test('Superzapper im Spiel: Z zappt einmal pro Anlauf, Feind-Schuesse erloeschen
   const view0 = g.current.viewState();
   assert.equal(view0.zapper, true, 'viewState traegt die Verfuegbarkeit (HUD)');
 
-  // Einen Jaeger direkt vor den Spieler stellen (im Blick, mit Sichtlinie).
+  // Alle anderen Feinde stilllegen (das zufaellige Maze soll den Spieler
+  // nicht nebenbei erschiessen), einen Jaeger direkt vor den Spieler
+  // stellen (im Blick, mit Sichtlinie).
+  for (const e of g.enemies) e.alive = false;
   const foe = g.enemies[0];
+  foe.alive = true;
   const p = g.playerState;
   foe.mode = 'hunt';
   foe.x = p.px - Math.sin(p.yaw) * 1.5 * view0.cell;
@@ -145,10 +149,12 @@ test('Superzapper im Spiel: Z zappt einmal pro Anlauf, Feind-Schuesse erloeschen
   assert.equal(g.gameOver, false, 'der gezappte Jaeger hat den Spieler nicht gerammt');
   // Zweites Z: nichts mehr.
   const other = g.enemies[1];
+  other.alive = true;
   other.mode = 'hunt';
   other.x = foe.x; other.z = foe.z;
   g.handleKey('Y');
   assert.equal(zapped(other), false, 'kein zweiter Zap in diesem Anlauf');
+  other.alive = false; // (sonst rammt er gleich)
 
   // Zur Karte und zurueck (Resume): verbraucht bleibt verbraucht.
   g.handleKey('X');
