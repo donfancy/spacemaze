@@ -135,6 +135,7 @@ test('Superzapper im Spiel: Z zappt einmal pro Anlauf, Feind-Schuesse erloeschen
   foe.alive = true;
   const p = g.playerState;
   foe.mode = 'hunt';
+  foe.min = -Infinity; foe.max = Infinity; // (die Jagd klemmt ihn sonst in seine Alley zurueck)
   foe.x = p.px - Math.sin(p.yaw) * 1.5 * view0.cell;
   foe.z = p.pz - Math.cos(p.yaw) * 1.5 * view0.cell;
   g.current.viewState().foeShots.push({ axis: 'x', dir: 1, wall: 0, cross: 0, runLen: 99, t: 1, prevT: 1, phase: 1 });
@@ -151,6 +152,7 @@ test('Superzapper im Spiel: Z zappt einmal pro Anlauf, Feind-Schuesse erloeschen
   const other = g.enemies[1];
   other.alive = true;
   other.mode = 'hunt';
+  other.min = -Infinity; other.max = Infinity;
   other.x = foe.x; other.z = foe.z;
   g.handleKey('Y');
   assert.equal(zapped(other), false, 'kein zweiter Zap in diesem Anlauf');
@@ -167,6 +169,7 @@ test('Superzapper im Spiel: Z zappt einmal pro Anlauf, Feind-Schuesse erloeschen
   // Crash -> Retry: neues Leben, Zapper geladen.
   const ram = g.enemies.find((e) => e.alive) ?? g.enemies[0];
   ram.alive = true; ram.mode = 'hunt'; ram.zapAt = null;
+  ram.min = -Infinity; ram.max = Infinity;
   ram.x = g.playerState.px; ram.z = g.playerState.pz;
   advance(g, 0.1);
   assert.equal(g.gameOver, true);

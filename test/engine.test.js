@@ -194,6 +194,7 @@ test('Playing (Kampf): Feindberuehrung setzt crash im viewState und Game Over', 
   // ist die Beruehrung -- deterministisch, ohne dorthin steuern zu muessen.
   const foe = g.enemies[0];
   foe.mode = 'hunt'; // Lauerer/Purzler sind harmlos -- nur ein Jaeger rammt
+  foe.min = -Infinity; foe.max = Infinity; // (die Jagd klemmt ihn sonst in seine Alley zurueck)
   foe.x = g.playerState.px;
   foe.z = g.playerState.pz;
   g.update(1 / 60);

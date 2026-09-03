@@ -283,6 +283,7 @@ test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry',
   // (Lauerer und Purzler sind harmlos).
   const victim = g.enemies[1];
   victim.mode = 'hunt';
+  victim.min = -Infinity; victim.max = Infinity; // (die Jagd klemmt ihn sonst in seine Alley zurueck)
   victim.x = g.playerState.px;
   victim.z = g.playerState.pz;
   advance(g, r, 0.1);
