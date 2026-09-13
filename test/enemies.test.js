@@ -265,6 +265,54 @@ test('enemyHit: nur JAEGER sind verwundbar/toedlich, Lauerer und Purzler nicht',
   assert.equal(enemyHit(enemies, e.x, e.z, 0.3 * CELL), null);
 });
 
+test('AUFFAECHERN (13.9.2026): End-Lauerer landen laengs gestaffelt, die Jagd rueckt als Kolonne mit huntGap an', () => {
+  const maze = corridorMaze();
+  const enemies = createEnemies(maze, { count: 6 }, { unit: 1, cell: CELL, rng: createRng(3) });
+  const ends = enemies.filter((e) => e.lurk.seat === 'end').sort((a, b) => a.order - b.order);
+  assert.equal(ends.length, 3);
+  const landAlong = (e) => (e.axis === 'x' ? e.to[0] : e.to[1]);
+  // Landeplaetze: landing, +landingGap, +2*landingGap von der Wand in den Gang.
+  ends.forEach((e, k) => {
+    const d = Math.abs(landAlong(e) - e.wall) / CELL;
+    assert.ok(Math.abs(d - (ENEMY.landing + k * ENEMY.landingGap)) < 1e-9, `End-Platz ${k} bei ${d} Gangbreiten`);
+  });
+  // Spieler am anderen Gang-Ende mit Blick zur Wand: alle purzeln und jagen.
+  const e0 = ends[0];
+  const farEnd = e0.dir > 0 ? e0.max : e0.min;
+  const player = { px: farEnd, pz: e0.cross, yaw: Math.atan2(e0.dir, 0) };
+  const dt = 1 / 60;
+  for (let t = 0; t < 14; t += dt) enemiesStep(enemies, dt, { cell: CELL, player });
+  assert.ok(enemies.every((e) => e.mode === 'hunt'), 'alle sechs jagen');
+  // Kolonne: der Fuehrer steht beim Spieler, dahinter je mindestens huntGap
+  // Abstand (Toleranz: ein Schritt) -- kein Knaeuel an einer Stelle.
+  const alongs = enemies.map(alongOf).sort((a, b) => (b - a) * e0.dir); // vom Spieler weg sortiert
+  assert.ok(Math.abs(alongs[0] - farEnd) < 1e-6, 'Kolonnenfuehrer bei der Spieler-Laengslage');
+  for (let i = 1; i < alongs.length; i++) {
+    const gap = Math.abs(alongs[i - 1] - alongs[i]);
+    assert.ok(gap >= ENEMY.huntGap * CELL - 2 * ENEMY.huntSpeed * CELL * dt, `Abstand ${i}: ${gap}`);
+  }
+  assert.ok(ENEMY.huntGap * CELL > 2 * ENEMY.hitRadius * CELL * 0.5, 'Abstand groesser als eine Raute');
+});
+
+test('AUFFAECHERN: steht der Spieler dicht vor der Wand, landen die End-Lauerer nie hinter ihm (landingClear)', () => {
+  const maze = corridorMaze();
+  const enemies = createEnemies(maze, { count: 3 }, { unit: 1, cell: CELL, rng: createRng(3) });
+  const e0 = enemies[0];
+  const landAlong = (e) => (e.axis === 'x' ? e.to[0] : e.to[1]);
+  // Spieler 2 Gangbreiten vor der Wand, Blick zur Wand: Platz 3 (1.7) laege
+  // nur 0.3 vor ihm -> auf 2.0 - landingClear geklemmt; 1 und 2 bleiben.
+  const pAlong = e0.wall + e0.dir * 2.0 * CELL;
+  const player = e0.axis === 'x'
+    ? { px: pAlong, pz: e0.cross, yaw: Math.atan2(e0.dir, 0) }
+    : { px: e0.cross, pz: pAlong, yaw: Math.atan2(0, e0.dir) };
+  for (let t = 0; t < 3; t += 1 / 60) enemiesStep(enemies, 1 / 60, { cell: CELL, player });
+  assert.ok(enemies.every((e) => e.mode !== 'lurk'), 'alle ausgeloest');
+  const dists = enemies.sort((a, b) => a.order - b.order).map((e) => Math.abs(landAlong(e) - e.wall) / CELL);
+  assert.ok(Math.abs(dists[0] - ENEMY.landing) < 1e-9 && Math.abs(dists[1] - (ENEMY.landing + ENEMY.landingGap)) < 1e-9, 'vordere Plaetze unveraendert');
+  assert.ok(Math.abs(dists[2] - (2.0 - ENEMY.landingClear)) < 1e-9, `dritter geklemmt (${dists[2]})`);
+  for (const e of enemies) assert.ok(e.dir * (pAlong - landAlong(e)) >= ENEMY.landingClear * CELL - 1e-9, 'nie naeher als landingClear vor dem Spieler');
+});
+
 test('DURCHKOMMENS-TEST Alley: Dauerfeuer vom Gang-Eingang raeumt eine Sechser-Gruppe, bevor sie ankommt', () => {
   const maze = corridorMaze();
   const unit = 1;

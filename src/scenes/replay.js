@@ -23,9 +23,9 @@ import { swayTransform } from '../render/sway.js';
 import { levelConfig, spinnerColor, enemyColor } from '../core/levels.js';
 import { spinnerMarkers } from '../world/spinners.js';
 import { flipperMarkers } from '../world/flippers.js';
-import { pulsarMarkers, pulsarOpenings } from '../world/pulsars.js';
-import { ZAPPER } from '../world/zapper.js';
-import { NEON_MAGENTA, ARCADE_YELLOW } from '../render/colors.js';
+import { pulsarMarkers, pulsarPhantoms } from '../world/pulsars.js';
+import { ZAPPER, zapFlash, zapLineMix } from '../world/zapper.js';
+import { NEON_MAGENTA, ARCADE_YELLOW, mixColors } from '../render/colors.js';
 import {
   bumpPatch, sizzlePatch, fanfarePatch, engineParams, fallPatch, risePatch,
   shotPatch, poofPatch, boomPatch, crashPatch, clinkPatch, whirrPatch, gyroPatch,
@@ -160,7 +160,7 @@ export function createReplay(game) {
       reached: !!reachedEv,
       reachedAt: reachedEv ? reachedEv.t : 0,
       crash: crashEv ? { t: tau - crashEv.t, x: crashEv.x, z: crashEv.z } : null,
-      zap: zapEv && tau - zapEv.t < ZAPPER.flash ? { t: tau - zapEv.t } : null,
+      zap: zapEv && tau - zapEv.t < ZAPPER.lines ? { t: tau - zapEv.t } : null,
       bump, bursts,
     };
   }
@@ -299,6 +299,10 @@ export function createReplay(game) {
           width: renderer.width, height: renderer.height, fov: camera.fov,
         }));
       }
+      // Superzapper: Kanten-Linien flimmern weiss (wie live, playing.js).
+      const themeColor = renderer.color;
+      const zapMix = d.zap ? zapLineMix(d.zap.t) : 0;
+      if (zapMix > 0) renderer.color = mixColors(themeColor, '#ffffff', zapMix);
       renderEgoWorld(renderer, camera, {
         maze, face, statics, px: cur.px, pz: cur.pz, yaw: cur.yaw,
         t: tau, near, stars, rainbow,
@@ -309,6 +313,7 @@ export function createReplay(game) {
         foeShots: cur.foeShots ?? [], shots: cur.shots ?? [],
         bursts: d.bursts, enemyCol, spinnerCol,
       });
+      renderer.color = themeColor;
       if (sway) renderer.popSway();
 
       const w = renderer.width;
@@ -336,7 +341,10 @@ export function createReplay(game) {
 
       // Crash-Moment: der weisse Einschlag-Blitz auch in der Wiedergabe;
       // ebenso der Superzapper-Blitz.
-      if (d.zap && !paused) renderer.flash(0.7 * (1 - d.zap.t / ZAPPER.flash) ** 2);
+      if (d.zap && !paused) {
+        const zf = zapFlash(d.zap.t);
+        if (zf > 0) renderer.flash(0.7 * zf);
+      }
       if (d.crash && d.crash.t < CRASH_FLASH && !paused) {
         renderer.flash(0.9 * (1 - d.crash.t / CRASH_FLASH));
       }
@@ -357,7 +365,7 @@ export function createReplay(game) {
         bump: d.bump, bursts: d.bursts, crash: d.crash, zap: d.zap,
         shots: cur.shots ?? [], foeShots: cur.foeShots ?? [],
         // Wandphantome: reine Funktion der aufgezeichneten Pulsare + Zeit.
-        openings: cur.pulsars ? pulsarOpenings(cur.pulsars, maze, tau) : [],
+        phantoms: cur.pulsars ? pulsarPhantoms(cur.pulsars, maze, tau) : [],
         foes: {
           enemies: puppets, spinners: cur.spinners,
           flippers: cur.flippers, pulsars: cur.pulsars,

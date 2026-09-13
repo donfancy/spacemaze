@@ -22,16 +22,21 @@
 // - STURM-Branch (Boris, 3.9.2026): die Beruehrung dreht IMMER 360 Grad
 //   (gyro.js), und die WAND WIRD DURCHLAESSIG: ist die Zackenstrecke
 //   ZUSAMMENGEZOGEN (Takt closedTime zu / openTime offen), werden
-//   Wandstuecke flirrend unsichtbar und begehbar (pulsarOpenings ->
+//   Wandstuecke unsichtbar und begehbar (pulsarOpenings ->
 //   maze.openings, s. maze.js) -- seitlich eingerastet bis 5 Stuecke auf
 //   DIESER Seite, oben/unten 3 je Seite, im Klappen 1 auf der beruehrten
 //   Seite; zentriert am Pulsar, nie Aussenwaende, nie Einmuendungen. Beim
 //   Wiedererscheinen drueckt die Wand den Spieler zurueck oder ganz in
 //   den Nachbargang (mazeWorld.resolveWallOverlap). Das eroeffnet
-//   Gang-WECHSEL mitten im Labyrinth.
+//   Gang-WECHSEL mitten im Labyrinth. OPTIK (13.9.2026, Boris: das
+//   Flirren sah aus wie ein Rendering-Fehler): die Stuecke GLUEHEN erst
+//   glowTime lang weiss auf, sind dann openTime KOMPLETT weg (die
+//   Nachbarwaende zeigen dabei einen Wandabschluss, s. 2026-Zeichner) und
+//   gluehen symmetrisch wieder herein (pulsarPhantoms = Sicht-Zustand;
+//   pulsarOpenings bleibt die reine Begehbarkeit).
 
 import { randInt } from '../util/rng.js';
-import { isOpenCell } from './maze.js';
+import { OPEN } from './maze.js';
 import {
   corridorCandidates, foeMarkers, QUARTER, orientIndex, sideOf, nextRnd,
 } from './foePlacement.js';
@@ -46,6 +51,8 @@ export const PULSAR = {
   closedTime: 2.5,  // s: ausgedehnt, die Waende stehen (Boris' Start-Takt)
   openTime: 0.8,    // s: zusammengezogen, die Wandstuecke sind weg
   ramp: 0.25,       // s: Zusammenziehen vor dem Oeffnen / Ausdehnen nach dem Schliessen
+  glowTime: 0.4,    // s: die Wandstuecke GLUEHEN weiss auf, bevor sie verschwinden, und
+                    // gluehen beim Wiedererscheinen symmetrisch zurueck (pulsarPhantoms)
   sideHoles: 2,     // Wandstuecke je Seite der Mitte bei Seiten-Stellung (2+1+2 = 5)
   upHoles: 1,       // ... bei oben/unten (1+1+1 = 3 je Seite)
   spreadMax: 0.42,  // halbe Laenge der Zackenstrecke, ausgedehnt (Gangbreiten)
@@ -135,40 +142,74 @@ export function pulsarOpen(p, time) {
   return cycleClock(p, time) >= PULSAR.closedTime;
 }
 
+// Wandzellen, die DIESER Pulsar in seiner aktuellen Stellung oeffnet:
+// seitlich eingerastet bis 5 Stuecke (mid +-2) auf DIESER Seite, oben/unten
+// 3 je Seite (mid +-1), im Klappen 1 (mid) auf der beruehrten Seite (die
+// Seiten-Stellung, von der weg bzw. auf die zu geklappt wird). Nur
+// innerhalb der Gang-Spanne, nie Aussenwaende, nie Einmuendungen (offene
+// Zellen) -- "gerader Gang, sonst weniger". FALLE (13.9.2026 gefixt): die
+// Einmuendungs-Pruefung MUSS das ROHE Grid lesen -- isOpenCell zaehlt das
+// Overlay maze.openings mit, damit galten die eigenen Phantome im
+// Folgeframe als "offen", die Oeffnung schaltete jeden Frame um (das war
+// das Flimmern, das wie ein Rendering-Fehler aussah).
+function openingCells(p, maze, visit) {
+  let sides;
+  let reach;
+  if (p.mode === 'hold') {
+    const k = orientIndex(p.angle);
+    if (k % 2 === 1) { sides = [k === 1 ? 1 : -1]; reach = PULSAR.sideHoles; }
+    else { sides = [-1, 1]; reach = PULSAR.upHoles; }
+  } else {
+    const from = orientIndex(p.from);
+    const to = orientIndex(p.from + p.delta);
+    const k = from % 2 === 1 ? from : to;
+    sides = [k === 1 ? 1 : -1];
+    reach = 0;
+  }
+  for (const side of sides) {
+    const row = p.fix + side;
+    if (row <= 0 || row >= maze.n - 1) continue; // Aussenwand: nie
+    for (let i = p.mid - reach; i <= p.mid + reach; i++) {
+      if (i < p.lo || i > p.hi) continue;
+      const [gx, gy] = p.axis === 'x' ? [i, row] : [row, i];
+      if (maze.grid[gy][gx] === OPEN) continue; // Einmuendung: da ist nichts zu oeffnen
+      visit(gx, gy, side);
+    }
+  }
+}
+
 // Wandphantome aller Pulsare zur Zeit `time`: die Wandzellen [{gx, gy,
-// side, pulsar}], die gerade unsichtbar/begehbar sind. Seitlich eingerastet
-// bis 5 Stuecke (mid +-2) auf DIESER Seite, oben/unten 3 je Seite (mid +-1),
-// im Klappen 1 (mid) auf der beruehrten Seite (die Seiten-Stellung, von der
-// weg bzw. auf die zu geklappt wird). Nur innerhalb der Gang-Spanne, nie
-// Aussenwaende, nie Einmuendungen (offene Zellen) -- "gerader Gang, sonst
-// weniger". Reine Funktion der Pulsar-Daten + Zeit (auch fuers Replay).
+// side, pulsar}], die gerade BEGEHBAR (und fuer Schuesse/Sichtlinien
+// durchsichtig) sind -- genau waehrend openTime. Reine Funktion der
+// Pulsar-Daten + Zeit (auch fuers Replay).
 export function pulsarOpenings(pulsars, maze, time) {
   const out = [];
   for (const p of pulsars) {
     if (!pulsarOpen(p, time)) continue;
-    let sides;
-    let reach;
-    if (p.mode === 'hold') {
-      const k = orientIndex(p.angle);
-      if (k % 2 === 1) { sides = [k === 1 ? 1 : -1]; reach = PULSAR.sideHoles; }
-      else { sides = [-1, 1]; reach = PULSAR.upHoles; }
-    } else {
-      const from = orientIndex(p.from);
-      const to = orientIndex(p.from + p.delta);
-      const k = from % 2 === 1 ? from : to;
-      sides = [k === 1 ? 1 : -1];
-      reach = 0;
-    }
-    for (const side of sides) {
-      const row = p.fix + side;
-      if (row <= 0 || row >= maze.n - 1) continue; // Aussenwand: nie
-      for (let i = p.mid - reach; i <= p.mid + reach; i++) {
-        if (i < p.lo || i > p.hi) continue;
-        const [gx, gy] = p.axis === 'x' ? [i, row] : [row, i];
-        if (isOpenCell(maze, gx, gy)) continue; // Einmuendung: da ist nichts zu oeffnen
-        out.push({ gx, gy, side, pulsar: p });
-      }
-    }
+    openingCells(p, maze, (gx, gy, side) => out.push({ gx, gy, side, pulsar: p }));
+  }
+  return out;
+}
+
+// SICHT-Zustand der Wandphantome fuer die Zeichner: [{gx, gy, side, pulsar,
+// gone, glow}] -- gone = das Stueck ist weg (Begehbarkeits-Fenster, glow 1),
+// sonst glueht es: vor dem Verschwinden steigt glow 0 -> 1 (glowTime lang,
+// "hell aufgluehen"), nach dem Wiedererscheinen faellt es 1 -> 0 (symmetrisch
+// "hereingluehen"). Ausserhalb dieser drei Fenster erscheint die Zelle nicht.
+// Die Zellen richten sich nach der AKTUELLEN Stellung (klappt der Pulsar im
+// Aufgluehen noch, wandert das Gluehen mit -- arcade-ok).
+export function pulsarPhantoms(pulsars, maze, time) {
+  const out = [];
+  const { closedTime, glowTime } = PULSAR;
+  for (const p of pulsars) {
+    const u = cycleClock(p, time);
+    let gone = false;
+    let glow;
+    if (u >= closedTime) { gone = true; glow = 1; }
+    else if (u >= closedTime - glowTime) glow = (u - (closedTime - glowTime)) / glowTime;
+    else if (u < glowTime) glow = 1 - u / glowTime; // direkt nach dem Schliessen (Uhr laeuft bei 0 weiter)
+    else continue;
+    openingCells(p, maze, (gx, gy, side) => out.push({ gx, gy, side, pulsar: p, gone, glow }));
   }
   return out;
 }

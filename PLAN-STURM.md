@@ -337,7 +337,41 @@ verwundbar nur beim Vorlauf, an der Wand geschützt. Neu:
   Tanker-Rammstoß (Nahkampf in der Alley), einzelne Flipper, ein
   Aufspießen.
 
+### Stufe 7 — Nachschärfen nach dem Spielen (13.9.2026)
+Boris hat ein paar Tage beide Varianten gespielt und favorisiert den
+Branch. Fünf Punkte, alle umgesetzt (Details/Konstanten in CLAUDE.md):
+- **Zap-Tasten:** ganze untere Buchstabenreihe — `ZAP_KEYS` Z Y C V B N.
+  X (Exit) und M (Mute) bleiben, obwohl Boris sie mit aufzählte —
+  Entscheid steht noch aus (X im Gefecht = raus zur Karte; M ist der
+  globale Stumm-Schalter in main.js und erreicht das Spiel gar nicht).
+  Info-Seite und Steuerzeile nennen weiter nur Z/Y.
+- **Zapper-Optik:** Kanten-Linien flimmern weiß durch (Tempest), 0.9 s,
+  30 Hz harte Wechsel, erst 0.12 s Dauer-Weiß; beide Engines + Replay
+  (`zapLineMix`/`zapFlash` pur, getestet).
+- **Pulsar-Wandlücken:** Das „Rendering-Fehler"-Flimmern war ein BUG:
+  `pulsarOpenings` filterte Einmündungen mit `isOpenCell`, das das
+  Overlay `maze.openings` mitliest → die eigenen Phantome galten im
+  nächsten Frame als offen, die Öffnung kippte jeden Frame (auch die
+  Begehbarkeit!). Jetzt rohes Grid. Optik neu: aufglühen (0.4 s) →
+  komplett weg (0.8 s, kein Flirren) → hereinglühen; die stehen
+  gebliebenen Nachbarn bekommen einen **Wandabschluss** (dynamische
+  Stirnflächen + Kanten, `updateHoleCaps`). 1980 zeichnet die Phantome
+  weiterhin nicht (Branch-Regel: nur crash-frei).
+- **Tanker aufgefächert:** End-Lauerer landen längs gestaffelt (0.5 /
+  1.1 / 1.7 Gangbreiten vor der Wand, nie näher als 0.8 vor dem Spieler),
+  Jagd in Kolonne mit 0.55 Abstand statt Knäuel.
+- **Salve langsamer:** SHOTS.rate 12 → 10 (≈ −15 %).
+- Sichtprüfung 2026 per CDP (cdp-sturm.mjs, Teleport-Rezept) bestanden:
+  Glühen/Loch/Abschluss/Hereinglühen und Zap-Flimmern im Bild; 513 Tests.
+
 ## Fallen und Notizen
+
+- **isOpenCell liest das Overlay (13.9.2026):** wer Wandzellen für die
+  Phantom-Logik klassifiziert, muss `maze.grid` lesen — `isOpenCell`
+  ist BEGEHBARKEIT (inkl. Phantome). Regressionstest in pulsars.test.js.
+- **CDP-Inszenierung:** `DRIVE.cruise = 0` macht die Kamera NaN
+  (vel/cruise in bank/Motor) → schwarzes Bild ohne Fehler; 0.001 nehmen.
+  Teleport: X → Karte, `game.playerState = {px,pz,yaw}`, S = Resume.
 
 - **Meta/Alt als Spieltaste (verworfen):** bei gehaltenem Cmd liefert
   macOS für andere Tasten KEINE keyup-Events (gehaltene Pfeile „kleben"),

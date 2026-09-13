@@ -51,13 +51,15 @@ import {
 import {
   flippersStep, flipperPlayerHit, flipperShotHit, spawnFlipperPair, flipperPos,
 } from '../world/flippers.js';
-import { pulsarsStep, pulsarPlayerTouch, pulsarOpenings } from '../world/pulsars.js';
+import { pulsarsStep, pulsarPlayerTouch, pulsarOpenings, pulsarPhantoms } from '../world/pulsars.js';
 import { createGyro, startSpin, gyroStep, gyroDirs, shortestRoll } from '../world/gyro.js';
 import { alignTurn } from '../world/align.js';
 import { AUTOPILOT, createAutopilot, autopilotStep } from '../world/autopilot.js';
 import { createShotsState, aimYaw, fireShot, shotsStep } from '../world/shots.js';
-import { ZAPPER, zapTargets, startZap, zapStep } from '../world/zapper.js';
-import { PHOSPHOR_GREEN, NEON_MAGENTA, TANKER_RED } from '../render/colors.js';
+import {
+  ZAPPER, zapTargets, startZap, zapStep, isZapKey, hasZapKey, zapFlash, zapLineMix,
+} from '../world/zapper.js';
+import { PHOSPHOR_GREEN, NEON_MAGENTA, TANKER_RED, mixColors } from '../render/colors.js';
 import { SHATTER } from '../render/shatter.js';
 import { createRng } from '../util/rng.js';
 import {
@@ -139,7 +141,8 @@ export function createPlaying(game) {
   let spinners = [];      // Spinner (liegen auf game.spinners, s. enter())
   let flippers = [];      // X-Flipper ab Level 21 (liegen auf game.flippers)
   let pulsars = [];       // Pulsare ab Level 26 (liegen auf game.pulsars)
-  let openings = [];      // Wandphantome der Pulsare dieses Frames (pulsarOpenings)
+  let openings = [];      // Wandphantome der Pulsare dieses Frames (pulsarOpenings, Begehbarkeit)
+  let phantoms = [];      // ... und ihr Sicht-Zustand (pulsarPhantoms: gluehen/weg, fuer die Zeichner)
   let zapQueue = [];      // Superzapper: Feinde, die noch explodieren (nah -> fern)
   let zapAt = -Infinity;  // Szenenzeit des letzten Zaps (weisser Blitz)
   let foeShots = [];      // sirrende Spinner-Schuesse (ab Level 21)
@@ -398,6 +401,7 @@ export function createPlaying(game) {
       flippers = game.flippers ?? [];
       pulsars = game.pulsars ?? [];
       openings = [];
+      phantoms = [];
       maze.openings = null;
       zapQueue = [];
       zapAt = -Infinity;
@@ -526,7 +530,7 @@ export function createPlaying(game) {
         up: keys.has('ArrowUp'),
         down: keys.has('ArrowDown'),
       };
-      if (keys.has('Z') || keys.has('Y')) zap(); // Superzapper (gehalten oder vom Autopiloten)
+      if (hasZapKey(keys)) zap(); // Superzapper (gehalten oder vom Autopiloten; untere Buchstabenreihe)
       // Tasten-Eingabe: im Fahrt-Modus rotiert das GANZE Kreuz "logisch"
       // unter der aktuellen Blick-Verdrehung (gyroDirs -- ohne Pulsar-
       // Beruehrung ist orient 0 und alles bleibt beim Gewohnten):
@@ -556,6 +560,7 @@ export function createPlaying(game) {
       // (Rueckdruecken oder ganz in den Nachbargang) -- mit Bump-Feedback.
       if (pulsars.length) {
         const now = pulsarOpenings(pulsars, maze, sceneT);
+        phantoms = pulsarPhantoms(pulsars, maze, sceneT);
         const keys = new Set(now.map((o) => openingKey(maze, o.gx, o.gy)));
         const closed = openings.filter((o) => !keys.has(openingKey(maze, o.gx, o.gy)));
         openings = now;
@@ -787,6 +792,14 @@ export function createPlaying(game) {
       if (drive) {
         renderer.pushSway(swayTransform(bank + rollOsc.x + gyro.roll, pitchOsc.x, { width: renderer.width, height: renderer.height, fov: camera.fov }));
       }
+      // SUPERZAPPER (Tempest-Hommage): die Kanten-Linien flimmern weiss durch
+      // -- die Theme-Farbe des Renderers wird fuer den Welt-Zeichner (Waende,
+      // Sterne, Fadenkreuz) Richtung Weiss gemischt (zapLineMix, hart
+      // flimmernd, ausklingend); Feind-/Schuss-Farben sind explizit und
+      // bleiben, die HUD-Texte danach wieder normal.
+      const themeColor = renderer.color;
+      const zapMix = zapLineMix(sceneT - zapAt);
+      if (zapMix > 0) renderer.color = mixColors(themeColor, '#ffffff', zapMix);
       // Die komplette Welt (Waende, Sterne, Ziel, Feuerwerk, Wellen, Feinde,
       // Schuesse, Splitter) zeichnet der gemeinsame Welt-Zeichner -- exakt
       // derselbe Code laeuft in der REPLAY-Szene (scenes/egoWorld.js).
@@ -823,6 +836,7 @@ export function createPlaying(game) {
           ], { intensity: 0.85, lineWidth: 1.5 });
         }
       }
+      renderer.color = themeColor;
       if (drive) renderer.popSway();
 
       const w = renderer.width;
@@ -860,8 +874,8 @@ export function createPlaying(game) {
       }
 
       // Superzapper-Blitz (weiss, quadratisch ausklingend).
-      const zt = sceneT - zapAt;
-      if (zt < ZAPPER.flash) renderer.flash(0.7 * (1 - zt / ZAPPER.flash) ** 2);
+      const zf = zapFlash(sceneT - zapAt);
+      if (zf > 0) renderer.flash(0.7 * zf);
 
       if (crash) {
         renderer.popShatter();
@@ -898,16 +912,16 @@ export function createPlaying(game) {
       if (!maze) return null; // vor enter() -- gleicher Vertrag wie alle Szenen
       return { maze, cell, unit, px, pz, yaw, sceneT, reached, reachedAt, bump,
         drive, roll: bank + rollOsc.x + gyro.roll, pitch: pitchOsc.x, bank,
-        orient: gyro.orient, foeShots, openings,
+        orient: gyro.orient, foeShots, phantoms,
         zapper: !!game.zapper && shoot,
-        zap: sceneT - zapAt < ZAPPER.flash ? { t: sceneT - zapAt } : null,
+        zap: sceneT - zapAt < ZAPPER.lines ? { t: sceneT - zapAt } : null,
         shoot, steer: drive ? driveState.steer : walkState.steer,
         shots: shotsState ? shotsState.shots : [], bursts,
         crash: crash ? { t: crashT, x: crashPos.x, z: crashPos.z } : null };
     },
 
     onKey(key) {
-      if (key === 'Z' || key === 'Y') { zap(); return; } // Superzapper (Tastendruck/Touch-Chip)
+      if (isZapKey(key)) { zap(); return; } // Superzapper (Tastendruck/Touch-Chip)
       if (key !== 'X' || crash) return; // waehrend der Explosion kein Abheben mehr
       // Frisch am Ziel schwingt die 2026-Kamera in die Aussenpose
       // (END_CAM_BLEND 0.8s) -- X darf die Blende ausklingen lassen, sonst

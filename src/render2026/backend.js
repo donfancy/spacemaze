@@ -58,11 +58,12 @@ import {
 import { flipperMarkers, flipperSegments, flipperTriangles } from '../world/flippers.js';
 import { pulsarMarkers, pulsarSegments } from '../world/pulsars.js';
 import { GLIDER } from '../world/glider.js';
-import { ZAPPER } from '../world/zapper.js';
+import { zapFlash, zapLineMix } from '../world/zapper.js';
+import { OPEN } from '../world/maze.js';
 import {
   buildWorld, applyTheme, disposeWorld, hdr, setWallHeight, setMarkerFade,
   UNITS_PER_CELL, FOG_DENSITY, HEADLIGHT_INTENSITY, EGO_BOOST, MIRROR_LINE_DIM,
-  MAX_HOLES,
+  MAX_HOLES, HOLE_GONE, HOLE_MARGIN,
 } from './world3d.js';
 import { buildStartscreenScene } from './startscreen3d.js';
 import { skyTheme } from './skyTheme.js';
@@ -156,6 +157,14 @@ const CUBE_ENV_REFLECT = 0.6;   // Nebel-Cubemap als diffuse Reflexion
 const DRIFT_INTENSITY = [130, 95]; // Wander-Sonnen (gruen/gelb)
 const DRIFT_RATE = 0.14;        // rad/s: gemaechlicher Umlauf
 const scratchCol = new THREE.Color(); // Scratch fuer die Zyklus-Mischung
+// SUPERZAPPER-Optik (13.9.2026, Boris: "wie der Tempest-Superzapper"): die
+// Kanten-Linien flimmern weiss durch (zapLineMix) -- Ziel-Weiss pro
+// Linien-Klasse: HDR fuer die Glut-Kanten (blueht), gedeckt fuer die
+// dezenten Pfosten und das Spiegelbild.
+const ZAP_LINE_WHITE = 3.0;
+const ZAP_GRID_WHITE = 1.0;
+const ZAP_MIRROR_WHITE = 1.0;
+const zapWhite = new THREE.Color();
 const SHOT_FLICKER = 12;        // Farb-Schaltrate (Hz)
 const SHOT_WHITE_MIX = 0.55;    // Weiss-Anteil der Arcade-Farben
 const NEAR_STAR = 0.6;          // Gangbreiten: der Stern-Radius waechst erst mit
@@ -551,15 +560,16 @@ export function createBackend2026(container = document.body) {
     renderPass.scene = world.scene;
   }
 
-  // Grundzustand pro Frame (jeder Zeichner setzt danach nur, was er braucht --
-  // sonst schleppt ein Szenenwechsel die Sichtbarkeiten der Vorszene mit).
-  // Pulsar-WANDPHANTOME (Sturm): die Zell-Footprints der gerade offenen
-  // Wandstuecke als Loch-Boxen in die Shader-Uniforms (world3d.installHoles),
-  // die naechsten zuerst (Deckel MAX_HOLES). Zeit fuers Flirren.
+  // Pulsar-WANDPHANTOME (Sturm): der Sicht-Zustand aus view.phantoms
+  // (pulsarPhantoms: gluehend/weg) als Loch-Boxen + Glueh-Werte in die
+  // Shader-Uniforms (world3d.installHoles), die naechsten zuerst (Deckel
+  // MAX_HOLES). Glueh-Kurve quadratisch: das Stueck wird spaet richtig hell
+  // ("aufgluehen") und klingt nach dem Wiedererscheinen schnell ab. Fuer die
+  // WEGGEFALLENEN Stuecke zeichnet updateHoleCaps den Wandabschluss.
   function updateHoles(view) {
     const h = world.holes;
-    const list = view.openings ?? [];
-    if (!list.length) { h.uHoleCount.value = 0; return; }
+    const list = view.phantoms ?? [];
+    if (!list.length) { h.uHoleCount.value = 0; updateHoleCaps(view.maze, []); return; }
     const k = world.kLocal;
     const near = list.map((o) => {
       const cx = (world.u(o.gx) + world.u(o.gx + 1)) / 2;
@@ -567,15 +577,116 @@ export function createBackend2026(container = document.body) {
       return { o, d: Math.hypot(cx - view.px * k, cz - view.pz * k) };
     }).sort((a, b) => a.d - b.d).slice(0, MAX_HOLES);
     near.forEach(({ o }, i) => {
-      h.uHoles.value[i].set(world.u(o.gx) - 0.02, world.u(o.gy) - 0.02,
-        world.u(o.gx + 1) + 0.02, world.u(o.gy + 1) + 0.02);
+      h.uHoles.value[i].set(world.u(o.gx) - HOLE_MARGIN, world.u(o.gy) - HOLE_MARGIN,
+        world.u(o.gx + 1) + HOLE_MARGIN, world.u(o.gy + 1) + HOLE_MARGIN);
+      h.uHoleGlow.value[i] = o.gone ? HOLE_GONE : o.glow * o.glow;
     });
     h.uHoleCount.value = near.length;
-    h.uHoleTime.value = view.sceneT;
+    updateHoleCaps(view.maze, near.filter(({ o }) => o.gone).map(({ o }) => o));
+  }
+
+  // WANDABSCHLUSS (Boris 13.9.2026: "die verbliebenen Waende duerfen nicht
+  // offen sein"): die Waende sind hohle Kaesten aus Seitenflaechen -- faellt
+  // ein Stueck weg, blickte man in die Nachbarn hinein. Fuer jedes
+  // weggefallene Stueck bekommt jeder Nachbar, der WAND ist (rohes Grid) und
+  // nicht selbst weg, eine Stirnflaeche an der gemeinsamen Zellgrenze (um
+  // HOLE_MARGIN in den Nachbarn gerueckt -- genau dort setzen seine
+  // Seitenflaechen wieder ein, kein Spalt), dazu ihre vier Glut-Kanten.
+  // Nachbarn, die Gang sind, brauchen nichts: dort WAR die Wandflaeche, ihr
+  // Wegfall ist der Durchgang. Eigene Materialien OHNE Loch-Shader
+  // (world3d), Linienfarben folgen lineMat/mirrorLineMat (inkl. Glow und
+  // Zapper-Flimmern). Spiegelbild wie die Waende.
+  function updateHoleCaps(maze, gone) {
+    if (!gone.length) {
+      world.holeCapBuf?.hide();
+      world.holeCapLineBuf?.hide();
+      return;
+    }
+    if (!world.holeCapBuf) {
+      world.holeCapBuf = makeBuffer({
+        world, triangles: true, material: world.holeCapMat, mirrorMaterial: world.holeCapMat,
+        parent: world.wallGroup,
+      });
+      world.holeCapLineBuf = makeBuffer({
+        world, material: world.holeCapLineMat, mirrorMaterial: world.mirrorHoleCapLineMat,
+        parent: world.wallGroup,
+      });
+    }
+    world.holeCapLineMat.color.copy(world.lineMat.color);
+    world.mirrorHoleCapLineMat.color.copy(world.mirrorLineMat.color);
+    const goneKeys = new Set(gone.map((o) => o.gy * maze.n + o.gx));
+    const caps = [];
+    for (const o of gone) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = o.gx + dx;
+        const ny = o.gy + dy;
+        if (nx < 0 || ny < 0 || nx >= maze.n || ny >= maze.n) continue;
+        if (maze.grid[ny][nx] === OPEN || goneKeys.has(ny * maze.n + nx)) continue;
+        caps.push({ o, dx, dy });
+      }
+    }
+    const H = world.H;
+    const fb = world.holeCapBuf;
+    const lb = world.holeCapLineBuf;
+    fb.ensure(caps.length * 18);
+    lb.ensure(caps.length * 24);
+    const fp = fb.pos.array;
+    const lp = lb.pos.array;
+    let fi = 0;
+    let li = 0;
+    const u = world.u;
+    for (const { o, dx, dy } of caps) {
+      // Ebene der Zellgrenze zum Nachbarn, in den Nachbarn gerueckt.
+      let ax, az, bx, bz;
+      if (dx !== 0) {
+        ax = bx = (dx > 0 ? u(o.gx + 1) : u(o.gx)) + dx * HOLE_MARGIN;
+        az = u(o.gy); bz = u(o.gy + 1);
+      } else {
+        az = bz = (dy > 0 ? u(o.gy + 1) : u(o.gy)) + dy * HOLE_MARGIN;
+        ax = u(o.gx); bx = u(o.gx + 1);
+      }
+      // Zwei Dreiecke (DoubleSide, Normalen per computeVertexNormals).
+      fp.set([ax, 0, az, bx, 0, bz, bx, H, bz, ax, 0, az, bx, H, bz, ax, H, az], fi);
+      fi += 18;
+      // Vier Kanten: Boden (Kontur-Hoehe 0.1), Krone, zwei Pfosten.
+      lp.set([ax, 0.1, az, bx, 0.1, bz, ax, H, az, bx, H, bz,
+        ax, 0, az, ax, H, az, bx, 0, bz, bx, H, bz], li);
+      li += 24;
+    }
+    fb.show(caps.length * 6);
+    fb.mesh.geometry.computeVertexNormals();
+    lb.show(caps.length * 8);
+  }
+
+  // SUPERZAPPER-Optik: waehrend zapLineMix > 0 werden die Linienfarben
+  // Richtung Weiss gemischt -- von einer SAUBEREN Basis aus (applyTheme +
+  // setLineGlow neu, denn wallGridMat/mirrorLineMat setzt sonst nur der
+  // Theme-Wechsel; ein Lerp auf dem Lerp des Vorframes liefe weg). Die
+  // Basis stellt resetWorldFrame im naechsten Frame wieder her (zapLinesDirty),
+  // auch wenn die Szene wechselt (Crash -> Rausschwenk -> Karte).
+  let zapLinesDirty = false;
+  function applyZapLines(view, glow) {
+    const mix = view?.zap ? zapLineMix(view.zap.t) : 0;
+    if (mix <= 0) return;
+    applyTheme(world, themeHex);
+    world.glowKey = null;
+    setLineGlow(glow);
+    zapLinesDirty = true;
+    world.lineMat.color.lerp(zapWhite.setScalar(ZAP_LINE_WHITE), mix);
+    world.outlineMat.color.lerp(zapWhite, mix);
+    world.wallGridMat.color.lerp(zapWhite.setScalar(ZAP_GRID_WHITE), mix);
+    world.mirrorLineMat.color.lerp(zapWhite.setScalar(ZAP_MIRROR_WHITE), mix);
   }
 
   function resetWorldFrame() {
     world.holes.uHoleCount.value = 0;
+    world.holeCapBuf?.hide();
+    world.holeCapLineBuf?.hide();
+    if (zapLinesDirty) { // Zapper-Flimmern des Vorframes zuruecknehmen (Theme-Basis)
+      applyTheme(world, themeHex);
+      world.glowKey = null;
+      zapLinesDirty = false;
+    }
     world.scene.fog.density = 0;
     world.headlight.intensity = 0;
     world.bumpLight.intensity = 0;
@@ -1901,6 +2012,7 @@ export function createBackend2026(container = document.body) {
     ensureWorld(game, view.maze, color);
     resetWorldFrame();
     setLineGlow(0);
+    applyZapLines(view, 0);
     setFov(EGO_FOV);
     world.scene.fog.density = FOG_DENSITY;
     world.headlight.intensity = HEADLIGHT_INTENSITY;
@@ -2203,6 +2315,7 @@ export function createBackend2026(container = document.body) {
       world.gridMat.opacity = 0.8 * e;
     }
     setLineGlow(glow);
+    applyZapLines(view, glow);
     world.scene.fog.density = FOG_DENSITY * fogF;
     world.headlight.intensity = HEADLIGHT_INTENSITY * e;
     setWallHeight(world, e);
@@ -2410,10 +2523,10 @@ export function createBackend2026(container = document.body) {
       // zerberstenden Voxel-Lettern.
       const tFlash = game.stateKey === State.STARTSCREEN && view?.titleT != null
         ? 0.8 * titleFlash(view.titleT) : 0;
-      const zapFlash = pv?.zap ? 0.8 * (1 - pv.zap.t / ZAPPER.flash) ** 2 : 0; // Superzapper
+      const zapA = pv?.zap ? 0.8 * zapFlash(pv.zap.t) : 0; // Superzapper
       flashEl.style.opacity = pv?.crash && pv.crash.t < CRASH_FLASH
         ? String(0.95 * (1 - pv.crash.t / CRASH_FLASH) ** 2)
-        : String(Math.max(tFlash, zapFlash));
+        : String(Math.max(tFlash, zapA));
     },
 
     // Live-Engine-Schalter (Stufe 3): main.js blendet die ganze 2026-Ausgabe

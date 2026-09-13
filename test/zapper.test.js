@@ -8,7 +8,10 @@ import assert from 'node:assert/strict';
 import { WALL, OPEN } from '../src/world/maze.js';
 import { createMetric } from '../src/world/metric.js';
 import { createRng } from '../src/util/rng.js';
-import { ZAPPER, zapTargets, startZap, zapStep, zapped } from '../src/world/zapper.js';
+import {
+  ZAPPER, zapTargets, startZap, zapStep, zapped, isZapKey, hasZapKey, zapFlash, zapLineMix,
+} from '../src/world/zapper.js';
+import { hasLineOfSight } from '../src/world/mazeWorld.js';
 import { createEnemies, enemyHit, enemyFire } from '../src/world/enemies.js';
 import { createSpinners, spinnerShotHit, spinnerPlayerHit, spinnerFire, spinnerPos } from '../src/world/spinners.js';
 import { createFlippers, flipperShotHit, flipperPlayerHit, flipperDiagonal } from '../src/world/flippers.js';
@@ -136,8 +139,12 @@ test('Superzapper im Spiel: Z zappt einmal pro Anlauf, Feind-Schuesse erloeschen
   const p = g.playerState;
   foe.mode = 'hunt';
   foe.min = -Infinity; foe.max = Infinity; // (die Jagd klemmt ihn sonst in seine Alley zurueck)
-  foe.x = p.px - Math.sin(p.yaw) * 1.5 * view0.cell;
-  foe.z = p.pz - Math.cos(p.yaw) * 1.5 * view0.cell;
+  // Im Blick MIT Sichtlinie: das Zufalls-Maze kann 1.5 Gangbreiten voraus
+  // schon eine Wand haben (Flake, 13.9.2026 gefixt) -- naeher ruecken, bis frei.
+  const ahead = (d) => [p.px - Math.sin(p.yaw) * d * view0.cell, p.pz - Math.cos(p.yaw) * d * view0.cell];
+  let dist = 1.5;
+  while (dist > 0 && !hasLineOfSight(view0.maze, p.px, p.pz, ...ahead(dist), view0.unit)) dist = Math.max(0, dist - 0.2);
+  [foe.x, foe.z] = ahead(dist);
   g.current.viewState().foeShots.push({ axis: 'x', dir: 1, wall: 0, cross: 0, runLen: 99, t: 1, prevT: 1, phase: 1 });
   g.handleKey('Z');
   assert.equal(g.zapper, false, 'verbraucht');
@@ -179,4 +186,46 @@ test('Superzapper im Spiel: Z zappt einmal pro Anlauf, Feind-Schuesse erloeschen
   advance(g, 2.5);
   assert.equal(g.stateKey, State.PLAYING);
   assert.equal(g.zapper, true, 'Retry = neues Leben: Zapper nachgeladen');
+  g.handleKey('V'); // untere Buchstabenreihe zappt ebenso (Boris 13.9.2026)
+  assert.equal(g.zapper, false, 'V verbraucht den Zapper');
+});
+
+test('Zap-Tasten = untere Buchstabenreihe ohne X (Exit) und M (Mute); Blitz- und Flimmer-Kurven', () => {
+  for (const k of ['Z', 'Y', 'C', 'V', 'B', 'N']) assert.ok(isZapKey(k), `${k} zappt`);
+  for (const k of ['X', 'M', ' ', 'S', 'R', 'I', 'ArrowLeft', 'z']) assert.ok(!isZapKey(k), `${k} zappt nicht`);
+  assert.ok(hasZapKey(new Set(['ArrowLeft', 'V'])));
+  assert.ok(!hasZapKey(new Set(['ArrowLeft', ' ', 'X'])));
+
+  // Vollbild-Blitz: voll am Anfang, quadratisch aus, ausserhalb 0.
+  assert.equal(zapFlash(0), 1);
+  assert.ok(Math.abs(zapFlash(ZAPPER.flash / 2) - 0.25) < 1e-9);
+  assert.equal(zapFlash(ZAPPER.flash), 0);
+  assert.equal(zapFlash(-0.1), 0);
+  assert.equal(zapFlash(NaN), 0);
+
+  // Kanten-Flimmern: erst `blast` lang durchgehend weiss, dann harte
+  // Wechsel unter der linear fallenden Huelle, nach `lines` aus.
+  assert.ok(ZAPPER.lines >= ZAPPER.flash, 'das Flimmern ueberdauert den Blitz');
+  assert.equal(zapLineMix(0), 1);
+  assert.ok(zapLineMix(ZAPPER.blast / 2) > 0.85, 'Anfangs-Blast voll');
+  const dt = 1 / ZAPPER.flickerHz;
+  let changes = 0;
+  let prev = null;
+  let brightFrames = 0;
+  let frames = 0;
+  for (let t = ZAPPER.blast + dt / 2; t < ZAPPER.lines; t += dt) {
+    const env = 1 - t / ZAPPER.lines;
+    const m = zapLineMix(t);
+    assert.ok(m > 0 && m <= env + 1e-9, `in der Huelle (${m} <= ${env})`);
+    assert.equal(m, zapLineMix(t), 'deterministisch');
+    const bright = m > 0.6 * env;
+    if (prev != null && bright !== prev) changes++;
+    if (bright) brightFrames++;
+    frames++;
+    prev = bright;
+  }
+  assert.ok(changes >= 6, `flimmert hart (${changes} Wechsel)`);
+  assert.ok(brightFrames > frames * 0.3 && brightFrames < frames * 0.8, `weder Dauer-Weiss noch Dauer-Dunkel (${brightFrames}/${frames})`);
+  assert.equal(zapLineMix(ZAPPER.lines), 0);
+  assert.equal(zapLineMix(-1), 0);
 });

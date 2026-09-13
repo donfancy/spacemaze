@@ -8,14 +8,14 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WALL, OPEN } from '../src/world/maze.js';
+import { WALL, OPEN, openingKey } from '../src/world/maze.js';
 import { createMetric } from '../src/world/metric.js';
 import { createRng } from '../src/util/rng.js';
 import { DRIVE } from '../src/world/drive.js';
 import { SHOTS } from '../src/world/shots.js';
 import {
   PULSAR, createPulsars, pulsarsStep, pulsarSide, pulsarPos, pulsarSpread,
-  pulsarPlayerTouch, pulsarMarkers, pulsarSegments, pulsarOpen, pulsarOpenings,
+  pulsarPlayerTouch, pulsarMarkers, pulsarSegments, pulsarOpen, pulsarOpenings, pulsarPhantoms,
 } from '../src/world/pulsars.js';
 
 const THIN = { wall: 1, corridor: 5 };
@@ -184,6 +184,48 @@ test('Wandphantome: seitlich 5 auf dieser Seite, oben/unten 3 je Seite, im Klapp
   assert.deepEqual(cells(pulsarOpenings(pulsars, maze, tOpen)), ['6,6']);
   p.from = 0; p.delta = -QUARTER; p.angle = -QUARTER / 2; // 0 -> 3PI/2 = links
   assert.deepEqual(cells(pulsarOpenings(pulsars, maze, tOpen)), ['6,4']);
+});
+
+test('Wandphantome-OPTIK: gluehen glowTime auf, sind openTime WEG, gluehen zurueck -- und das eigene Overlay tarnt sie nicht', () => {
+  const maze = phantomMaze();
+  const pulsars = createPulsars(maze, { count: 1 }, { unit: 1, cell: CELL, rng: createRng(7) });
+  const p = pulsars[0];
+  settle(p, QUARTER); // rechts: Reihe 6
+  const cells = (list) => list.map((o) => `${o.gx},${o.gy}`).sort();
+  const expect = cells([4, 5, 6, 7, 8].map((x) => ({ gx: x, gy: 6 })));
+  const tOpen = (() => { let t = 0; while (!pulsarOpen(p, t)) t += 0.001; return t; })(); // Beginn der Oeffnung
+  const { glowTime, openTime } = PULSAR;
+
+  // Lange vorher: nichts zu sehen.
+  assert.deepEqual(pulsarPhantoms(pulsars, maze, tOpen - glowTime - 0.2), []);
+  // AUFGLUEHEN: dieselben Zellen, glow steigt 0 -> 1, noch nicht weg und nicht begehbar.
+  const a = pulsarPhantoms(pulsars, maze, tOpen - 0.75 * glowTime);
+  const b = pulsarPhantoms(pulsars, maze, tOpen - 0.25 * glowTime);
+  assert.deepEqual(cells(a), expect);
+  assert.ok(a.every((o) => !o.gone && Math.abs(o.glow - 0.25) < 0.01), 'frueh: glow ~0.25');
+  assert.ok(b.every((o) => !o.gone && Math.abs(o.glow - 0.75) < 0.01), 'spaet: glow ~0.75');
+  assert.deepEqual(pulsarOpenings(pulsars, maze, tOpen - 0.25 * glowTime), [], 'gluehend ist noch Wand');
+  // WEG: gone, begehbar.
+  const g = pulsarPhantoms(pulsars, maze, tOpen + openTime / 2);
+  assert.deepEqual(cells(g), expect);
+  assert.ok(g.every((o) => o.gone && o.glow === 1));
+  assert.deepEqual(cells(pulsarOpenings(pulsars, maze, tOpen + openTime / 2)), expect);
+  // HEREINGLUEHEN: nach dem Schliessen faellt glow 1 -> 0, sofort wieder Wand.
+  const tClose = tOpen + openTime;
+  const c = pulsarPhantoms(pulsars, maze, tClose + 0.25 * glowTime);
+  assert.deepEqual(cells(c), expect);
+  assert.ok(c.every((o) => !o.gone && Math.abs(o.glow - 0.75) < 0.01), 'zurueck: glow ~0.75');
+  assert.deepEqual(pulsarOpenings(pulsars, maze, tClose + 0.01), [], 'geschlossen = begehbar vorbei');
+  assert.deepEqual(pulsarPhantoms(pulsars, maze, tClose + glowTime + 0.05), [], 'ausgeglueht');
+
+  // REGRESSION (13.9.2026, das "Rendering-Fehler"-Flimmern): mit gesetztem
+  // Overlay maze.openings (= die eigenen Phantome des Vorframes) muessen
+  // Oeffnungen und Phantome IDENTISCH bleiben -- vorher galten die Zellen
+  // per isOpenCell als Einmuendung und die Oeffnung schaltete jeden Frame um.
+  maze.openings = new Set(g.map((o) => openingKey(maze, o.gx, o.gy)));
+  assert.deepEqual(cells(pulsarOpenings(pulsars, maze, tOpen + openTime / 2)), expect, 'Oeffnungen mit Overlay');
+  assert.deepEqual(cells(pulsarPhantoms(pulsars, maze, tOpen + openTime / 2)), expect, 'Phantome mit Overlay');
+  maze.openings = null;
 });
 
 test('Wandphantome: Aussenwaende bleiben immer -- ein Randgang oeffnet nur zur Innenseite', () => {

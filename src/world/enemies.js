@@ -11,9 +11,14 @@
 //            anderen (dropGap), sobald die Gruppe "in Sicht" kommt: der
 //            Spieler ist IM Gang und hat die Lauer-Wand VOR sich
 //            (Blick-Halbebene -- wer mit dem Ruecken einfaehrt, loest
-//            nichts aus).
+//            nichts aus). AUFGEFAECHERT (13.9.2026, Boris: "nicht so
+//            dicht geballt"): die End-Lauerer landen laengs gestaffelt
+//            (landing + k*landingGap), aber nie naeher als landingClear
+//            vor dem Spieler (Landeplatz wird beim Abheben geklemmt).
 //   hunt  -- jagt GANGBUNDEN auf die Laengs-Position des Spielers zu
-//            (huntSpeed < DRIVE.cruise: fliehbar) und FEUERT dieselben
+//            (huntSpeed < DRIVE.cruise: fliehbar), in KOLONNE: wer einen
+//            Kameraden derselben Alley vor sich hat, haelt huntGap Abstand
+//            (kein Verschmelzen zu einem Knaeuel) -- und FEUERT dieselben
 //            sirrenden Schuesse wie die Spinner (world/spinners.js --
 //            gangbreit toedlich, abfangbar per eigenem Feuer). Feuer
 //            braucht nur den Spieler im Gang, NICHT seinen Blick: wer sich
@@ -46,11 +51,14 @@ export const ENEMY = {
   lurkSway: 0.12,   // Gangbreiten: Hin-und-her-Schieben auf der Krone (Amplitude)
   lurkFreq: 0.3,    // Hz des Schiebens
   endSlots: [0, -0.3, 0.3], // Quer-Versatz (Gangbreiten) der Plaetze auf der End-Krone
-  landing: 0.5,     // Gangbreiten: Landeplatz der End-Lauerer vor der Wand
+  landing: 0.5,     // Gangbreiten: Landeplatz des ERSTEN End-Lauerers vor der Wand ...
+  landingGap: 0.6,  // ... die weiteren je so viel weiter im Gang (Auffaecherung)
+  landingClear: 0.8, // Gangbreiten: so viel Luft bleibt beim Landen mindestens vor dem Spieler
   sideLanding: 0.2, // Gangbreiten: Quer-Versatz der Seiten-Lauerer beim Landen
   dropTime: 0.6,    // s Purzeln (Krone -> Gang)
   dropGap: 0.6,     // s zwischen zwei Purzlern einer Gruppe
   huntSpeed: 1.0,   // Jagd-Tempo (Gangbreiten/s) -- unter DRIVE.cruise 1.5
+  huntGap: 0.55,    // Gangbreiten: Mindestabstand in der Jagd-Kolonne (laengs)
   fireRate: 0.4,    // mittlere Schuesse/s pro Jaeger bei Spieler im Gang
 };
 
@@ -82,11 +90,15 @@ export function createEnemies(maze, config, opts) {
     const seats = [];
     // End-Krone: bis drei nebeneinander (die Krone ist wt dick, der Gang
     // eine Gangbreite breit).
+    // Landeplaetze laengs GESTAFFELT (landing, +landingGap, +2*landingGap),
+    // innerhalb der Kammern-Spanne des Gangs.
     for (let k = 0; k < Math.min(ENEMY.endSlots.length, size); k++) {
+      const landAlong = Math.min(run.max, Math.max(run.min,
+        wall + dir * (ENEMY.landing + k * ENEMY.landingGap) * cell));
       seats.push({
         seat: 'end', side: 0, crossOff: ENEMY.endSlots[k],
         along: wall - dir * 0.5 * wt,
-        land: worldOf(wall + dir * ENEMY.landing * cell, run.cross + ENEMY.endSlots[k] * cell),
+        land: worldOf(landAlong, run.cross + ENEMY.endSlots[k] * cell),
         cell: gridOf(endIdx - dir), // die End-WAND hinter der Endkammer
       });
     }
@@ -143,6 +155,11 @@ function placeLurker(e, cell) {
   else setPos(e, e.lurk.along + sway, e.lurk.cross);
 }
 
+// Bewachen zwei Tanker dieselbe Alley (Gang + Lauer-Wand)?
+function sameAlley(a, b) {
+  return a.axis === b.axis && a.cross === b.cross && a.wall === b.wall;
+}
+
 // Steht der Spieler in der Alley dieses Tankers? (quer in der Gangbreite,
 // laengs in der Spanne bis an die Wandflaechen)
 function playerInAlley(e, px, pz, cell) {
@@ -181,6 +198,17 @@ export function enemiesStep(enemies, dt, opts) {
           e.mode = 'drop';
           e.dropT = 0;
           e.from = [e.x, e.z];
+          // Landeplatz klemmen: nie naeher als landingClear VOR dem Spieler
+          // (die gestaffelten End-Plaetze reichen sonst hinter einen dicht
+          // vor der Wand stehenden Spieler) -- nur laengs, quer bleibt.
+          if (inAlley) {
+            const toAlong = e.axis === 'x' ? e.to[0] : e.to[1];
+            const limit = pAlong - e.dir * ENEMY.landingClear * cell;
+            if (e.dir * (toAlong - limit) > 0) {
+              const clamped = Math.min(e.max, Math.max(e.min, limit));
+              e.to = e.axis === 'x' ? [clamped, e.to[1]] : [e.to[0], clamped];
+            }
+          }
           events.push({ type: 'drop', enemy: e });
         }
       }
@@ -196,9 +224,26 @@ export function enemiesStep(enemies, dt, opts) {
     } else {
       if (inAlley) e.target = pAlong;
       const along = e.axis === 'x' ? e.x : e.z;
-      const gap = e.target - along;
+      const sgn = Math.sign(e.target - along);
+      // KOLONNE: ein Kamerad derselben Alley zwischen mir und dem Ziel
+      // begrenzt mein Ziel auf huntGap hinter ihm -- die Gruppe rueckt als
+      // gestaffelte Reihe an statt zu einem Knaeuel zu verschmelzen.
+      let limit = e.target;
+      if (sgn !== 0) {
+        for (const o of enemies) {
+          if (o === e || !o.alive || o.mode !== 'hunt' || !sameAlley(o, e)) continue;
+          const oAlong = o.axis === 'x' ? o.x : o.z;
+          const ahead = (oAlong - along) * sgn;
+          if (ahead < 0 || ahead > (e.target - along) * sgn + ENEMY.huntGap * cell) continue;
+          if (ahead < 1e-9 && o.order > e.order) continue; // gleiche Lage: der fruehere Purzler fuehrt
+          const hold = oAlong - sgn * ENEMY.huntGap * cell;
+          limit = sgn > 0 ? Math.min(limit, hold) : Math.max(limit, hold);
+        }
+      }
+      const gap = limit - along;
       const step = Math.min(Math.abs(gap), ENEMY.huntSpeed * cell * dt);
-      const next = Math.min(e.max, Math.max(e.min, along + Math.sign(gap) * step));
+      const move = gap * sgn > 0 ? sgn * step : 0; // hinter einem Kameraden: stehen bleiben, nie rueckwaerts
+      const next = Math.min(e.max, Math.max(e.min, along + move));
       setPos(e, next, e.axis === 'x' ? e.z : e.x);
     }
   }

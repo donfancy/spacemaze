@@ -18,8 +18,50 @@ import { flipperPos } from './flippers.js';
 export const ZAPPER = {
   cone: Math.PI / 4.8, // rad: halber Sichtkegel (= halbes Kamera-fov von 75 Grad)
   stagger: 0.08,       // s: Versatz der Explosionen von nah nach fern
-  flash: 0.35,         // s: weisser Blitz
+  flash: 0.35,         // s: weisser Vollbild-Blitz
+  lines: 0.9,          // s: weisses DURCHFLIMMERN der Kanten-Linien (Tempest-Superzapper)
+  flickerHz: 30,       // Flimmer-Takt der Linien (harte Wechsel, kein Blenden)
+  blast: 0.12,         // s: am Anfang stehen die Linien durchgehend weiss
 };
+
+// TASTEN (13.9.2026, Boris: "wenn es hektisch wird, verfehle ich die Taste"):
+// die ganze untere Buchstabenreihe zappt -- Y X C V B N M (deutsch) bzw.
+// Z X C V B N M (US), damit passen fast alle Layouts. AUSGENOMMEN X (= Exit,
+// Tasten-Stringenz) und M (= globaler Stumm-Schalter in main.js, faellt nie
+// ins Spiel durch). Info-Seite und Steuer-Zeile nennen weiter nur Z / Y.
+export const ZAP_KEYS = new Set(['Z', 'Y', 'C', 'V', 'B', 'N']);
+
+export function isZapKey(key) {
+  return ZAP_KEYS.has(key);
+}
+
+// Ist eine Zap-Taste gehalten (game.keys bzw. Autopilot-Tasten)?
+export function hasZapKey(keys) {
+  for (const k of ZAP_KEYS) if (keys.has(k)) return true;
+  return false;
+}
+
+// Weisser Vollbild-Blitz: Deckkraft-Anteil 0..1 zur Zeit t seit dem Zap
+// (quadratisch ausklingend, 0 ausserhalb des Fensters -- die Zeichner
+// multiplizieren ihre Engine-Amplitude drauf).
+export function zapFlash(t) {
+  if (!(t >= 0) || t >= ZAPPER.flash) return 0;
+  return (1 - t / ZAPPER.flash) ** 2;
+}
+
+// Weiss-Anteil der KANTEN-LINIEN zur Zeit t seit dem Zap (0..1): erst
+// `blast` lang durchgehend weiss, dann flimmert es mit flickerHz hart
+// zwischen voll und fast aus (LCG-Hash des Frame-Index: deterministisch,
+// beide Engines und das Replay flimmern identisch), unter einer linear
+// ausklingenden Huelle bis `lines`. 0 ausserhalb des Fensters.
+export function zapLineMix(t) {
+  if (!(t >= 0) || t >= ZAPPER.lines) return 0;
+  const env = 1 - t / ZAPPER.lines;
+  if (t < ZAPPER.blast) return env;
+  const frame = Math.floor(t * ZAPPER.flickerHz);
+  const h = (Math.imul(frame, 1103515245) + 12345 >>> 0) / 4294967296;
+  return env * (h < 0.55 ? 1 : 0.2);
+}
 
 // Ist der Feind schon gezappt (entschaerft, wartet auf seine Explosion)?
 export function zapped(f) {

@@ -165,18 +165,32 @@ export function disposeWorld(world) {
 // WANDPHANTOME (Sturm-Branch): die Waende sind zusammengefasste Quads --
 // ein einzelnes Wandstueck laesst sich nicht ausblenden. Stattdessen
 // schneidet der Fragment-Shader LOECHER: eine Uniform-Liste von xz-Boxen
-// (Zell-Footprints in 3D-Einheiten), in denen Fragmente verworfen werden --
-// FLIRREND (Raum-Zeit-Hash, nur ein Rest bleibt stehen). Wirkt auf
-// Flaechen, Kronen/Pfosten, Zellgrenzen-Linien, Deckel (teilen wallMat)
-// und das Spiegelbild (gleiche Uniforms; nur xz zaehlt, die Spiegelung
-// kippt y). Die Boden-Kontur bleibt als "Geist" des Stuecks stehen.
+// (Zell-Footprints in 3D-Einheiten) mit je einem GLUEH-Wert (uHoleGlow):
+// > 1.5 = das Stueck ist WEG (Fragmente verworfen, kein Flirren mehr --
+// Boris 13.9.2026: das sah aus wie ein Rendering-Fehler), 0..1 = das
+// Stueck GLUEHT (Ausgabefarbe wird Richtung uHoleGlowColor gemischt: vor
+// dem Verschwinden aufgluehen, beim Wiedererscheinen hereingluehen,
+// pulsarPhantoms). Wirkt auf Flaechen, Kronen/Pfosten, Zellgrenzen-Linien,
+// Deckel (teilen wallMat) und das Spiegelbild (gleiche Uniforms; nur xz
+// zaehlt, die Spiegelung kippt y). Die Boden-Kontur bleibt als "Geist" des
+// Stuecks stehen. Den WANDABSCHLUSS der stehen gebliebenen Nachbarn (die
+// Waende sind hohle Kaesten) zeichnet backend.updateHoles als dynamische
+// Stirnflaechen mit eigenen Materialien OHNE Loch-Shader (holeCapMat).
 export const MAX_HOLES = 16;
+export const HOLE_GONE = 2;        // uHoleGlow-Wert fuer "weg"
+export const HOLE_MARGIN = 0.02;   // Einheiten: Loch-Box ragt so weit ueber die Zelle (Float-Rand)
+const HOLE_GLOW_FACE = 1.3;        // Glueh-Weiss der Flaechen (ueber der Bloom-Schwelle 0.85; 1.6 war eine satte weisse Platte)
+const HOLE_GLOW_LINE = 3.0;        // ... der HDR-Kanten (blueht kraeftig)
+const HOLE_GLOW_GRID = 1.2;        // ... der dezenten Zellgrenzen-Pfosten
+const HOLE_GLOW_MIRROR = 1.0;      // ... im Spiegel (gedimmt wie die Spiegel-Linien)
 
-function installHoles(world, mat) {
+function installHoles(world, mat, glow) {
+  const glowColor = new THREE.Color(glow, glow, glow);
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uHoles = world.holes.uHoles;
+    shader.uniforms.uHoleGlow = world.holes.uHoleGlow;
     shader.uniforms.uHoleCount = world.holes.uHoleCount;
-    shader.uniforms.uHoleTime = world.holes.uHoleTime;
+    shader.uniforms.uHoleGlowColor = { value: glowColor };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vHoleW;')
       .replace('#include <project_vertex>',
@@ -185,18 +199,23 @@ function installHoles(world, mat) {
       .replace('#include <common>', `#include <common>
 varying vec3 vHoleW;
 uniform vec4 uHoles[${MAX_HOLES}];
+uniform float uHoleGlow[${MAX_HOLES}];
 uniform int uHoleCount;
-uniform float uHoleTime;`)
+uniform vec3 uHoleGlowColor;`)
       .replace('void main() {', `void main() {
+  float holeGlow = 0.0;
   for (int i = 0; i < ${MAX_HOLES}; i++) {
     if (i >= uHoleCount) break;
     vec4 h = uHoles[i];
     if (vHoleW.x > h.x && vHoleW.x < h.z && vHoleW.z > h.y && vHoleW.z < h.w) {
-      vec2 cellId = floor(vHoleW.xz * 0.7) + floor(uHoleTime * 24.0) * 7.0;
-      float n = fract(sin(dot(cellId, vec2(12.9898, 78.233))) * 43758.5453);
-      if (n > 0.12) discard;
+      float g = uHoleGlow[i];
+      if (g > 1.5) discard;
+      holeGlow = max(holeGlow, g);
     }
-  }`);
+  }`)
+      // Ausgabefarbe (vor Tonemapping/Nebel) Richtung Glueh-Weiss mischen.
+      .replace('#include <opaque_fragment>',
+        'outgoingLight = mix(outgoingLight, uHoleGlowColor, holeGlow);\n#include <opaque_fragment>');
   };
   mat.customProgramCacheKey = () => 'holes';
 }
@@ -206,8 +225,8 @@ function buildWallsAndLines(world, maze) {
   const segs = mergeCollinear(corridorOutline(maze));
   world.holes = {
     uHoles: { value: Array.from({ length: MAX_HOLES }, () => new THREE.Vector4()) },
+    uHoleGlow: { value: new Float32Array(MAX_HOLES) },
     uHoleCount: { value: 0 },
-    uHoleTime: { value: 0 },
   };
 
   world.wallGroup = new THREE.Group();
@@ -244,18 +263,28 @@ function buildWallsAndLines(world, maze) {
   wallGeo.setIndex(idx);
   // Albedo bewusst hell waehlen: sRGB 0x1a ist linear nur ~1% Reflexion,
   // solche Waende schlucken jedes Licht (Falle aus dem Prototyp).
-  world.wallMat = new THREE.MeshStandardMaterial({
+  const wallMatParams = {
     color: 0x4a5a78, roughness: 0.55, metalness: 0.15, side: THREE.DoubleSide,
     emissive: 0x0a0e1a, emissiveIntensity: 1, // Flaechen bleiben auch ohne Licht lesbar
     // Flaechen minimal nach hinten schieben, damit die aufliegenden Kanten-
     // Linien sauber gewinnen (kein Z-Fighting).
     polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+  };
+  world.wallMat = new THREE.MeshStandardMaterial(wallMatParams);
+  installHoles(world, world.wallMat, HOLE_GLOW_FACE);
+  // Wandabschluss-Materialien der Phantom-Loecher (backend.updateHoles):
+  // dieselbe Optik, aber OHNE Loch-Shader -- die Stirnflaechen liegen in
+  // der Loch-Box und wuerden sonst mit verworfen. Farben der Linien zieht
+  // updateHoles pro Frame von lineMat/mirrorLineMat nach.
+  world.holeCapMat = new THREE.MeshStandardMaterial(wallMatParams);
+  world.holeCapLineMat = new THREE.LineBasicMaterial({ color: hdr(PHOSPHOR_GREEN) });
+  world.mirrorHoleCapLineMat = new THREE.LineBasicMaterial({
+    color: new THREE.Color(PHOSPHOR_GREEN).multiplyScalar(MIRROR_LINE_DIM),
   });
-  installHoles(world, world.wallMat);
   world.wallGroup.add(new THREE.Mesh(wallGeo, world.wallMat));
 
   world.lineMat = new THREE.LineBasicMaterial({ color: hdr(PHOSPHOR_GREEN) });
-  installHoles(world, world.lineMat);
+  installHoles(world, world.lineMat, HOLE_GLOW_LINE);
 
   // Wandkronen + senkrechte Eck-Pfosten (wachsen mit der Wandhoehe mit).
   const lp = [];
@@ -358,7 +387,7 @@ function buildWallsAndLines(world, maze) {
     color: new THREE.Color(PHOSPHOR_GREEN).multiplyScalar(0.3),
     transparent: true, opacity: 0.8,
   });
-  installHoles(world, world.wallGridMat);
+  installHoles(world, world.wallGridMat, HOLE_GLOW_GRID);
   world.wallGroup.add(new THREE.LineSegments(wallGridGeo, world.wallGridMat));
 
   // Geometrien fuers Spiegelbild aufheben (buildMirror).
@@ -608,7 +637,7 @@ function buildMirror(world) {
   world.mirrorLineMat = new THREE.LineBasicMaterial({
     color: new THREE.Color(PHOSPHOR_GREEN).multiplyScalar(0.85),
   });
-  installHoles(world, world.mirrorLineMat);
+  installHoles(world, world.mirrorLineMat, HOLE_GLOW_MIRROR);
   // Alles mit Hoehe in eine eigene Untergruppe: setWallHeight skaliert sie
   // synchron zur echten Wandgruppe (die Schwenks wachsen im Spiegel mit).
   const mw = new THREE.Group();

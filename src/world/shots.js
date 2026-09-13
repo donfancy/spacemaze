@@ -21,7 +21,8 @@ import { enemyHit } from './enemies.js';
 
 export const SHOTS = {
   max: 8,        // maximal gleichzeitig unterwegs (Tempest)
-  rate: 12,      // Schuesse/s bei Dauerfeuer (Mindestabstand 0.083 s = 0.67 Gangbreiten)
+  rate: 10,      // Schuesse/s bei Dauerfeuer (Mindestabstand 0.1 s = 0.8 Gangbreiten;
+                 // 13.9.2026 von 12 um ~15 % gesenkt -- Boris: die Salven laufen laenger)
   speed: 8,      // Flugtempo (Gangbreiten/s)
   life: 4,       // s Sicherheits-Lebensdauer (falls nie eine Wand kommt)
   deflect: 0.35, // rad: Fadenkreuz-/Ziel-Ausschlag bei vollem Lenkeinschlag

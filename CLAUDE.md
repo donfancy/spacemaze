@@ -103,7 +103,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 509 grün auf sturm-feinde).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 513 grün auf sturm-feinde).
 - `npm run build` — Deployment-Build nach `dist/` (tools/build.mjs, pure
   Kopie: index.html an die Wurzel + favicon.ico + public/ + src/, ohne
   proto2026; Inhalt 1:1 in den WEBROOT von mazestorm.io/.de — wegen der
@@ -213,6 +213,60 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   frischem Anlauf, Resume behaelt; Feind-Schuesse verpuffen; Blitz 1980/
   2026/Replay (Event 'zap'), zapPatch, HUD 'Z ZAP', ZAP-Chip, Autopilot
   zappt ab AUTOPILOT.zapCount 3. Messlauf-Skript measure.mjs (Scratchpad).
+  NACHSCHAERFEN (13.9.2026, Boris' Spiel-Feedback nach ein paar Tagen
+  mit beiden Varianten -- er favorisiert den Branch): (1) ZAP-TASTEN =
+  untere Buchstabenreihe `ZAP_KEYS` Z Y C V B N (zapper.js; X bleibt
+  Exit, M bleibt der globale Mute in main.js -- Boris hatte beide mit
+  aufgezaehlt, Entscheid offen; Info-Seite/Steuerzeile nennen weiter
+  nur Z/Y). (2) ZAPPER-OPTIK = Tempest-Superzapper: die KANTEN-LINIEN
+  flimmern weiss durch (`zapLineMix`: ZAPPER.lines 0.9 s, blast 0.12 s
+  durchgehend weiss, dann 30-Hz-LCG-Hash voll/0.2 unter linearer Huelle;
+  deterministisch, beide Engines + Replay identisch), Vollbild-Blitz
+  ueber `zapFlash`; viewState.zap laeuft jetzt ZAPPER.lines lang. 1980:
+  renderer.color wird um renderEgoWorld per mixColors Richtung Weiss
+  gemischt (Feind-/Schuss-Farben explizit, HUD danach normal). 2026:
+  `applyZapLines` lerpt lineMat/outlineMat/wallGridMat/mirrorLineMat von
+  einer FRISCHEN Basis (applyTheme + setLineGlow neu -- wallGridMat/
+  mirrorLineMat setzt sonst nur der Theme-Wechsel, ein Lerp auf dem Lerp
+  liefe weg), resetWorldFrame stellt die Basis zurueck (zapLinesDirty,
+  auch beim Szenenwechsel). (3) PULSAR-WANDPHANTOME: BUG gefixt --
+  `pulsarOpenings` pruefte Einmuendungen per isOpenCell, das das Overlay
+  maze.openings MITLIEST: die eigenen Phantome galten im Folgeframe als
+  "offen", die Oeffnung schaltete JEDEN Frame um (das war Boris'
+  "Rendering-Fehler"-Flimmern, plus Begehbarkeits-Flattern); jetzt rohes
+  Grid (`openingCells`), Regressionstest mit gesetztem Overlay. OPTIK:
+  `pulsarPhantoms` = Sicht-Zustand {gone, glow}: glowTime 0.4 s weiss
+  AUFGLUEHEN (glow 0->1) -> openTime KOMPLETT weg (kein Flirren) ->
+  symmetrisch HEREINGLUEHEN (1->0); pulsarOpenings bleibt die reine
+  Begehbarkeit; viewState traegt `phantoms` (statt openings), Replay
+  rechnet sie aus den Puppen. 2026-Shader (installHoles): uHoleGlow je
+  Loch (> 1.5 = discard, sonst outgoingLight-Mix Richtung Glueh-Weiss
+  vor opaque_fragment; Flaechen 1.3, HDR-Kanten 3.0, Pfosten 1.2,
+  Spiegel 1.0; Backend quadriert glow = spaet hell). WANDABSCHLUSS (die
+  Waende sind hohle Kaesten): `updateHoleCaps` zeichnet fuer jedes
+  weggefallene Stueck an jeder Zellgrenze zu einem STEHENDEN Wand-
+  Nachbarn (rohes Grid, nicht selbst gone) eine Stirnflaeche + 4 Kanten
+  (makeBuffer in wallGroup + Spiegel; Materialien holeCapMat/
+  holeCapLineMat OHNE Loch-Shader -- sie liegen in der Loch-Box; Linien-
+  farbe folgt lineMat pro Frame; um HOLE_MARGIN in den Nachbarn gerueckt,
+  da setzen dessen Seitenflaechen wieder ein). Gang-Nachbarn brauchen
+  nichts: dort WAR die Wandflaeche, ihr Wegfall ist der Durchgang.
+  (4) TANKER AUFGEFAECHERT: End-Lauerer landen laengs gestaffelt
+  (landing 0.5 + k*landingGap 0.6, beim Abheben geklemmt auf
+  landingClear 0.8 VOR dem Spieler, nie dahinter), Jagd als KOLONNE
+  (huntGap 0.55 hinter einem Kameraden derselben Alley -- sameAlley --,
+  nie rueckwaerts; Gleichstand: der fruehere Purzler fuehrt, sonst
+  Deadlock). (5) SHOTS.rate 12 -> 10 (Salve laeuft laenger).
+  SICHTPRUEFUNG cdp-sturm.mjs + cdp-lib.mjs (Scratchpad): TELEPORT-
+  Rezept fuer inszenierte Szenen = X zur Karte, `game.playerState`
+  setzen, S = Resume faellt an die Pose; Stillstand per DRIVE.cruise
+  0.001 -- NICHT 0: playing normiert bank/Motor mit vel/cruise -> NaN-
+  Kamera = schwarzes Bild (kostete eine Stunde); Zeitlupe, indem man die
+  exportierten Konstanten-Objekte (PULSAR/ZAPPER) im Browser mutiert;
+  schwarzes Bild kann auch "Nase an der Wand" sein (Fahrt-Modus faehrt
+  in 2 s in die Wand). Test-FLAKE gefixt: zapper.test stellte den
+  Jaeger 1.5 Gangbreiten voraus, das Zufalls-Maze hatte dort in ~30 %
+  eine Wand -- jetzt rueckt er bis zur Sichtlinie nach.
 - **TOUCH + MOBILE (1.9.2026, Boris' Entscheid "Mini-Automat" + Floating
   D-Pad):** Beruehrungen erzeugen EXAKT die Tastatur-Tasten -- die Spiel-
   logik (Rampen, Gyro-Mapping, Autopilot, Recorder/Replay) kennt keinen
