@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../src/core/game.js';
 import { State, GameEvent } from '../src/core/states.js';
+import { levelConfig } from '../src/core/levels.js';
 import { PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_RED } from '../src/render/colors.js';
 
 // Renderer-Attrappe: bietet alle vom Spiel genutzten Methoden als No-Op an.
@@ -267,9 +268,9 @@ test('Kampf-Level 11: Feinde stehen, Beruehrung -> Crash -> GAME OVER -> Retry',
   advance(g, r, 2.0); // Falling -> Playing
   assert.equal(g.stateKey, State.PLAYING);
 
-  // Feinde stehen: Level 11 hat bis zu 6 Tanker (weniger nur, wenn das
-  // zufaellige Maze zu wenig lange Gaenge hat), alle lebendig.
-  assert.ok(g.enemies.length > 0 && g.enemies.length <= 6);
+  // Feinde stehen: Level 11 hat bis zu enemies.count Tanker (weniger nur,
+  // wenn das zufaellige Maze zu wenig lange Gaenge hat), alle lebendig.
+  assert.ok(g.enemies.length > 0 && g.enemies.length <= levelConfig(11).enemies.count);
   const count = g.enemies.length;
   assert.ok(g.enemies.every((e) => e.alive));
   const bornAt = g.enemies.map((e) => [e.gx, e.gy]); // fuer den Determinismus-Check unten

@@ -14,7 +14,7 @@ import { createShotsState, fireShot, shotsStep, SHOTS } from '../src/world/shots
 import {
   FLIPPER, createFlippers, flippersStep, flipperSide, flipperPos, flipperDiagonal,
   flipperShotHit, flipperPlayerHit, flipperMarkers, flipperSegments,
-  flipperTriangles, spawnFlipperPair,
+  flipperTriangles, spawnFlipperPair, flipperAimPoint,
 } from '../src/world/flippers.js';
 
 const THIN = { wall: 1, corridor: 5 };
@@ -490,4 +490,21 @@ test('RETTUNGSSCHUSS-STATISTIK: mit der Salven-Feuerrate rettet Dauerfeuer zuver
     return false;
   }, 0, 8);
   assert.equal(wasted, false, 'volle Liste: kein Schuss frei fuer die Diagonale');
+});
+
+test('flipperAimPoint: Seiten-Trefferpunkt (0.5 - lift) neben der Gangmitte, sonst null', () => {
+  const { flippers } = makeFlipper();
+  const f = flippers[0];
+  settle(f, QUARTER); // rechts (+quer = +z bei axis x)
+  const [x, z] = flipperAimPoint(f, CELL);
+  assert.equal(x, f.along);
+  assert.ok(Math.abs(z - (f.cross + (0.5 - FLIPPER.lift) * CELL)) < 1e-12);
+  settle(f, 3 * QUARTER);
+  assert.ok(Math.abs(flipperAimPoint(f, CELL)[1] - (f.cross - (0.5 - FLIPPER.lift) * CELL)) < 1e-12, 'links gespiegelt');
+  settle(f, 0);
+  assert.equal(flipperAimPoint(f, CELL), null, 'unten: kein Seitenpunkt');
+  settle(f, Math.PI);
+  assert.equal(flipperAimPoint(f, CELL), null, 'oben');
+  f.mode = 'flip';
+  assert.equal(flipperAimPoint(f, CELL), null, 'im Flip');
 });

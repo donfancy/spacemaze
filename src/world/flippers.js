@@ -73,6 +73,19 @@ export function flipperPos(f) {
   return f.axis === 'x' ? [f.along, f.cross] : [f.cross, f.along];
 }
 
+// SEITEN-Trefferpunkt (Welt x,z) eines seitlich eingerasteten Flippers: die
+// Stelle, an der das hochkant stehende X die Schusshoehe kreuzt --
+// (0.5 - lift) Gangbreiten neben der Gangmitte auf seiner Wandseite. Dorthin
+// zielt man mit dem Fadenkreuz-Lenkausschlag (Autopilot-Duell UND die
+// Ziel-Automatik world/aimLock.js), dort prueft flipperShotHit. null, wenn
+// er unten/oben steht oder gerade klappt (dann gibt es keinen Seitenpunkt).
+export function flipperAimPoint(f, cell) {
+  const side = sideOf(f);
+  if (side === 0) return null;
+  const q = f.cross + side * (0.5 - FLIPPER.lift) * cell;
+  return f.axis === 'x' ? [f.along, q] : [q, f.along];
+}
+
 // Baustein: ein fertiger Flipper. Startwinkel eine SEITEN-Stellung (dort
 // verweilen sie am laengsten), Wander- und Drehrichtung aus `rnd`.
 function makeFlipper(axis, cross, along, min, max, rnd) {
@@ -243,10 +256,9 @@ export function flipperShotHit(flippers, x, z, cell, prev = null) {
       }
       continue;
     }
-    const side = flipperSide(f);
-    if (side === 0) continue;
-    const q = f.cross + side * (0.5 - FLIPPER.lift) * cell;
-    const [hx, hz] = f.axis === 'x' ? [f.along, q] : [q, f.along];
+    const aimPt = flipperAimPoint(f, cell);
+    if (!aimPt) continue;
+    const [hx, hz] = aimPt;
     if (Math.hypot(x - hx, z - hz) < FLIPPER.shotRadius * cell) {
       f.alive = false;
       return { type: 'flipper', x: hx, z: hz, flipper: f };

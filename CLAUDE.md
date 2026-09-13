@@ -103,7 +103,7 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
 - Git-Commits enden mit dem Co-Authored-By-Trailer.
 
 ## Befehle
-- `npm test` — alle Tests (so verifiziere ich; Stand: 513 grün auf sturm-feinde).
+- `npm test` — alle Tests (so verifiziere ich; Stand: 525 grün auf sturm-feinde).
 - `npm run build` — Deployment-Build nach `dist/` (tools/build.mjs, pure
   Kopie: index.html an die Wurzel + favicon.ico + public/ + src/, ohne
   proto2026; Inhalt 1:1 in den WEBROOT von mazestorm.io/.de — wegen der
@@ -267,6 +267,30 @@ Boris' Kindheitstraum von 1981. Architektur-Details: siehe README.md.
   in 2 s in die Wand). Test-FLAKE gefixt: zapper.test stellte den
   Jaeger 1.5 Gangbreiten voraus, das Zufalls-Maze hatte dort in ~30 %
   eine Wand -- jetzt rueckt er bis zur Sichtlinie nach.
+  STUFE 8 (13.9.2026, Boris: "schwieriger UND leichter"): (1) ALLEYS +
+  EINZELNE -- `enemies: { count, group, alleys }`: die ersten `alleys`
+  Gaenge volle Gruppen, der Rest von `count` als EINZEL-Lauerer je Gang
+  verstreut (Weg-Gaenge vor Abseits, deterministisch gemischt; ohne
+  `alleys` alte Schreibweise = alles Gruppen). Level 22 von 10 Tankern/
+  2 Alleys auf 28/13 Gaenge (bei ~19 Weg-Gaengen), alle Tanker-Levels
+  angehoben, Spinner +1..+2. (2) ZIEL-AUTOMATIK `world/aimLock.js`
+  (pur): KURZER TIPP links/rechts im Fahrt-Modus mit seitlich
+  eingerastetem Flipper auf dieser Seite (aimTarget) -> die Lenkung
+  fuehrt das Fadenkreuz auf `flipperAimPoint` (jetzt geteilt mit
+  flipperShotHit + Autopilot-Duell), Sollwert = Winkel/deflect durch die
+  normale Lenk-Rampe; Ende bei tot/geklappt/hinter mir, dann RECOVER per
+  alignTurn (max 1.2 s, AIM_LOCK.recover schaltbar). KAPER-FALLE (Boris:
+  "uebersteuere an jeder Ecke", Physik war unveraendert): Lock NUR
+  zentriert im Gang (Kurs < straight 0.2 rad zur Gang-Achse, Lage <
+  centered 0.25 Gangbreiten, steer < steerMax 0.15 -- aimTarget liest
+  pose.steer) und nur als EINZELNER Tipp (Druck < pulseGap 0.4 s nach dem
+  vorigen = Puls-Lenken, kein Ziel); JEDER Lenk-Druck beendet Lock +
+  Nachrichten sofort, Halten > tapHold 0.25 s ebenso. Tipp = keydown-
+  FLANKE (`steerTap` in playing.onKey, Auto-Repeat ueber `steerHeld` des
+  Vorframes gefiltert, logisch unter gyroDirs); Autopilot nutzt sie
+  nicht. Info-Zeile "TAP LEFT/RIGHT: AIM AT FLIPPER". Messung:
+  Abschuss 0.2-0.65 s nach dem Tipp (2-6 Gangbreiten), Kursfehler 4-9
+  Grad, wieder gerade nach 0.5-0.7 s (PLAN-STURM Stufe 8).
 - **TOUCH + MOBILE (1.9.2026, Boris' Entscheid "Mini-Automat" + Floating
   D-Pad):** Beruehrungen erzeugen EXAKT die Tastatur-Tasten -- die Spiel-
   logik (Rampen, Gyro-Mapping, Autopilot, Recorder/Replay) kennt keinen

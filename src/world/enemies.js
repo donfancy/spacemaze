@@ -29,14 +29,21 @@
 // entstehen nie anders.
 //
 // Platzierung: corridorCandidates (foePlacement.js) -- Weg-Gaenge zuerst,
-// laengste zuerst, Schutzzone um S/G; `count` Tanker werden in Gruppen bis
-// `group` (nie mehr als Kammern) auf die Gaenge verteilt. KEINE Gang-Sperre
-// gegen Spinner/Pulsare: in langen Gaengen tauchen ALLE Feinde auf.
+// laengste zuerst, Schutzzone um S/G. ALLEYS + EINZELNE (13.9.2026, Boris:
+// "in Level 22 fast gar keine Feinde" -- 10 Tanker in 2 Alleys bei ~19
+// Weg-Gaengen): die ersten `alleys` Gaenge bekommen VOLLE Gruppen (bis
+// `group`, nie mehr als Kammern), der Rest von `count` wird als EINZEL-
+// Lauerer ueber weitere Gaenge VERSTREUT (je einer pro Gang, Reihenfolge
+// deterministisch gemischt -- so bekommen auch kurze Gaenge ihren
+// Hinterhalt, nicht nur die laengsten). Ohne `alleys` gehen alle in
+// Gruppen (alte Schreibweise, Tests). KEINE Gang-Sperre gegen Spinner/
+// Pulsare: in langen Gaengen tauchen ALLE Feinde auf.
 
 import { isOpenCell } from './maze.js';
 import { cellCenter } from './mazeWorld.js';
 import { mazeMetric } from './metric.js';
 import { corridorCandidates, aheadEnd } from './foePlacement.js';
+import { randInt } from '../util/rng.js';
 
 export const ENEMY = {
   size: 0.3,        // Rauten-Halbhoehe (Gangbreiten)
@@ -64,20 +71,33 @@ export const ENEMY = {
 
 // --- Platzierung ------------------------------------------------------------
 
-// Erzeugt die Tanker eines Levels. config = { count, group? } (Level-Daten),
-// opts = { unit, cell, rng }. Deterministisch bei gleichem rng (Tests).
+// Erzeugt die Tanker eines Levels. config = { count, group?, alleys? }
+// (Level-Daten): `count` Tanker insgesamt, die ersten `alleys` Gaenge als
+// volle Gruppen bis `group`, der Rest einzeln verstreut (ohne `alleys`:
+// alles in Gruppen). opts = { unit, cell, rng }. Deterministisch bei
+// gleichem rng (Tests).
 export function createEnemies(maze, config, opts) {
   const { unit, cell, rng } = opts;
   const groupMax = config.group ?? ENEMY.group;
   let remaining = config.count ?? 0;
+  let alleys = config.alleys ?? Infinity;
   const wt = mazeMetric(maze).wall * unit; // Wand-Dicke (Welt)
-  const candidates = corridorCandidates(maze, {
+  const sorted = corridorCandidates(maze, {
     minChambers: ENEMY.minChambers, exclude: ENEMY.exclude, unit, cell,
   });
+  // Alley-Gaenge in Kandidaten-Ordnung (Weg zuerst, laengste zuerst); die
+  // Einzel-Gaenge dahinter gemischt -- Weg-Gaenge bleiben vor den Abseits-
+  // Gaengen (dort begegnet man ihnen auch).
+  const candidates = Number.isFinite(alleys)
+    ? [...sorted.slice(0, alleys),
+      ...shuffle(sorted.slice(alleys).filter((r) => r.onPath), rng),
+      ...shuffle(sorted.slice(alleys).filter((r) => !r.onPath), rng)]
+    : sorted;
   const enemies = [];
   for (const run of candidates) {
     if (remaining <= 0) break;
-    const size = Math.min(groupMax, run.chambers, remaining);
+    const size = alleys > 0 ? Math.min(groupMax, run.chambers, remaining) : 1;
+    alleys--;
     const highEnd = aheadEnd(run, rng);
     const dir = highEnd ? -1 : 1;                              // Blickrichtung Wand -> Gang
     const wall = highEnd ? run.max + 0.5 * cell : run.min - 0.5 * cell; // Wandflaeche (Welt)
@@ -140,6 +160,16 @@ export function createEnemies(maze, config, opts) {
     remaining -= seats.length;
   }
   return enemies;
+}
+
+// Fisher-Yates mit dem Level-rng (deterministisch): die Einzel-Lauerer
+// landen verstreut statt der Laenge nach.
+function shuffle(list, rng) {
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = randInt(rng, i + 1);
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
 }
 
 // Welt-Lage aus Gang-Koordinaten (laengs, quer).

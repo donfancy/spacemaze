@@ -94,6 +94,45 @@ test('createEnemies: Weg-Gaenge zuerst, S/G-Zonen bleiben tankerfrei', () => {
   }
 });
 
+test('createEnemies: `alleys` = volle Gruppen vorn, der Rest EINZELN verstreut auf eigenen Gaengen', () => {
+  const { maze, enemies } = spawn({ count: 14, group: 4, alleys: 2 });
+  assert.ok(enemies.length > 2 && enemies.length <= 14, `Anzahl gedeckelt (${enemies.length})`);
+  const key = (e) => e.axis + ':' + e.cross + ':' + e.wall;
+  const groups = new Map();
+  for (const e of enemies) groups.set(key(e), (groups.get(key(e)) ?? 0) + 1);
+  const sizes = [...groups.values()];
+  // Die ersten beiden Gaenge tragen Gruppen (>= 3 Kammern -> mindestens 3 Sitze), alle weiteren genau EINEN.
+  assert.ok(sizes[0] >= 3 && sizes[0] <= 4, `erste Alley voll (${sizes[0]})`);
+  assert.ok(sizes[1] >= 3 && sizes[1] <= 4, `zweite Alley voll (${sizes[1]})`);
+  assert.ok(sizes.length > 2, 'Einzelne kommen dazu');
+  for (const size of sizes.slice(2)) assert.equal(size, 1, 'Einzel-Lauerer: einer pro Gang');
+  assert.equal(sizes.reduce((a, b) => a + b, 0), enemies.length);
+  // Einzelne sitzen mittig auf der End-Krone und purzeln als erste (order 0).
+  const singles = enemies.filter((e) => groups.get(key(e)) === 1);
+  for (const e of singles) {
+    assert.equal(e.lurk.seat, 'end');
+    assert.equal(e.order, 0);
+    assert.ok(Math.abs(crossOf(e) - e.cross) < 1e-9 || Math.abs(crossOf(e) - e.cross) <= ENEMY.lurkSway * CELL + 1e-9,
+      'mittig auf der Krone');
+  }
+  // Weg-Gaenge vor Abseits-Gaengen: die ersten Einzelnen bewachen den Weg.
+  const path = findPath(maze, maze.start, maze.goal).filter(([x, y]) => isChamber(x, y));
+  const pathKeys = new Set(path.map(([x, y]) => `${x},${y}`));
+  const onPath = (e) => {
+    const [gx, gy] = cellAt(maze, e.to[0], e.to[1], 1);
+    return pathKeys.has(`${gx},${gy}`);
+  };
+  assert.ok(onPath(singles[0]), 'erster Einzel-Lauerer landet auf einem Weg-Gang');
+  // Ohne `alleys` (alte Schreibweise): alles in Gruppen, keine Einzelnen.
+  const old = spawn({ count: 14, group: 4 }).enemies;
+  const oldGroups = new Map();
+  for (const e of old) oldGroups.set(key(e), (oldGroups.get(key(e)) ?? 0) + 1);
+  for (const size of oldGroups.values()) assert.ok(size >= 2, 'alte Schreibweise: nur Gruppen');
+  // Deterministisch (der Mischer haengt am rng).
+  assert.deepEqual(spawn({ count: 14, group: 4, alleys: 2 }, 4711, 5).enemies,
+    spawn({ count: 14, group: 4, alleys: 2 }, 4711, 5).enemies);
+});
+
 test('createEnemies ist deterministisch bei gleichem rng', () => {
   const a = spawn({ count: 6 }, 4711, 7).enemies;
   const b = spawn({ count: 6 }, 4711, 7).enemies;

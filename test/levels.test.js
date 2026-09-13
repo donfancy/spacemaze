@@ -8,6 +8,7 @@ import {
 import {
   PHOSPHOR_GREEN, TEMPEST_BLUE, ARCADE_YELLOW, ARCADE_RED, TANKER_RED,
 } from '../src/render/colors.js';
+import { ENEMY } from '../src/world/enemies.js';
 
 test('Maze-Groessen: 1-15 wachsend, 16-20 moderat, ab 21 wieder wachsend', () => {
   assert.equal(MIN_LEVEL, 1);
@@ -95,6 +96,19 @@ test('Levels 21-25: wieder gruen, KEINE platzierten Flipper (nur Paare), Spinner
     }
     prevEnemies = cfg.enemies.count;
   }
+});
+
+test('Sturm 13.9.2026: jedes Tanker-Level hat volle Alleys UND verstreute Einzelne', () => {
+  for (let level = 11; level <= 30; level++) {
+    const cfg = levelConfig(level);
+    if (!cfg.enemies) continue;
+    const { count, group = ENEMY.group, alleys } = cfg.enemies;
+    assert.ok(alleys >= 2, `Level ${level}: mindestens zwei volle Alleys`);
+    assert.ok(count > alleys * group, `Level ${level}: ueber die Alleys hinaus bleiben Einzelne (${count} > ${alleys}x${group})`);
+    assert.ok(count - alleys * group <= 12, `Level ${level}: hoechstens ein Dutzend Einzelne`);
+  }
+  // Boris' Befund "Level 22 fast keine Feinde": deutlich mehr als die alten 10.
+  assert.ok(levelConfig(22).enemies.count >= 24);
 });
 
 test('Farb-Thema: 6-10 und 16-20 Tempest-blau, 26-30 Arcade-rot, sonst gruen', () => {

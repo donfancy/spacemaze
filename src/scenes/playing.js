@@ -54,6 +54,7 @@ import {
 import { pulsarsStep, pulsarPlayerTouch, pulsarOpenings, pulsarPhantoms } from '../world/pulsars.js';
 import { createGyro, startSpin, gyroStep, gyroDirs, shortestRoll } from '../world/gyro.js';
 import { alignTurn } from '../world/align.js';
+import { AIM_LOCK, aimTarget, aimTurn } from '../world/aimLock.js';
 import { AUTOPILOT, createAutopilot, autopilotStep } from '../world/autopilot.js';
 import { createShotsState, aimYaw, fireShot, shotsStep } from '../world/shots.js';
 import {
@@ -155,6 +156,12 @@ export function createPlaying(game) {
   // enter(): nach Karte/Resume startet man wieder aufrecht.
   let gyro = createGyro();
   let pairSource = false; // Level hat Tanker: JEDER Abschuss spawnt ein Flipper-Paar
+  // ZIEL-AUTOMATIK (world/aimLock.js): kurzer Tipp auf links/rechts mit
+  // einem seitlich eingerasteten Flipper auf dieser Seite -> die Lenkung
+  // fuehrt das Fadenkreuz auf ihn. { phase: 'aim'|'recover', flipper, at }
+  let aimLock = null;
+  let steerHeld = new Set(); // Lenktasten, die im letzten Frame gehalten waren (Auto-Repeat-Filter)
+  let lastSteerPress = -Infinity; // Szenenzeit des letzten Lenk-Drucks (Puls-Lenken erkennen)
   let shotsState = null;  // Tempest-Schuesse (world/shots.js)
   let bursts = [];        // aktive Splitter-Explosionen (Verpuffen/Abschuss/Crash)
   let burstSeq = 0;       // laufender Splitter-Seed (unabhaengig von gerade lebenden Bursts)
@@ -301,6 +308,33 @@ export function createPlaying(game) {
   // Fahr-Modus: ein Simulationsschritt (Vortrieb, Lenken, Abprall + Effekte).
   // boost (Pfeil hoch gehalten): Zieltempo boost*cruise, die vorhandenen
   // Rampen (accel rauf, brake beim Loslassen) machen den Uebergang smooth.
+  // Lenk-Druck (keydown-Flanke, NICHT der Autopilot): JEDER Druck auf
+  // Lenk-links/-rechts beendet eine laufende Ziel-Automatik samt
+  // Nachrichten -- der Spieler uebernimmt. Ein EINZELNER Tipp (kein
+  // Puls-Lenken: der vorige Druck liegt pulseGap zurueck) im Fahrt-Modus
+  // mit Feuer ist der Startschuss der ZIEL-AUTOMATIK, wenn auf dieser
+  // Seite ein seitlich eingerasteter Flipper wartet und das Schiff
+  // zentriert im Gang fliegt (aimTarget: Kurs, Lage, Lenkung in Ruhe).
+  // Die Taste wird "logisch" gelesen (gyroDirs -- unter der Pulsar-
+  // Verdrehung lenkt z.B. runter). Auto-Repeat (Taste schon im letzten
+  // Frame gehalten) zaehlt nicht.
+  function steerTap(key) {
+    if (!drive || !shoot || crash || reached || game.demo) return;
+    if (steerHeld.has(key)) return;
+    const gd = gyroDirs(gyro.orient, {
+      left: key === 'ArrowLeft', right: key === 'ArrowRight',
+      up: key === 'ArrowUp', down: key === 'ArrowDown',
+    });
+    const dir = (gd.left ? 1 : 0) - (gd.right ? 1 : 0);
+    if (dir === 0) return;
+    const pulse = sceneT - lastSteerPress < AIM_LOCK.pulseGap;
+    lastSteerPress = sceneT;
+    aimLock = null;
+    if (pulse) return;
+    const target = aimTarget({ px, pz, yaw, steer: driveState.steer }, flippers, dir, cell);
+    if (target) aimLock = { phase: 'aim', flipper: target, at: sceneT };
+  }
+
   function updateDrive(turn, dt, boost) {
     // Am Ziel haelt der Wagen sofort (Tempo und Feder-Impuls hart auf 0),
     // aber driveStep laeuft weiter: bei Tempo 0 bewegt er nichts und
@@ -413,6 +447,9 @@ export function createPlaying(game) {
       rainbow = !!cfg?.rainbowStars;
       gyro = createGyro(); // aufrecht starten (auch nach Karte/Resume)
       pairSource = !!cfg?.enemies;
+      aimLock = null;
+      steerHeld = new Set();
+      lastSteerPress = -Infinity;
       // Sternenhimmel ab Level 4 (1-3 "legacy 1974"), deterministisch aus
       // dem Maze-Seed -- gleiche Karte, gleicher Himmel.
       stars = game.level >= STARS.minLevel ? createStars(maze.seed) : null;
@@ -544,13 +581,34 @@ export function createPlaying(game) {
       let boost = false;
       if (drive) {
         boost = gd.up;
+        // ZIEL-AUTOMATIK (per Tipp in onKey gesetzt): Handarbeit gewinnt --
+        // eine ueber tapHold hinaus gehaltene Lenktaste beendet sie (der
+        // Tipp selbst haelt die Taste nur ein, zwei Frames). Sonst fuehrt
+        // sie das Fadenkreuz auf den Flipper, und nach dessen Ende richtet
+        // sie kurz wieder gerade (recover, Ausricht-Assistent).
+        if (aimLock && turn !== 0) {
+          if (sceneT - aimLock.at > AIM_LOCK.tapHold) aimLock = null;
+        } else if (aimLock) {
+          if (aimLock.phase === 'aim') {
+            const t = aimTurn({ px, pz, yaw }, aimLock.flipper, cell);
+            if (t != null) turn = t;
+            else aimLock = AIM_LOCK.recover ? { phase: 'recover', at: sceneT } : null;
+          }
+          if (aimLock?.phase === 'recover') {
+            const t = alignTurn(maze, { px, pz, yaw }, { unit, cell });
+            if (t == null || Math.abs(t) < AIM_LOCK.recoverDone
+              || sceneT - aimLock.at > AIM_LOCK.recoverMax) aimLock = null;
+            else turn = t;
+          }
+        }
         // Ausrichten nur, wenn nicht von Hand gelenkt wird -- Handarbeit
         // gewinnt; der Assistent liefert null, wenn quer zum Gang nichts
         // Sinnvolles auszurichten ist.
-        if (gd.down && turn === 0) {
+        if (gd.down && turn === 0 && !aimLock) {
           turn = alignTurn(maze, { px, pz, yaw }, { unit, cell }) ?? 0;
         }
       }
+      steerHeld = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].filter((k) => keys.has(k)));
       const prevX = px, prevZ = pz; // Lage VOR dem Schritt (Spike-Kreuzungs-Check)
 
       // Pulsar-WANDPHANTOME (Sturm): welche Wandstuecke sind gerade weg?
@@ -922,6 +980,7 @@ export function createPlaying(game) {
 
     onKey(key) {
       if (isZapKey(key)) { zap(); return; } // Superzapper (Tastendruck/Touch-Chip)
+      if (key.startsWith('Arrow')) { steerTap(key); return; }
       if (key !== 'X' || crash) return; // waehrend der Explosion kein Abheben mehr
       // Frisch am Ziel schwingt die 2026-Kamera in die Aussenpose
       // (END_CAM_BLEND 0.8s) -- X darf die Blende ausklingen lassen, sonst

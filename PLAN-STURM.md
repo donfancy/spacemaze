@@ -364,6 +364,62 @@ Branch. Fünf Punkte, alle umgesetzt (Details/Konstanten in CLAUDE.md):
 - Sichtprüfung 2026 per CDP (cdp-sturm.mjs, Teleport-Rezept) bestanden:
   Glühen/Loch/Abschluss/Hereinglühen und Zap-Flimmern im Bild; 513 Tests.
 
+### Stufe 8 — Schwerer UND leichter (13.9.2026)
+Boris nach Level 22: „fast gar keine Feinde" — 10 Tanker in 2 Alleys bei
+~19 Weg-Gängen mit 3+ Kammern (gemessen über 8 Seeds), dazu 5 Spinner.
+- **Schwerer — Alleys + Einzelne:** `enemies: { count, group, alleys }`.
+  Die ersten `alleys` Kandidaten-Gänge (Weg zuerst, längste zuerst)
+  bekommen VOLLE Gruppen bis `group`, der Rest von `count` lauert
+  EINZELN auf je einem weiteren Gang — Weg-Gänge vor Abseits-Gängen,
+  innerhalb dessen deterministisch gemischt (auch kurze 3-Kammer-Gänge
+  bekommen ihren Hinterhalt). Ein Einzelner ist mechanisch eine Gruppe
+  der Größe 1 (End-Krone mittig, purzelt, jagt, feuert, hinterlässt sein
+  Flipper-Paar). Tabelle: 11–15 = 2/2/3/3/3 Alleys + 4–8 Einzelne (8 →
+  26 Tanker), 17–20 = 11/14/21/25, 21–25 = 26/28/32/35/36 (3–4 Alleys +
+  8–12), 26–30 = 28/32/35/36/40 (3–5 Alleys); Spinner +1 bis +2 pro
+  Level (22: 5 → 7). Level 22 jetzt im Schnitt 28 Tanker auf 13 Gängen.
+  Ohne `alleys` (Tests) bleibt die alte Schreibweise: alles Gruppen.
+- **Leichter — Ziel-Automatik (`world/aimLock.js`, pur):** im Fahrt-
+  Modus mit Feuer ist ein KURZER TIPP auf links/rechts der Startschuss:
+  steht auf dieser Seite ein seitlich eingerasteter Flipper im eigenen
+  Gang voraus (`aimTarget`: nächster, Trefferpunkt auf der getippten
+  Seite, ≤ 7 Gangbreiten, innerhalb 2× deflect), führt die Lenkung das
+  Fadenkreuz per `aimTurn` auf seinen Seiten-Trefferpunkt
+  (`flipperAimPoint`, jetzt geteilt mit flipperShotHit und dem
+  Autopilot-Duell) — Sollwert = Winkelfehler/deflect, exakt die Regelung
+  des Autopiloten, durch die normale Lenk-Rampe. Feuern bleibt Space.
+  Der Lock endet, wenn der Flipper stirbt/wegklappt/hinter einem liegt;
+  dann RECOVER: Ausricht-Assistent bis der Kurs steht (max 1.2 s).
+  Handarbeit gewinnt: eine über 0.25 s gehaltene Lenktaste beendet die
+  Automatik, ein Tipp ohne Ziel ebenso, ein Tipp mit Ziel wechselt.
+  Der Tipp ist die keydown-FLANKE (`onKey` → `steerTap` in playing.js;
+  Auto-Repeat wird über die im Vorframe gehaltenen Tasten gefiltert),
+  „logisch" unter der Pulsar-Verdrehung (gyroDirs), Touch-Pad-Tipps
+  laufen denselben Weg. Der Autopilot nutzt sie nicht (eigenes Duell).
+  Messung (Simulation, echte Konstanten, Flipper 2/3/4/6 Gangbreiten
+  voraus): Abschuss nach 0.22/0.32/0.43/0.65 s, Kursfehler dabei
+  9/7/5/4 Grad, seitlicher Versatz < 0.07 Gangbreiten, wieder gerade
+  0.5–0.7 s nach dem Tipp. Gegenprobe: geradeaus gefeuert trifft man
+  einen seitlich eingerasteten Flipper nie (0.34 > shotRadius 0.3).
+  Info-Seite: „TAP LEFT/RIGHT: AIM AT FLIPPER".
+  NACHGESCHÄRFT (Boris: „ich übersteuere an jeder Ecke, wie sensibler
+  oder mit längerem Nachlauf" — auf Level 7 „wie immer"): die Physik war
+  unverändert (drive.js untouched), aber JEDER Lenk-Druck galt als Tipp
+  — mit einem Seiten-Flipper irgendwo voraus im Gang kaperte der Lock
+  die Kurven-Einleitung (Puls-Lenken erst recht), und das Nachrichten
+  lief bis 1.2 s nach. Jetzt: (a) Lock nur ZENTRIERT im Gang — Kurs
+  innerhalb 0.2 rad der Gang-Achse (`straight`), Lage innerhalb 0.25
+  Gangbreiten der Mitte (`centered`), Lenkausschlag < 0.15 (`steerMax`,
+  die Szene reicht driveState.steer mit); (b) nur ein EINZELNER Tipp —
+  ein Druck < 0.4 s nach dem vorigen ist Puls-Lenken (`pulseGap`); (c)
+  JEDER Lenk-Druck beendet Lock und Nachrichten sofort. Tests: Kurs/
+  Lage/Ausschlag-Fälle, Puls-Lenken im Spiel. 525 Tests.
+  OFFEN (Boris fühlen lassen): ob das Nachrichten (recover) gewünscht
+  ist — `AIM_LOCK.recover = false` schaltet es ab; Alternative wäre ein
+  Fadenkreuz, das OHNE Mitdrehen des Schiffs auf den Flipper springt
+  (bräuchte eine eigene Ziel-Größe neben steer — bricht die Regel „der
+  Assistent kann nichts, was der Spieler nicht auch könnte").
+
 ## Fallen und Notizen
 
 - **isOpenCell liest das Overlay (13.9.2026):** wer Wandzellen für die

@@ -9,11 +9,15 @@
 // Ab Level 11 (Kampf-Levels):
 //   `straight` (0..1)  Geradeaus-Bias des Generators (laengere Gangstuecke)
 //   `shoot`            Space feuert Projektile (world/shots.js, Tempest-Regel)
-//   `enemies`          { count, group? }: Tanker (world/enemies.js) -- LAUERN
-//                      seit dem Sturm-Branch in Gruppen (bis `group`, Standard
-//                      ENEMY.group) auf den Wandkronen langer Gaenge, purzeln
-//                      bei Sichtkontakt herunter, jagen und feuern; jeder
-//                      Abschuss hinterlaesst ein Flipper-PAAR (world/flippers.js)
+//   `enemies`          { count, group?, alleys? }: Tanker (world/enemies.js)
+//                      -- LAUERN seit dem Sturm-Branch auf den Wandkronen
+//                      langer Gaenge, purzeln bei Sichtkontakt herunter, jagen
+//                      und feuern; jeder Abschuss hinterlaesst ein Flipper-
+//                      PAAR (world/flippers.js). `count` = Tanker insgesamt;
+//                      die ersten `alleys` Gaenge sind VOLLE "shooting
+//                      alleys" (Gruppen bis `group`, Standard ENEMY.group),
+//                      der Rest lauert EINZELN verstreut ueber weitere Gaenge
+//                      (13.9.2026, Boris: "mehr Feinde verteilen")
 // Ab Level 16 (wieder blau, neue Feinde):
 //   `spinners`         { count }: gruene Spiral-Spinner an den End-Waenden
 //                      langer Gangstuecke (world/spinners.js); sie wandern
@@ -52,62 +56,64 @@ export const LEVELS = [
   { n: 25, metric: THIN, drive: true, color: TEMPEST_BLUE }, // Level 10
   // Level 11+: groesser, laengere Geraden (straight 0.75 -- die Buehne fuer
   // die Tanker-Alleys), lauernde Tanker in wachsenden Gruppen + Schiessen.
-  { n: 27, metric: THIN, drive: true, straight: 0.75, shoot: true, enemies: { count: 6, group: 2 } },   // Level 11
-  { n: 29, metric: THIN, drive: true, straight: 0.75, shoot: true, enemies: { count: 8, group: 3 } },   // Level 12
-  { n: 31, metric: THIN, drive: true, straight: 0.75, shoot: true, enemies: { count: 10, group: 4 } },  // Level 13
-  { n: 33, metric: THIN, drive: true, straight: 0.75, shoot: true, enemies: { count: 12, group: 5 } },  // Level 14
-  { n: 35, metric: THIN, drive: true, straight: 0.75, shoot: true, enemies: { count: 14, group: 6 } },  // Level 15
+  // Je zwei bis drei volle Alleys, dazu Einzel-Lauerer verstreut (ein
+  // 27er-Maze hat ~10 Weg-Gaenge mit 3+ Kammern, ein 35er ~16).
+  { n: 27, metric: THIN, drive: true, straight: 0.75, shoot: true, enemies: { count: 8, group: 2, alleys: 2 } },   // Level 11: 2x2 + 4
+  { n: 29, metric: THIN, drive: true, straight: 0.75, shoot: true, enemies: { count: 11, group: 3, alleys: 2 } },  // Level 12: 2x3 + 5
+  { n: 31, metric: THIN, drive: true, straight: 0.75, shoot: true, enemies: { count: 18, group: 4, alleys: 3 } },  // Level 13: 3x4 + 6
+  { n: 33, metric: THIN, drive: true, straight: 0.75, shoot: true, enemies: { count: 22, group: 5, alleys: 3 } },  // Level 14: 3x5 + 7
+  { n: 35, metric: THIN, drive: true, straight: 0.75, shoot: true, enemies: { count: 26, group: 6, alleys: 3 } },  // Level 15: 3x6 + 8
   // Level 16-20: wieder Tempest-blau, Groesse moderat (35-39), dafuer mehr
   // lange Geraden (straight steigt) -- die Buehne fuer die Spinner. Level 16
   // fuehrt sie solo ein, ab 17 kommen die Rauten zurueck (Mix, steigend).
   { n: 35, metric: THIN, drive: true, straight: 0.75, shoot: true, color: TEMPEST_BLUE,
-    spinners: { count: 5 } },                                                                            // Level 16
+    spinners: { count: 6 } },                                                                            // Level 16
   { n: 35, metric: THIN, drive: true, straight: 0.75, shoot: true, color: TEMPEST_BLUE,
-    spinners: { count: 5 }, enemies: { count: 6, group: 3 } },                                           // Level 17
+    spinners: { count: 6 }, enemies: { count: 11, group: 3, alleys: 2 } },                               // Level 17: 2x3 + 5
   { n: 37, metric: THIN, drive: true, straight: 0.75, shoot: true, color: TEMPEST_BLUE,
-    spinners: { count: 6 }, enemies: { count: 8, group: 4 } },                                           // Level 18
+    spinners: { count: 7 }, enemies: { count: 14, group: 4, alleys: 2 } },                               // Level 18: 2x4 + 6
   { n: 37, metric: THIN, drive: true, straight: 0.75, shoot: true, color: TEMPEST_BLUE,
-    spinners: { count: 7 }, enemies: { count: 10, group: 5 } },                                          // Level 19
+    spinners: { count: 8 }, enemies: { count: 21, group: 5, alleys: 3 } },                               // Level 19: 3x5 + 6
   { n: 39, metric: THIN, drive: true, straight: 0.8, shoot: true, color: TEMPEST_BLUE,
-    spinners: { count: 8 }, enemies: { count: 12 } },                                                    // Level 20
+    spinners: { count: 9 }, enemies: { count: 25, alleys: 3 } },                                         // Level 20: 3x6 + 7
   // Level 21-25: wieder Phosphor-GRUEN, die Labyrinthe wachsen weiter
-  // (41-45), straight bleibt 0.8. Level 21 nur Tanker-Alleys (volle
-  // Gruppen), ab 22 kehren die Spinner zurueck -- jetzt GELB (auf Gruen).
-  // Bis 25 steigt alles.
+  // (41-45), straight bleibt 0.8. Level 21 nur Tanker (volle Alleys +
+  // Einzelne), ab 22 kehren die Spinner zurueck -- jetzt GELB (auf Gruen).
+  // Bis 25 steigt alles (ein 43er-Maze hat ~19 Weg-Gaenge mit 3+ Kammern).
   { n: 41, metric: THIN, drive: true, straight: 0.8, shoot: true,
-    enemies: { count: 10 } },                                                                            // Level 21
+    enemies: { count: 26, alleys: 3 } },                                                                 // Level 21: 3x6 + 8
   { n: 43, metric: THIN, drive: true, straight: 0.8, shoot: true,
-    enemies: { count: 10 },
-    spinners: { count: 5, color: ARCADE_YELLOW } },                                         // Level 22
+    enemies: { count: 28, alleys: 3 },
+    spinners: { count: 7, color: ARCADE_YELLOW } },                                         // Level 22: 3x6 + 10
   { n: 43, metric: THIN, drive: true, straight: 0.8, shoot: true,
-    enemies: { count: 12 },
-    spinners: { count: 6, color: ARCADE_YELLOW } },                                         // Level 23
+    enemies: { count: 32, alleys: 4 },
+    spinners: { count: 8, color: ARCADE_YELLOW } },                                         // Level 23: 4x6 + 8
   { n: 45, metric: THIN, drive: true, straight: 0.8, shoot: true,
-    enemies: { count: 13 },
-    spinners: { count: 7, color: ARCADE_YELLOW } },                                         // Level 24
+    enemies: { count: 35, alleys: 4 },
+    spinners: { count: 9, color: ARCADE_YELLOW } },                                         // Level 24: 4x6 + 11
   { n: 45, metric: THIN, drive: true, straight: 0.8, shoot: true,
-    enemies: { count: 14 },
-    spinners: { count: 8, color: ARCADE_YELLOW } },                                         // Level 25
+    enemies: { count: 36, alleys: 4 },
+    spinners: { count: 10, color: ARCADE_YELLOW } },                                        // Level 25: 4x6 + 12
   // Level 26-30: ARCADE-ROT, die Labyrinthe wachsen weiter (47-51), bunte
   // Sterne, und ALLE bisherigen Feinde treten an -- Tanker jetzt BLAU (Rot
   // ist die Wandfarbe), Spinner wieder gruen (gelb gehoert den Neuen),
   // Flipper-Paare magenta. Neu: gelbe PULSARE -- unzerstoerbare
   // Zackenlinien, deren Beruehrung die Blickachse um 360 Grad verdreht.
   { n: 47, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
-    pulsars: { count: 3 }, enemies: { count: 12, color: TEMPEST_BLUE },
-    spinners: { count: 6 } },                                        // Level 26
+    pulsars: { count: 3 }, enemies: { count: 28, alleys: 3, color: TEMPEST_BLUE },
+    spinners: { count: 8 } },                                        // Level 26: 3x6 + 10
   { n: 47, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
-    pulsars: { count: 4 }, enemies: { count: 12, color: TEMPEST_BLUE },
-    spinners: { count: 7 } },                                        // Level 27
+    pulsars: { count: 4 }, enemies: { count: 32, alleys: 4, color: TEMPEST_BLUE },
+    spinners: { count: 9 } },                                        // Level 27: 4x6 + 8
   { n: 49, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
-    pulsars: { count: 5 }, enemies: { count: 13, color: TEMPEST_BLUE },
-    spinners: { count: 7 } },                                        // Level 28
+    pulsars: { count: 5 }, enemies: { count: 35, alleys: 4, color: TEMPEST_BLUE },
+    spinners: { count: 9 } },                                        // Level 28: 4x6 + 11
   { n: 49, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
-    pulsars: { count: 6 }, enemies: { count: 14, color: TEMPEST_BLUE },
-    spinners: { count: 8 } },                                        // Level 29
+    pulsars: { count: 6 }, enemies: { count: 36, alleys: 4, color: TEMPEST_BLUE },
+    spinners: { count: 10 } },                                       // Level 29: 4x6 + 12
   { n: 51, metric: THIN, drive: true, straight: 0.8, shoot: true, color: ARCADE_RED, rainbowStars: true,
-    pulsars: { count: 8 }, enemies: { count: 15, color: TEMPEST_BLUE },
-    spinners: { count: 8 } },                                        // Level 30
+    pulsars: { count: 8 }, enemies: { count: 40, alleys: 5, color: TEMPEST_BLUE },
+    spinners: { count: 10 } },                                       // Level 30: 5x6 + 10
 ];
 
 export const MIN_LEVEL = 1;

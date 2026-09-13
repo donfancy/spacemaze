@@ -46,7 +46,7 @@
 import { findPath } from './maze.js';
 import { cellCenter } from './mazeWorld.js';
 import { gyroTurn, gyroDirs } from './gyro.js';
-import { FLIPPER, flipperSide, flipperPos, flipperDiagonal } from './flippers.js';
+import { FLIPPER, flipperPos, flipperAimPoint, flipperDiagonal } from './flippers.js';
 import { SHOTS } from './shots.js';
 
 export const AUTOPILOT = {
@@ -176,12 +176,11 @@ export function flipperDuel(pose, flippers, cell, maxDist = Infinity) {
     if (dist > limit) continue;
     if (dx * -Math.sin(pose.yaw) + dz * -Math.cos(pose.yaw) <= 0) continue; // hinter mir
     if (best && dist >= best.dist) continue;
-    const side = flipperSide(f);
+    const aimPt = flipperAimPoint(f, cell);
     let steer = null;
     let aim = null;
-    if (side !== 0) {
-      const q = f.cross + side * (0.5 - FLIPPER.lift) * cell;
-      const [hx, hz] = f.axis === 'x' ? [f.along, q] : [q, f.along];
+    if (aimPt) {
+      const [hx, hz] = aimPt;
       aim = Math.atan2(-(hx - pose.px), -(hz - pose.pz));
       const off = wrapAngle(aim - pose.yaw);
       // Verfolgt (angesteuert) wird der Punkt nur, wenn der Fadenkreuz-

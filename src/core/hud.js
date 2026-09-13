@@ -62,6 +62,7 @@ export const INFO_LINES = [
   ['ARROWS', 'MOVE + STEER'],
   ['', 'LEVEL 6+: UP BOOST, DOWN ALIGN'],
   ['SPACE', 'FIRE (LEVEL 11+)'],
+  ['', 'TAP LEFT/RIGHT: AIM AT FLIPPER'],
   ['Z / Y', 'SUPERZAPPER, ONCE PER LIFE'],
   ['S', 'START + RESUME + RETRY'],
   ['X', 'EXIT'],
